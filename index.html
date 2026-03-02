@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f4f0;
+  --surface: #fff;
+  --surface2: #f0efeb;
+  --surface3: #e8e7e2;
+  --border: #dddbd4;
+  --text: #1a1915;
+  --muted: #6b6960;
+  --dim: #a09e96;
+  --accent: #2d6a4f;
+  --abright: #40916c;
+  --asoft: rgba(45,106,79,.10);
+  --green: #2d6a4f;
+  --gsoft: rgba(45,106,79,.12);
+  --amber: #b5621a;
+  --ambersoft: rgba(181,98,26,.12);
+  --red: #c0392b;
+  --rsoft: rgba(192,57,43,.12);
+  --shadow: 0 2px 8px rgba(26,25,21,.08);
+  --shadowlg: 0 8px 32px rgba(26,25,21,.12);
+  --r: 10px;
+  --rl: 16px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: .9rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
+.hdr h1 { font-size: 1rem; font-weight: 700; }
+.month-tabs { display: flex; gap: .2rem; flex-wrap: wrap; }
+.mtab { padding: .35rem .75rem; border: none; background: none; cursor: pointer; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: .78rem; font-weight: 500; color: var(--muted); transition: all .15s; }
+.mtab:hover { background: var(--surface2); color: var(--text); }
+.mtab.active { background: var(--asoft); color: var(--accent); font-weight: 600; }
+
+/* Layout */
+.main { padding: 1.5rem; max-width: 900px; margin: 0 auto; }
+
+/* Top stats */
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.25rem; box-shadow: var(--shadow); }
+.stat-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: .5rem; }
+.stat-val { font-family: 'DM Mono', monospace; font-size: 1.7rem; font-weight: 500; line-height: 1; }
+.stat-val.green { color: var(--green); }
+.stat-val.red { color: var(--red); }
+.stat-sub { font-size: .68rem; color: var(--dim); margin-top: .4rem; }
+
+/* Income card */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.25rem 1.5rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
+.card-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+.income-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+.income-row { display: flex; justify-content: space-between; align-items: center; padding: .5rem .75rem; background: var(--surface2); border-radius: 8px; }
+.income-source { font-size: .82rem; font-weight: 500; }
+.income-amt { font-family: 'DM Mono', monospace; font-size: .88rem; font-weight: 500; }
+
+/* Category bars */
+.categories { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
+.cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: .85rem 1rem; box-shadow: var(--shadow); }
+.cat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; cursor: pointer; }
+.cat-name { font-size: .84rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+.cat-emoji { font-size: 1rem; }
+.cat-amounts { font-size: .75rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+.cat-spent-bold { font-weight: 700; color: var(--text); }
+.progress-bar { height: 6px; background: var(--surface3); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 99px; transition: width .3s ease; }
+.progress-fill.ok { background: var(--green); }
+.progress-fill.warn { background: var(--amber); }
+.progress-fill.over { background: var(--red); }
+.cat-remaining { font-size: .7rem; margin-top: .35rem; }
+.cat-remaining.ok { color: var(--green); }
+.cat-remaining.warn { color: var(--amber); }
+.cat-remaining.over { color: var(--red); }
+
+/* Transactions */
+.tx-list { display: none; border-top: 1px solid var(--border); margin-top: .75rem; padding-top: .75rem; }
+.cat-row.open .tx-list { display: block; }
+.tx-item { display: flex; align-items: center; justify-content: space-between; padding: .4rem 0; border-bottom: 1px solid var(--border); font-size: .8rem; }
+.tx-item:last-child { border-bottom: none; }
+.tx-left { display: flex; flex-direction: column; gap: .1rem; }
+.tx-store { font-weight: 500; }
+.tx-item-name { color: var(--muted); font-size: .73rem; }
+.tx-amt { font-family: 'DM Mono', monospace; font-weight: 500; }
+.no-tx { color: var(--dim); font-size: .78rem; padding: .5rem 0; }
+
+/* Add transaction */
+.add-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.25rem 1.5rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
+.add-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 1rem; }
+.form-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end; }
+.fg { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 120px; }
+.fg label { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+select, input[type="text"], input[type="number"], input[type="date"] { padding: .55rem .8rem; border: 1px solid var(--border); border-radius: var(--r); font-family: 'DM Sans', sans-serif; font-size: .875rem; background: var(--surface2); color: var(--text); outline: none; transition: border-color .2s; width: 100%; }
+select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--asoft); }
+.btn { padding: .6rem 1.2rem; border: none; border-radius: var(--r); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: .84rem; transition: all .15s; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: var(--abright); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Setup screen */
+.setup { max-width: 500px; margin: 3rem auto; text-align: center; }
+.setup h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: .5rem; }
+.setup p { color: var(--muted); margin-bottom: 1.5rem; font-size: .9rem; }
+.setup-form { text-align: left; display: flex; flex-direction: column; gap: .75rem; }
+
+/* Toast */
+.toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: .65rem 1.25rem; border-radius: 99px; font-size: .82rem; font-weight: 500; z-index: 999; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+/* Loading */
+.loading { text-align: center; padding: 3rem; color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 600px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .income-grid { grid-template-columns: 1fr; }
+  .hdr { flex-direction: column; gap: .75rem; align-items: flex-start; }
+  .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div id="root">
+  <div class="loading">Loading...</div>
+</div>
+
+<script>
+const SB_URL = 'https://hpiyvnfhoqnnnotrmwaz.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaXl2bmZob3Fubm5vdHJtd2F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzIwNDEsImV4cCI6MjA4ODA0ODA0MX0.AsGhYitkSnyVMwpJII05UseS_gICaXiCy7d8iHsr6Qw';
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CATEGORIES = [
+  { key: 'groceries',    label: 'Groceries',           emoji: '🛒', hasStore: true },
+  { key: 'takeout',      label: 'Take Out',             emoji: '🥡', hasStore: false },
+  { key: 'entertainment',label: 'Entertainment',        emoji: '🎬', hasStore: false },
+  { key: 'retail',       label: 'Retail & Shopping',    emoji: '🛍️', hasStore: true },
+  { key: 'transport',    label: 'Transportation',       emoji: '🚗', hasStore: false },
+  { key: 'health',       label: 'Health & Therapy',     emoji: '🏥', hasStore: false },
+  { key: 'housing',      label: 'Housing',              emoji: '🏠', hasStore: false },
+  { key: 'recurring',    label: 'Recurring Payments',   emoji: '🔄', hasStore: false },
+  { key: 'charity',      label: 'Charity',              emoji: '💚', hasStore: false },
+  { key: 'travel',       label: 'Travel',               emoji: '✈️', hasStore: false },
+  { key: 'admin',        label: 'Admin & Professional', emoji: '📋', hasStore: false },
+  { key: 'gifts',        label: 'Gifts',                emoji: '🎁', hasStore: false },
+  { key: 'holiday',      label: 'Holiday',              emoji: '🎉', hasStore: false },
+];
+
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+let state = {
+  months: [],
+  currentMonthId: null,
+  transactions: [],
+  budgets: {},
+  loading: true,
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────
+const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const pct = (spent, budget) => budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+const status = (spent, budget) => {
+  if (budget === 0) return 'ok';
+  const p = spent / budget;
+  if (p >= 1) return 'over';
+  if (p >= 0.85) return 'warn';
+  return 'ok';
+};
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ── Data loading ──────────────────────────────────────────────────────
+async function loadMonths() {
+  const { data } = await sb.from('months').select('*').eq('year', 2026).order('month_num');
+  state.months = data || [];
+}
+
+async function loadTransactions(monthId) {
+  const { data } = await sb.from('transactions').select('*').eq('month_id', monthId).order('created_at', { ascending: false });
+  state.transactions = data || [];
+}
+
+async function loadBudgets(monthId) {
+  const { data } = await sb.from('budgets').select('*').eq('month_id', monthId);
+  state.budgets = {};
+  (data || []).forEach(b => state.budgets[b.category] = b.amount);
+}
+
+async function switchMonth(monthId) {
+  state.currentMonthId = monthId;
+  state.loading = true;
+  renderApp();
+  await Promise.all([loadTransactions(monthId), loadBudgets(monthId)]);
+  state.loading = false;
+  renderApp();
+}
+
+// ── Spent per category ────────────────────────────────────────────────
+function spentByCategory() {
+  const totals = {};
+  CATEGORIES.forEach(c => totals[c.key] = 0);
+  state.transactions.forEach(tx => {
+    if (totals[tx.category] !== undefined) totals[tx.category] += Number(tx.amount);
+  });
+  return totals;
+}
+
+function totalIncome(month) {
+  return (Number(month.income_petachya) || 0)
+    + (Number(month.income_clalit) || 0)
+    + (Number(month.income_private) || 0)
+    + (Number(month.income_other) || 0);
+}
+
+// ── Add transaction ───────────────────────────────────────────────────
+async function addTransaction() {
+  const cat = document.getElementById('tx-cat').value;
+  const store = document.getElementById('tx-store').value.trim();
+  const item = document.getElementById('tx-item').value.trim();
+  const amount = parseFloat(document.getElementById('tx-amount').value);
+  const date = document.getElementById('tx-date').value;
+
+  if (!cat || !amount || isNaN(amount)) { toast('Fill in category and amount'); return; }
+
+  const btn = document.getElementById('tx-btn');
+  btn.disabled = true;
+
+  const { error } = await sb.from('transactions').insert({
+    month_id: state.currentMonthId,
+    category: cat,
+    store: store || null,
+    item: item || null,
+    amount,
+    date: date || null,
+  });
+
+  if (error) { toast('Error saving — try again'); btn.disabled = false; return; }
+
+  // Clear form
+  document.getElementById('tx-store').value = '';
+  document.getElementById('tx-item').value = '';
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('tx-date').value = today();
+  btn.disabled = false;
+
+  await loadTransactions(state.currentMonthId);
+  renderApp();
+  toast('Transaction saved ✓');
+}
+
+// ── Setup: create month ───────────────────────────────────────────────
+async function createMonth(num) {
+  const { data, error } = await sb.from('months').insert({
+    month_name: MONTHS[num - 1],
+    month_num: num,
+    year: 2026,
+  }).select().single();
+  if (error) { toast('Error creating month'); return; }
+  state.months.push(data);
+  state.months.sort((a, b) => a.month_num - b.month_num);
+  await switchMonth(data.id);
+}
+
+// ── Render ────────────────────────────────────────────────────────────
+function renderApp() {
+  const root = document.getElementById('root');
+
+  if (state.months.length === 0) {
+    root.innerHTML = `
+      <div class="main">
+        <div class="setup">
+          <h2>Welcome to Budget 2026 👋</h2>
+          <p>Which month do you want to start with?</p>
+          <div class="setup-form">
+            <div class="fg">
+              <label>Month</label>
+              <select id="setup-month">
+                ${MONTHS.map((m,i) => `<option value="${i+1}" ${i===1?'selected':''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="createMonth(parseInt(document.getElementById('setup-month').value))">
+              Start this month →
+            </button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const current = state.months.find(m => m.id === state.currentMonthId) || state.months[state.months.length - 1];
+  if (!state.currentMonthId) state.currentMonthId = current.id;
+
+  const income = totalIncome(current);
+  const spent = spentByCategory();
+  const totalSpent = Object.values(spent).reduce((a, b) => a + b, 0)
+    + (Number(current.savings_bank) || 0)
+    + (Number(current.savings_invested) || 0);
+  const remaining = income - totalSpent;
+  const totalBudgeted = Object.values(state.budgets).reduce((a, b) => a + b, 0);
+
+  root.innerHTML = `
+    <div class="hdr">
+      <h1>Budget 2026</h1>
+      <div class="month-tabs">
+        ${state.months.map(m => `
+          <button class="mtab ${m.id === state.currentMonthId ? 'active' : ''}" onclick="switchMonth('${m.id}')">
+            ${m.month_name.slice(0,3)}
+          </button>`).join('')}
+        <button class="mtab" onclick="showAddMonth()" title="Add month">+ Month</button>
+      </div>
+    </div>
+
+    <div class="main">
+      ${state.loading ? '<div class="loading">Loading...</div>' : `
+
+      <!-- Top stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Income</div>
+          <div class="stat-val">${fmt(income)}</div>
+          <div class="stat-sub">This month</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Spent</div>
+          <div class="stat-val">${fmt(totalSpent)}</div>
+          <div class="stat-sub">Including savings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Left to Spend</div>
+          <div class="stat-val ${remaining >= 0 ? 'green' : 'red'}">${fmt(remaining)}</div>
+          <div class="stat-sub">${remaining >= 0 ? 'Looking good' : 'Over budget'}</div>
+        </div>
+      </div>
+
+      <!-- Income breakdown -->
+      <div class="card">
+        <div class="card-title">
+          Income Breakdown
+          <button class="btn btn-primary" style="padding:.3rem .75rem;font-size:.72rem;" onclick="showEditIncome()">Edit</button>
+        </div>
+        <div class="income-grid">
+          <div class="income-row"><span class="income-source">Petachya</span><span class="income-amt">${fmt(current.income_petachya)}</span></div>
+          <div class="income-row"><span class="income-source">Clalit</span><span class="income-amt">${fmt(current.income_clalit)}</span></div>
+          <div class="income-row"><span class="income-source">Private (Vivi)</span><span class="income-amt">${fmt(current.income_private)}</span></div>
+          <div class="income-row"><span class="income-source">Other</span><span class="income-amt">${fmt(current.income_other)}</span></div>
+        </div>
+      </div>
+
+      <!-- Add transaction -->
+      <div class="add-section">
+        <div class="add-title">Add Transaction</div>
+        <div class="form-row">
+          <div class="fg" style="min-width:140px;flex:1.5;">
+            <label>Category</label>
+            <select id="tx-cat">
+              <option value="">Select...</option>
+              ${CATEGORIES.map(c => `<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('')}
+            </select>
+          </div>
+          <div class="fg">
+            <label>Store</label>
+            <input type="text" id="tx-store" placeholder="Makolet, Wolt...">
+          </div>
+          <div class="fg">
+            <label>Item</label>
+            <input type="text" id="tx-item" placeholder="Yogurt, rent...">
+          </div>
+          <div class="fg" style="max-width:110px;">
+            <label>Amount ₪</label>
+            <input type="number" id="tx-amount" placeholder="0" min="0" step="0.01">
+          </div>
+          <div class="fg" style="max-width:140px;">
+            <label>Date</label>
+            <input type="date" id="tx-date" value="${today()}">
+          </div>
+          <button class="btn btn-primary" id="tx-btn" onclick="addTransaction()">Save</button>
+        </div>
+      </div>
+
+      <!-- Category bars -->
+      <div class="card-title" style="padding:.5rem 0 .75rem;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);">
+        Spending by Category — click to see transactions
+      </div>
+      <div class="categories">
+        ${CATEGORIES.map(c => {
+          const s = spent[c.key] || 0;
+          const b = state.budgets[c.key] || 0;
+          const st = status(s, b);
+          const p = pct(s, b);
+          const txs = state.transactions.filter(tx => tx.category === c.key);
+          return `
+            <div class="cat-row" id="cat-${c.key}">
+              <div class="cat-top" onclick="toggleCat('${c.key}')">
+                <div class="cat-name">
+                  <span class="cat-emoji">${c.emoji}</span>
+                  ${c.label}
+                </div>
+                <div class="cat-amounts">
+                  <span class="cat-spent-bold">${fmt(s)}</span>
+                  ${b > 0 ? ` / ${fmt(b)}` : ' <span style="color:var(--dim)">no budget set</span>'}
+                </div>
+              </div>
+              ${b > 0 ? `
+                <div class="progress-bar">
+                  <div class="progress-fill ${st}" style="width:${p}%"></div>
+                </div>
+                <div class="cat-remaining ${st}">
+                  ${st === 'over' ? `₪${fmt(s - b).replace('₪','')} over budget` : `₪${fmt(b - s).replace('₪','')} remaining`}
+                </div>` : ''}
+              <div class="tx-list">
+                ${txs.length === 0
+                  ? '<div class="no-tx">No transactions yet</div>'
+                  : txs.map(tx => `
+                    <div class="tx-item">
+                      <div class="tx-left">
+                        <span class="tx-store">${tx.store || tx.item || '—'}</span>
+                        ${tx.store && tx.item ? `<span class="tx-item-name">${tx.item}</span>` : ''}
+                      </div>
+                      <span class="tx-amt">${fmt(tx.amount)}</span>
+                    </div>`).join('')}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+      `}
+    </div>
+
+    <!-- Edit income modal -->
+    <div id="income-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px);">
+      <div style="background:var(--surface);border-radius:var(--rl);padding:1.75rem;max-width:380px;width:100%;box-shadow:var(--shadowlg);">
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1.25rem;">Edit Income — ${current.month_name}</h3>
+        <div style="display:flex;flex-direction:column;gap:.65rem;">
+          <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
+          <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
+          <div class="fg"><label>Private (Vivi)</label><input type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0"></div>
+          <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
+          <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;">
+          <button class="btn" style="background:var(--surface2);color:var(--muted);" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveIncome()">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Set store field visibility based on category
+  const catSel = document.getElementById('tx-cat');
+  if (catSel) {
+    catSel.addEventListener('change', () => {
+      const cat = CATEGORIES.find(c => c.key === catSel.value);
+      const storeField = document.getElementById('tx-store');
+      if (storeField) storeField.placeholder = cat?.hasStore ? 'Makolet, Yochananof...' : 'Optional';
+    });
+  }
+}
+
+function toggleCat(key) {
+  const el = document.getElementById('cat-' + key);
+  if (el) el.classList.toggle('open');
+}
+
+function showEditIncome() {
+  const modal = document.getElementById('income-modal');
+  if (modal) { modal.style.display = 'flex'; }
+}
+
+function closeModal() {
+  const modal = document.getElementById('income-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveIncome() {
+  const updates = {
+    income_petachya: parseFloat(document.getElementById('inc-petachya').value) || 0,
+    income_clalit: parseFloat(document.getElementById('inc-clalit').value) || 0,
+    income_private: parseFloat(document.getElementById('inc-private').value) || 0,
+    income_other: parseFloat(document.getElementById('inc-other').value) || 0,
+    savings_bank: parseFloat(document.getElementById('inc-savings').value) || 0,
+  };
+  const { error } = await sb.from('months').update(updates).eq('id', state.currentMonthId);
+  if (error) { toast('Error saving'); return; }
+  await loadMonths();
+  state.currentMonthId = state.currentMonthId; // keep current
+  closeModal();
+  renderApp();
+  toast('Income saved ✓');
+}
+
+function showAddMonth() {
+  const existing = state.months.map(m => m.month_num);
+  const available = MONTHS.map((m,i) => ({name: m, num: i+1})).filter(m => !existing.includes(m.num));
+  if (available.length === 0) { toast('All months already added'); return; }
+  const num = available[0].num;
+  if (confirm(`Add ${MONTHS[num-1]}?`)) createMonth(num);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+async function init() {
+  await loadMonths();
+  if (state.months.length > 0) {
+    // Default to current month or latest
+    const now = new Date();
+    const currentMonth = state.months.find(m => m.month_num === now.getMonth() + 1) || state.months[state.months.length - 1];
+    await switchMonth(currentMonth.id);
+  } else {
+    state.loading = false;
+    renderApp();
+  }
+}
+
+init();
+</script>
+</body>
+</html>
