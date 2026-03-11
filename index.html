@@ -36,14 +36,24 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* Header */
 .hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: .9rem 1.5rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
 .hdr h1 { font-size: 1rem; font-weight: 700; }
-.ribbon { position: sticky; top: 57px; z-index: 90; background: var(--surface); border-bottom: 2px solid var(--border); display: flex; align-items: center; padding: .4rem 1.5rem; gap: 0; box-shadow: var(--shadow); }
-.ribbon.hidden { display: none; }
+.ribbon-panel { position: sticky; top: 57px; z-index: 90; background: var(--surface); border-bottom: 2px solid var(--border); box-shadow: var(--shadow); }
+.ribbon { display: flex; align-items: center; padding: .4rem 1.5rem; gap: 0; border-bottom: 1px solid var(--border); }
 .ribbon-stat { flex: 1; text-align: center; padding: .25rem .5rem; border-right: 1px solid var(--border); }
 .ribbon-stat:last-of-type { border-right: none; }
 .ribbon-label { font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .ribbon-val { font-family: 'DM Mono', monospace; font-size: .9rem; font-weight: 600; line-height: 1.4; }
-.ribbon-toggle { font-size: .65rem; color: var(--muted); cursor: pointer; padding: .2rem .5rem; margin-left: .75rem; border: 1px solid var(--border); border-radius: var(--r); background: none; white-space: nowrap; flex-shrink: 0; }
+.ribbon-toggle { font-size: .65rem; color: var(--muted); cursor: pointer; padding: .2rem .5rem; border: 1px solid var(--border); border-radius: var(--r); background: none; white-space: nowrap; }
 .ribbon-toggle:hover { background: var(--surface2); }
+.ribbon-snapshot { padding: .75rem 1.5rem; border-bottom: 1px solid var(--border); max-height: 50vh; overflow-y: auto; }
+.sub-ribbon { display: flex; align-items: center; gap: 0; padding: .35rem 1.5rem; overflow-x: auto; background: var(--surface2); }
+.sub-ribbon-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-right: 1rem; border-right: 1px solid var(--border); margin-right: .5rem; white-space: nowrap; flex-shrink: 0; }
+.sub-ribbon-cat { text-align: center; padding: .2rem .75rem; border-right: 1px solid var(--border); flex-shrink: 0; }
+.sub-ribbon-cat:last-child { border-right: none; }
+.sub-ribbon-nums { font-family: 'DM Mono', monospace; font-size: .75rem; display: flex; gap: .25rem; align-items: center; justify-content: center; margin-top: .1rem; }
+.sub-spent { font-weight: 600; }
+.sub-sep { color: var(--muted); }
+.sub-budget { color: var(--muted); }
+.sub-rem { font-weight: 700; font-size: .7rem; }
 .month-tabs { display: flex; gap: .2rem; flex-wrap: wrap; }
 .mtab { padding: .35rem .75rem; border: none; background: none; cursor: pointer; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: .78rem; font-weight: 500; color: var(--muted); transition: all .15s; }
 .mtab:hover { background: var(--surface2); color: var(--text); }
@@ -427,15 +437,74 @@ function renderApp() {
     ${(()=>{
       if (state.activeTab !== 'budget' || state.loading) return '';
       const ribbonHidden = localStorage.getItem('ribbonHidden') === 'true';
+      const ribbonExpanded = localStorage.getItem('ribbonExpanded') === 'true';
       const leftToBudget = income - totalBudgeted;
       const remainingInBudget = totalBudgeted - totalSpent;
-      if (ribbonHidden) return `<div style="position:sticky;top:57px;z-index:90;text-align:right;padding:.2rem 1.5rem;background:var(--surface);border-bottom:1px solid var(--border);"><button class="ribbon-toggle" onclick="toggleRibbon()">▼ show summary</button></div>`;
-      return `<div class="ribbon">
-        <div class="ribbon-stat"><div class="ribbon-label">Income</div><div class="ribbon-val">${fmt(income)}</div></div>
-        <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-        <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
-        <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
-        <button class="ribbon-toggle" onclick="toggleRibbon()">▲ hide</button>
+      const n = v => v == null || v === '' ? '' : Number(v).toLocaleString('en-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+
+      if (ribbonHidden) return `<div style="position:sticky;top:57px;z-index:90;text-align:right;padding:.25rem 1.5rem;background:var(--surface);border-bottom:1px solid var(--border);"><button class="ribbon-toggle" onclick="toggleRibbon()">▼ show summary</button></div>`;
+
+      // Snapshot table rows for expanded view
+      const groupRows = CATEGORY_GROUPS.map(group => {
+        const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
+        const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
+        const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
+        const gr = gb - gs;
+        const catRows = cats.map(c => {
+          const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
+          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${s?n(s):'0'}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
+        }).join('');
+        return `<tr class="sn-group"><td>${group.emoji} ${group.label}</td><td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td></tr>${catRows}`;
+      }).join('');
+
+      // Leisure sub-ribbon
+      const leisureGroup = CATEGORY_GROUPS.find(g => g.label === 'Leisure & Lifestyle');
+      const leisureCats = leisureGroup.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
+      const leisureSubRibbon = `<div class="sub-ribbon">
+        <span class="sub-ribbon-label">🎉 Leisure</span>
+        ${leisureCats.map(c => {
+          const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
+          return `<div class="sub-ribbon-cat">
+            <div class="ribbon-label">${c.emoji} ${c.label}</div>
+            <div class="sub-ribbon-nums">
+              <span class="sub-spent">${n(s)}</span>
+              ${b ? `<span class="sub-sep">/</span><span class="sub-budget">${n(b)}</span>` : ''}
+              ${b ? `<span class="sub-rem ${r<0?'sn-over':'sn-ok'}">${n(r)}</span>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+      return `<div class="ribbon-panel">
+        <div class="ribbon">
+          <div class="ribbon-stat"><div class="ribbon-label">Income</div><div class="ribbon-val">${fmt(income)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
+            <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
+            <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
+          </div>
+        </div>
+        ${ribbonExpanded ? `
+        <div class="ribbon-snapshot">
+          <div style="display:flex;gap:2rem;align-items:flex-start;">
+            <div style="flex:1;min-width:0;">
+              <table class="sn-table">
+                <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Remaining</th></tr></thead>
+                <tbody>
+                  <tr class="sn-section"><td colspan="4">📋 Budget Overview</td></tr>
+                  <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
+                  <tr class="sn-cat"><td>Budgeted</td><td>${n(totalBudgeted)}</td><td></td><td class="${leftToBudget<0?'sn-over':'sn-ok'}">${n(leftToBudget)} left</td></tr>
+                  <tr class="sn-cat"><td>Remaining in Budget</td><td></td><td></td><td class="${remainingInBudget>=0?'sn-ok':'sn-over'}">${n(remainingInBudget)}</td></tr>
+                  <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
+                  ${groupRows}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>` : ''}
+        ${leisureSubRibbon}
       </div>`;
     })()}
 
@@ -959,6 +1028,12 @@ async function saveBizField(field, value) {
 function toggleRibbon() {
   const hidden = localStorage.getItem('ribbonHidden') === 'true';
   localStorage.setItem('ribbonHidden', !hidden);
+  if (!hidden) localStorage.removeItem('ribbonExpanded');
+  renderApp();
+}
+function toggleRibbonExpand() {
+  const expanded = localStorage.getItem('ribbonExpanded') === 'true';
+  localStorage.setItem('ribbonExpanded', !expanded);
   renderApp();
 }
 
