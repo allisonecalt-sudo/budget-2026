@@ -69,7 +69,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .cat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; cursor: pointer; }
 .cat-name { font-size: .84rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 .cat-emoji { font-size: 1rem; }
-.cat-amounts { font-size: .75rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+.cat-amounts { font-size: .75rem; color: var(--muted); font-family: 'DM Mono', monospace; display:flex; align-items:center; gap:2px; }
+.budget-inline { font-size:.75rem; font-family:'DM Mono',monospace; color:var(--text); background:transparent; border:none; border-bottom:1px dashed var(--border); padding:0 2px; outline:none; -moz-appearance:textfield; cursor:text; }
+.budget-inline::-webkit-outer-spin-button, .budget-inline::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+.budget-inline:focus { border-bottom-color: var(--accent); background: var(--surface2); border-radius:3px; }
 .cat-spent-bold { font-weight: 700; color: var(--text); }
 .progress-bar { height: 6px; background: var(--surface3); border-radius: 99px; overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 99px; transition: width .3s ease; }
@@ -476,7 +479,18 @@ function renderApp() {
                 </div>
                 <div class="cat-amounts">
                   <span class="cat-spent-bold">${fmt(s)}</span>
-                  ${b > 0 ? ` / ${fmt(b)}` : ' <span style="color:var(--dim)">no budget set</span>'}
+                  <span style="color:var(--muted)"> / </span>
+                  <input
+                    type="number"
+                    class="budget-inline"
+                    value="${b || ''}"
+                    placeholder="set budget"
+                    min="0" step="1"
+                    onclick="event.stopPropagation()"
+                    onchange="saveBudget('${c.key}', this.value)"
+                    onkeydown="if(event.key==='Enter'){this.blur()}"
+                    style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 90}px"
+                  >
                 </div>
               </div>
               ${b > 0 ? `
@@ -533,6 +547,23 @@ function renderApp() {
       updateStoreSuggestions(catSel.value);
     });
   }
+}
+
+async function saveBudget(catKey, amount) {
+  const num = parseFloat(amount) || 0;
+  const old = state.budgets[catKey] || 0;
+  const monthId = state.currentMonthId;
+  // Upsert — try update first, then insert
+  const { data: existing } = await sb.from('budgets').select('id').eq('month_id', monthId).eq('category', catKey).single();
+  if (existing) {
+    await sb.from('budgets').update({ amount: num }).eq('id', existing.id);
+  } else {
+    await sb.from('budgets').insert({ month_id: monthId, category: catKey, amount: num });
+  }
+  state.budgets[catKey] = num;
+  pushUndo({ label: 'budget '+catKey, undo: async()=>{ await saveBudget(catKey, old); }, redo: async()=>{ await saveBudget(catKey, num); } });
+  renderApp();
+  toast('Budget saved ✓');
 }
 
 const PRESET_STORES = {
