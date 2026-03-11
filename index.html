@@ -336,12 +336,15 @@ function catBudget(catKey) {
 }
 
 async function addBudgetItem(catKey) {
+  const sortOrder = (state.budgetItems[catKey] || []).length;
+  // Add to this month
   const { data } = await sb.from('budget_items').insert({
-    month_id: state.currentMonthId, category: catKey, label: 'New item', amount: 0,
-    sort_order: (state.budgetItems[catKey] || []).length
+    month_id: state.currentMonthId, category: catKey, label: 'New item', amount: 0, sort_order: sortOrder
   }).select().single();
   if (!state.budgetItems[catKey]) state.budgetItems[catKey] = [];
   state.budgetItems[catKey].push(data);
+  // Also save to template
+  await sb.from('budget_item_templates').insert({ category: catKey, label: 'New item', amount: 0, sort_order: sortOrder });
   renderApp();
 }
 
@@ -349,19 +352,39 @@ async function saveBudgetItem(id, field, value) {
   const catKey = Object.keys(state.budgetItems).find(k => state.budgetItems[k].find(i => i.id === id));
   const item = (state.budgetItems[catKey] || []).find(i => i.id === id);
   if (!item) return;
-  const old = item[field];
   const val = field === 'amount' ? (parseFloat(value) || 0) : value;
   await sb.from('budget_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  // Sync label changes to template
+  if (field === 'label') {
+    await sb.from('budget_item_templates').update({ label: val }).eq('category', catKey).eq('label', item.label).eq('sort_order', item.sort_order);
+  }
   renderApp();
 }
 
 async function deleteBudgetItem(id) {
+  const catKey = Object.keys(state.budgetItems).find(k => state.budgetItems[k].find(i => i.id === id));
+  const item = (state.budgetItems[catKey] || []).find(i => i.id === id);
   await sb.from('budget_items').delete().eq('id', id);
+  if (item) await sb.from('budget_item_templates').delete().eq('category', catKey).eq('sort_order', item.sort_order);
   for (const k of Object.keys(state.budgetItems)) {
     state.budgetItems[k] = state.budgetItems[k].filter(i => i.id !== id);
   }
   renderApp();
+}
+
+// When loading a month that has no budget items for a hasLines category,
+// copy from template if template exists
+async function seedBudgetItemsFromTemplate(monthId) {
+  const linesCats = CATEGORIES.filter(c => c.hasLines).map(c => c.key);
+  for (const catKey of linesCats) {
+    if (state.budgetItems[catKey] && state.budgetItems[catKey].length > 0) continue;
+    const { data: tmpl } = await sb.from('budget_item_templates').select('*').eq('category', catKey).order('sort_order');
+    if (!tmpl || tmpl.length === 0) continue;
+    const inserts = tmpl.map(t => ({ month_id: monthId, category: catKey, label: t.label, amount: t.amount, sort_order: t.sort_order }));
+    const { data: newItems } = await sb.from('budget_items').insert(inserts).select();
+    state.budgetItems[catKey] = newItems || [];
+  }
 }
 
 async function switchMonth(monthId) {
@@ -369,7 +392,7 @@ async function switchMonth(monthId) {
   localStorage.setItem('activeMonthId', monthId);
   state.loading = true;
   renderApp();
-  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId)];
+  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId))];
   if (state.activeTab === 'biz') loads.push(loadBizData());
   await Promise.all(loads);
   state.loading = false;
