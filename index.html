@@ -193,6 +193,7 @@ let state = {
   biz: null,           // biz_months row for current month
   ptClients: [],       // private tracker clients
   ptSessions: [],      // private tracker sessions
+  incomeItems: [],     // flexible extra income items
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -698,21 +699,27 @@ function renderBizTab(current) {
 }
 
 function renderAccountantTracker(current) {
-  const biz = state.biz || {};
-  const paid = biz.accountant_fee || 0;
-  const shouldBe = 200;
-  const diffColor = paid >= shouldBe ? 'var(--green)' : 'var(--red)';
+  const allBiz = state.allBiz || [];
+  const todayMonth = new Date().getMonth() + 1;
+  const upToMonth = Math.min(current.month_num, todayMonth);
+  // Sum fees for all months up to the tab month
+  const paidUpTo = allBiz.filter(b => {
+    const m = state.months.find(mo => mo.id === b.month_id);
+    return m && m.month_num <= upToMonth;
+  }).reduce((sum, b) => sum + (b.accountant_fee || 0), 0);
+  const shouldBe = upToMonth * 200;
+  const diffColor = paidUpTo >= shouldBe ? 'var(--green)' : 'var(--red)';
 
   return `
     <div class="biz-card">
-      <div class="biz-section-title">Accountant Fee — ${current.month_name}</div>
+      <div class="biz-section-title">Accountant Fee Tracker — ₪200/month</div>
       <div class="biz-row">
-        <span class="biz-label">Should pay this month</span>
+        <span class="biz-label">Should have paid until ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
         <span class="biz-val">${fmt(shouldBe)}</span>
       </div>
       <div class="biz-row">
-        <span class="biz-label">Entered for this month</span>
-        <span class="biz-val" style="color:${diffColor}">${fmt(paid)}</span>
+        <span class="biz-label">Actually paid until ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
+        <span class="biz-val" style="color:${diffColor}">${fmt(paidUpTo)}</span>
       </div>
     </div>
   `;
