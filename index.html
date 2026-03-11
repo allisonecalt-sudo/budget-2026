@@ -612,34 +612,23 @@ function renderApp() {
           const groupSpent = bankSpent + investSpent;
           const groupSt = status(groupSpent, groupBudget);
           const savingsRow = (label, emoji, budgetKey, spentField, budgetVal, spentVal) => {
-            const r = budgetVal - spentVal;
-            const st = status(spentVal, budgetVal);
             return `<div class="cat-row">
               <div class="cat-top" style="cursor:default;">
-                <div class="cat-name"><span class="cat-emoji">${emoji}</span>${label} <span style="font-size:.65rem;color:var(--muted);margin-left:.3rem;">(manual)</span></div>
+                <div class="cat-name"><span class="cat-emoji">${emoji}</span>${label}</div>
                 <div class="cat-amounts">
-                  <input type="number" class="budget-inline" value="${spentVal||''}" placeholder="actual" min="0" step="1"
-                    onchange="saveSavingsField('${spentField}', this.value)"
+                  <input type="number" class="budget-inline" value="${budgetVal||''}" placeholder="set amount" min="0" step="1"
+                    onchange="saveBudget('${budgetKey}', this.value);saveSavingsField('${spentField}', this.value)"
                     onkeydown="if(event.key==='Enter')this.blur()"
-                    style="width:80px" title="Actual amount saved">
-                  <span style="color:var(--muted)"> / </span>
-                  <input type="number" class="budget-inline" value="${budgetVal||''}" placeholder="budget" min="0" step="1"
-                    onchange="saveBudget('${budgetKey}', this.value)"
-                    onkeydown="if(event.key==='Enter')this.blur()"
-                    style="width:80px" title="Budgeted amount">
+                    style="width:100px">
                 </div>
               </div>
-              ${budgetVal > 0 ? `<div class="progress-bar"><div class="progress-fill ${st}" style="width:${pct(spentVal,budgetVal)}%"></div></div>
-              <div class="cat-remaining ${st}">${st==='over'?`₪${fmt(spentVal-budgetVal).replace('₪','')} over`:`₪${fmt(r).replace('₪','')} remaining`}</div>` : ''}
             </div>`;
           };
           return `<div class="group-block" id="group-Savings">
             <div class="group-header" onclick="toggleGroup('Savings')">
               <span><span class="group-chevron">▼</span>🏦 Savings</span>
               <span class="group-totals">
-                <span class="cat-spent-bold">${fmt(groupSpent)}</span>
-                ${groupBudget>0?`<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>`:''}
-                ${groupBudget>0?`<span class="group-rem ${groupSt}"> · ${fmt(Math.abs(groupBudget-groupSpent))} ${groupSt==='over'?'over':'left'}</span>`:''}
+                <span class="cat-spent-bold">${fmt(groupBudget)}</span>
               </span>
             </div>
             <div class="group-cats">
