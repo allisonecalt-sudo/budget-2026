@@ -69,6 +69,16 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .cat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; cursor: pointer; }
 .cat-name { font-size: .84rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 .cat-emoji { font-size: 1rem; }
+.sn-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.sn-table th { text-align:left; padding:.4rem .6rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:2px solid var(--border); }
+.sn-table th:not(:first-child) { text-align:right; }
+.sn-section td { font-weight:700; font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; padding:.7rem .6rem .3rem; color:var(--muted); border-top: 1px solid var(--border); }
+.sn-group td { font-weight:700; padding:.45rem .6rem; background:var(--surface2); }
+.sn-cat td { padding:.3rem .6rem; }
+.sn-table td:not(:first-child) { text-align:right; font-family:'DM Mono',monospace; }
+.sn-ok { color: var(--accent); font-weight:600; }
+.sn-over { color: #dc2626; font-weight:600; }
+@media print { #snapshot-modal { position:static!important; background:none!important; backdrop-filter:none!important; padding:0!important; } #snapshot-modal > div { box-shadow:none!important; max-width:100%!important; } button { display:none!important; } }
 .group-block { margin-bottom: 1.25rem; }
 .group-header { display:flex; justify-content:space-between; align-items:center; padding:.5rem .75rem; background:var(--surface2); border-radius:var(--r); margin-bottom:.35rem; font-size:.8rem; font-weight:700; color:var(--text); letter-spacing:.01em; }
 .group-totals { font-family:'DM Mono',monospace; font-size:.75rem; font-weight:400; display:flex; gap:.3rem; align-items:center; }
@@ -394,6 +404,7 @@ function renderApp() {
         <div style="display:flex;gap:.2rem;">
           <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">← Undo</button>
           <button id="redo-btn" class="mtab" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">Redo →</button>
+          <button class="mtab" onclick="openSnapshot()" title="Snapshot">📊 Snapshot</button>
         </div>
         <div class="month-tabs">
           ${state.months.map(m => `
@@ -560,6 +571,20 @@ function renderApp() {
         }).join('')}
       </div>
       `}
+    </div>
+
+    <!-- Snapshot modal -->
+    <div id="snapshot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:1.5rem;overflow-y:auto;backdrop-filter:blur(4px);" onclick="if(event.target===this)this.style.display='none'">
+      <div style="background:var(--surface);border-radius:var(--rl);padding:1.5rem;max-width:560px;width:100%;box-shadow:var(--shadowlg);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+          <h3 style="font-size:1rem;font-weight:700;">📊 Snapshot</h3>
+          <div style="display:flex;gap:.5rem;">
+            <button class="btn btn-primary" onclick="window.print()" style="font-size:.8rem;padding:.4rem .9rem;">🖨️ Print / PDF</button>
+            <button class="mtab" onclick="document.getElementById('snapshot-modal').style.display='none'">✕ Close</button>
+          </div>
+        </div>
+        <div id="snapshot-body"></div>
+      </div>
     </div>
 
     <!-- Edit income modal (budget tab only) -->
@@ -905,6 +930,61 @@ async function saveBizField(field, value) {
 
   renderApp();
   toast('Saved ✓');
+}
+
+function openSnapshot() {
+  const current = state.months.find(m => m.id === state.currentMonthId);
+  if (!current) return;
+  const income = totalIncome(current);
+  const spent = spentByCategory();
+  const totalSpent = Object.values(spent).reduce((a,b) => a+b, 0);
+  const totalBudgeted = Object.values(state.budgets).reduce((a,b) => a+b, 0);
+  const leftToBudget = income - totalBudgeted;
+  const remainingInBudget = totalBudgeted - totalSpent;
+
+  const n = v => v == null || v === '' ? '' : Number(v).toLocaleString('en-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
+
+  const groupRows = CATEGORY_GROUPS.map(group => {
+    const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
+    const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
+    const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
+    const gr = gb - gs;
+    const catRows = cats.map(c => {
+      const s = spent[c.key] || 0;
+      const b = state.budgets[c.key] || 0;
+      const r = b - s;
+      return `<tr class="sn-cat">
+        <td>${c.emoji} ${c.label}</td>
+        <td>${b ? n(b) : ''}</td>
+        <td>${s ? n(s) : '0'}</td>
+        <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
+      </tr>`;
+    }).join('');
+    return `<tr class="sn-group">
+        <td>${group.emoji} ${group.label}</td>
+        <td>${gb ? n(gb) : ''}</td>
+        <td>${n(gs)}</td>
+        <td class="${(gr)<0?'sn-over':gr>0?'sn-ok':''}">${gb ? n(gr) : ''}</td>
+      </tr>${catRows}`;
+  }).join('');
+
+  document.getElementById('snapshot-modal').style.display = 'flex';
+  document.getElementById('snapshot-body').innerHTML = `
+    <table class="sn-table">
+      <thead><tr><th>Category</th><th>Budget ₪</th><th>Spent ₪</th><th>Remaining ₪</th></tr></thead>
+      <tbody>
+        <tr class="sn-section"><td colspan="4">📊 Summary — ${current.month_name}</td></tr>
+        <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
+        <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
+        <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income-totalSpent>=0?'sn-ok':'sn-over'}">${n(income-totalSpent)}</td></tr>
+        <tr class="sn-section"><td colspan="4">📋 Budget Overview</td></tr>
+        <tr class="sn-cat"><td>Budgeted</td><td>${n(totalBudgeted)}</td><td></td><td></td></tr>
+        <tr class="sn-cat"><td>Left to Budget</td><td class="${leftToBudget<0?'sn-over':'sn-ok'}">${n(leftToBudget)}</td><td></td><td></td></tr>
+        <tr class="sn-cat"><td>Remaining in Budget</td><td></td><td></td><td class="${remainingInBudget>=0?'sn-ok':'sn-over'}">${n(remainingInBudget)}</td></tr>
+        <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
+        ${groupRows}
+      </tbody>
+    </table>`;
 }
 
 async function refreshBiz() {
