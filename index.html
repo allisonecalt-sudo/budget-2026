@@ -116,6 +116,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .bi-amount:focus { border-bottom-color:var(--accent); }
 .bi-del { background:none; border:none; color:var(--dim); cursor:pointer; font-size:1rem; padding:0 .2rem; line-height:1; }
 .bi-del:hover { color:var(--red); }
+.bi-default { background:none; border:none; color:var(--dim); cursor:pointer; font-size:.85rem; padding:0 .2rem; line-height:1; }
+.bi-default:hover { color:var(--amber); }
+.bi-default.is-default { color:var(--amber); }
 .bi-add { background:none; border:none; font-size:.72rem; color:var(--accent); cursor:pointer; padding:.25rem .5rem; font-weight:600; }
 .group-block { margin-bottom: 1rem; }
 .group-block.collapsed .group-cats { display:none; }
@@ -371,6 +374,20 @@ async function deleteBudgetItem(id) {
     state.budgetItems[k] = state.budgetItems[k].filter(i => i.id !== id);
   }
   renderApp();
+}
+
+async function setItemAsDefault(id) {
+  const catKey = Object.keys(state.budgetItems).find(k => state.budgetItems[k].find(i => i.id === id));
+  const item = (state.budgetItems[catKey] || []).find(i => i.id === id);
+  if (!item) return;
+  // Update template row matching this category + sort_order with the current amount + label
+  await sb.from('budget_item_templates')
+    .update({ amount: item.amount, label: item.label })
+    .eq('category', catKey).eq('sort_order', item.sort_order);
+  // Visual feedback — briefly mark as default
+  item.is_default = true;
+  renderApp();
+  setTimeout(() => { item.is_default = false; renderApp(); }, 1500);
 }
 
 // When loading a month that has no budget items for a hasLines category,
@@ -786,6 +803,7 @@ function renderApp() {
                                 onclick="event.stopPropagation()"
                                 onchange="saveBudgetItem('${item.id}','amount',this.value)"
                                 onkeydown="if(event.key==='Enter')this.blur()">
+                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" title="Set as default for future months">★</button>
                               <button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem('${item.id}')">×</button>
                             </div>`).join('')}
                           <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
