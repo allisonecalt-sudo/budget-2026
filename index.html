@@ -194,7 +194,8 @@ const PT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const CATEGORIES = [
   { key: 'groceries',    label: 'Groceries',           emoji: '🛒', hasStore: true },
-  { key: 'takeout',      label: 'Take Out',             emoji: '🥡', hasStore: false },
+  { key: 'takeout',      label: 'Take Out',             emoji: '🥡', hasStore: true },
+  { key: 'eatingout',    label: 'Eating Out',           emoji: '🍽️', hasStore: true },
   { key: 'entertainment',label: 'Entertainment',        emoji: '🎬', hasStore: false },
   { key: 'retail',       label: 'Retail & Shopping',    emoji: '🛍️', hasStore: true },
   { key: 'transport',    label: 'Transportation',       emoji: '🚗', hasStore: false },
@@ -211,7 +212,7 @@ const CATEGORIES = [
 
 const CATEGORY_GROUPS = [
   { label: 'Essential Living',   emoji: '🏠', keys: ['groceries', 'housing', 'transport', 'health', 'therapy'] },
-  { label: 'Leisure & Lifestyle',emoji: '🎉', keys: ['takeout', 'entertainment', 'retail', 'holiday', 'gifts'] },
+  { label: 'Leisure & Lifestyle',emoji: '🎉', keys: ['takeout', 'eatingout', 'entertainment', 'retail', 'holiday', 'gifts'] },
   { label: 'Core Financial',     emoji: '🔄', keys: ['recurring'] },
   { label: 'Charity',            emoji: '💚', keys: ['charity'] },
   { label: 'Travel',             emoji: '✈️', keys: ['travel'] },
