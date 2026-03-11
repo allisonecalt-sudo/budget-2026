@@ -437,7 +437,8 @@ function renderApp() {
           </div>
           <div class="fg">
             <label>Store</label>
-            <input type="text" id="tx-store" placeholder="Makolet, Wolt...">
+            <input type="text" id="tx-store" placeholder="Makolet, Wolt..." list="store-suggestions" autocomplete="off">
+            <datalist id="store-suggestions"></datalist>
           </div>
           <div class="fg">
             <label>Item</label>
@@ -448,7 +449,7 @@ function renderApp() {
             <input type="number" id="tx-amount" placeholder="0" min="0" step="0.01">
           </div>
           <div class="fg" style="max-width:140px;">
-            <label>Date</label>
+            <label>Date <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(optional)</span></label>
             <input type="date" id="tx-date" value="${today()}">
           </div>
           <button class="btn btn-primary" id="tx-btn" onclick="addTransaction()">Save</button>
@@ -522,15 +523,31 @@ function renderApp() {
     </div>
   `;
 
-  // Set store field visibility based on category
+  // Set store field visibility + autocomplete based on category
   const catSel = document.getElementById('tx-cat');
   if (catSel) {
     catSel.addEventListener('change', () => {
       const cat = CATEGORIES.find(c => c.key === catSel.value);
       const storeField = document.getElementById('tx-store');
       if (storeField) storeField.placeholder = cat?.hasStore ? 'Makolet, Yochananof...' : 'Optional';
+      updateStoreSuggestions(catSel.value);
     });
   }
+}
+
+const PRESET_STORES = {
+  groceries: ['Shufersal', 'Osher Ad', 'Carrefour'],
+};
+
+function updateStoreSuggestions(catKey) {
+  const dl = document.getElementById('store-suggestions');
+  if (!dl) return;
+  const presets = PRESET_STORES[catKey] || [];
+  const fromHistory = state.transactions
+    .filter(tx => tx.category === catKey && tx.store)
+    .map(tx => tx.store);
+  const stores = [...new Set([...presets, ...fromHistory])];
+  dl.innerHTML = stores.map(s => `<option value="${s}">`).join('');
 }
 
 function toggleCat(key) {
