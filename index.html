@@ -605,6 +605,11 @@ async function loadBizData() {
   const { data: scheduled } = await pt.from('sessions').select('*').eq('status','scheduled').gte('date', thisMonthStart).lt('date', thisMonthEnd);
 
   state.ptSessions = { earned: earned || [], scheduled: scheduled || [] };
+
+  // Load all biz_months for accountant fee tracking
+  const monthIds = state.months.map(m => m.id);
+  const { data: allBiz } = await sb.from('biz_months').select('*').in('month_id', monthIds);
+  state.allBiz = allBiz || [];
 }
 
 // ── Biz tab render ────────────────────────────────────────────────────
@@ -689,6 +694,35 @@ function renderBizTab(current) {
       <div class="biz-net">
         <span class="biz-net-label">Net → Private (Vivi)</span>
         <span class="biz-net-val">${fmt(net)}</span>
+      </div>
+    </div>
+
+    ${renderAccountantTracker(current)}
+  `;
+}
+
+function renderAccountantTracker(current) {
+  const allBiz = state.allBiz || [];
+  const totalPaid = allBiz.reduce((sum, b) => sum + (b.accountant_fee || 0), 0);
+  const shouldBe = current.month_num * 200;
+  const diff = totalPaid - shouldBe;
+  const diffLabel = diff === 0 ? 'on track' : diff > 0 ? `₪${diff} ahead` : `₪${Math.abs(diff)} behind`;
+  const diffColor = diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--amber)' : 'var(--red)';
+
+  return `
+    <div class="biz-card">
+      <div class="biz-section-title">Accountant Fee Tracker — ₪200/month</div>
+      <div class="biz-row">
+        <span class="biz-label">Should have paid by ${current.month_name}</span>
+        <span class="biz-val">${fmt(shouldBe)}</span>
+      </div>
+      <div class="biz-row">
+        <span class="biz-label">Actually paid (all months)</span>
+        <span class="biz-val">${fmt(totalPaid)}</span>
+      </div>
+      <div class="biz-row" style="background:var(--surface3);">
+        <span class="biz-label" style="font-weight:700;">Status</span>
+        <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:700;color:${diffColor};">${diffLabel}</span>
       </div>
     </div>
   `;
