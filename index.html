@@ -473,9 +473,16 @@ function renderApp() {
       // Leisure sub-ribbon
       const leisureGroup = CATEGORY_GROUPS.find(g => g.label === 'Leisure & Lifestyle');
       const leisureCats = leisureGroup.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
+      const leisureExpanded = localStorage.getItem('leisureExpanded') !== 'false';
+      const leisureSpent = leisureCats.reduce((sum,c) => sum+(spent[c.key]||0), 0);
+      const leisureBudget = leisureCats.reduce((sum,c) => sum+(state.budgets[c.key]||0), 0);
       const leisureSubRibbon = `<div class="sub-ribbon">
-        <span class="sub-ribbon-label">🎉 Leisure</span>
-        ${leisureCats.map(c => {
+        <span class="sub-ribbon-label" onclick="localStorage.setItem('leisureExpanded', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
+          ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
+          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${n(leisureSpent)}${leisureBudget?` / ${n(leisureBudget)}`:''}
+          </span>
+        </span>
+        ${leisureExpanded ? leisureCats.map(c => {
           const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
           return `<div class="sub-ribbon-cat">
             <div class="ribbon-label">${c.emoji} ${c.label}</div>
@@ -485,7 +492,7 @@ function renderApp() {
               ${b ? `<span class="sub-rem ${r<0?'sn-over':'sn-ok'}">${n(r)}</span>` : ''}
             </div>
           </div>`;
-        }).join('')}
+        }).join('') : ''}
       </div>`;
 
       return `<div class="ribbon-panel">
