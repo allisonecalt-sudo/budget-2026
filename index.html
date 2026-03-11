@@ -589,23 +589,18 @@ async function loadBizData() {
   const { data: clients } = await pt.from('clients').select('*');
   state.ptClients = clients || [];
 
-  // Load sessions from previous month (that's when money is earned)
+  // All sessions from previous month (happened + scheduled)
   const prevMonthNum = current.month_num - 1;
   const prevYear = prevMonthNum === 0 ? 2025 : 2026;
   const actualPrevMonthNum = prevMonthNum === 0 ? 12 : prevMonthNum;
   const monthStart = `${prevYear}-${String(actualPrevMonthNum).padStart(2,'0')}-01`;
   const monthEnd = `${current.year}-${String(current.month_num).padStart(2,'0')}-01`;
 
-  // Earned = happened sessions from previous month
-  const { data: earned } = await pt.from('sessions').select('*').eq('status','happened').gte('date', monthStart).lt('date', monthEnd);
-  // Scheduled = upcoming sessions this month
-  const thisMonthStart = `${current.year}-${String(current.month_num).padStart(2,'0')}-01`;
-  const nextMonthNum = current.month_num === 12 ? 1 : current.month_num + 1;
-  const nextYear = current.month_num === 12 ? current.year + 1 : current.year;
-  const thisMonthEnd = `${nextYear}-${String(nextMonthNum).padStart(2,'0')}-01`;
-  const { data: scheduled } = await pt.from('sessions').select('*').eq('status','scheduled').gte('date', thisMonthStart).lt('date', thisMonthEnd);
+  const { data: prevSessions } = await pt.from('sessions').select('*').gte('date', monthStart).lt('date', monthEnd);
+  const earned = (prevSessions || []).filter(s => s.status === 'happened');
+  const scheduled = (prevSessions || []).filter(s => s.status === 'scheduled');
 
-  state.ptSessions = { earned: earned || [], scheduled: scheduled || [] };
+  state.ptSessions = { earned, scheduled };
 
   // Load all biz_months for accountant fee tracking
   const monthIds = state.months.map(m => m.id);
@@ -661,7 +656,7 @@ function renderBizTab(current) {
     </div>
 
     <div class="biz-card">
-      <div class="biz-section-title">Scheduled — ${current.month_name}</div>
+      <div class="biz-section-title">Scheduled — ${prevMonthName} (not happened)</div>
       ${Object.keys(scheduledByClient).length === 0
         ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions scheduled for ${current.month_name}</div>`
         : Object.entries(scheduledByClient).map(([cid, sessions]) => `
