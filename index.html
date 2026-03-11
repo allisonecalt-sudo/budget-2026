@@ -183,6 +183,12 @@ const CATEGORIES = [
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 const pt = window.supabase.createClient(PT_URL, PT_KEY);
 
+const undoStack = [], redoStack = [];
+function pushUndo(action) { undoStack.push(action); if (undoStack.length > 30) undoStack.shift(); redoStack.length = 0; updateUndoButtons(); }
+function updateUndoButtons() { const u=document.getElementById('undo-btn'),r=document.getElementById('redo-btn'); if(u)u.disabled=undoStack.length===0; if(r)r.disabled=redoStack.length===0; }
+async function doUndo() { const a=undoStack.pop(); if(!a)return; await a.undo(); redoStack.push(a); updateUndoButtons(); renderApp(); toast('Undone: '+a.label); }
+async function doRedo() { const a=redoStack.pop(); if(!a)return; await a.redo(); undoStack.push(a); updateUndoButtons(); renderApp(); toast('Redone: '+a.label); }
+
 let state = {
   months: [],
   currentMonthId: null,
@@ -282,16 +288,17 @@ async function addTransaction() {
   const btn = document.getElementById('tx-btn');
   btn.disabled = true;
 
-  const { error } = await sb.from('transactions').insert({
+  const { data: txData, error } = await sb.from('transactions').insert({
     month_id: state.currentMonthId,
     category: cat,
     store: store || null,
     item: item || null,
     amount,
     date: date || null,
-  });
+  }).select().single();
 
   if (error) { toast('Error saving — try again'); btn.disabled = false; return; }
+  pushUndo({ label: 'add transaction', undo: async()=>{ await sb.from('transactions').delete().eq('id',txData.id); await loadTransactions(state.currentMonthId); }, redo: async()=>{ await sb.from('transactions').insert(txData); await loadTransactions(state.currentMonthId); } });
 
   // Clear form
   document.getElementById('tx-store').value = '';
@@ -362,6 +369,10 @@ function renderApp() {
         <div class="page-tabs">
           <button class="ptab ${state.activeTab === 'budget' ? 'active' : ''}" onclick="switchTab('budget')">Budget</button>
           <button class="ptab ${state.activeTab === 'biz' ? 'active' : ''}" onclick="switchTab('biz')">Biz 💼</button>
+        </div>
+        <div style="display:flex;gap:.2rem;">
+          <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">← Undo</button>
+          <button id="redo-btn" class="mtab" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">Redo →</button>
         </div>
         <div class="month-tabs">
           ${state.months.map(m => `
@@ -529,11 +540,12 @@ function toggleCat(key) {
 
 async function saveIncomeField(field, value) {
   const num = parseFloat(value) || 0;
+  const month = state.months.find(m => m.id === state.currentMonthId);
+  const oldVal = month ? month[field] : 0;
   const { error } = await sb.from('months').update({ [field]: num }).eq('id', state.currentMonthId);
   if (error) { toast('Error saving'); return; }
-  const month = state.months.find(m => m.id === state.currentMonthId);
   if (month) month[field] = num;
-  // Re-render stats only
+  pushUndo({ label: field.replace('income_',''), undo: async()=>{ await sb.from('months').update({[field]:oldVal}).eq('id',state.currentMonthId); if(month)month[field]=oldVal; }, redo: async()=>{ await sb.from('months').update({[field]:num}).eq('id',state.currentMonthId); if(month)month[field]=num; } });
   renderApp();
   toast('Saved ✓');
 }
@@ -542,29 +554,37 @@ async function addIncomeItem() {
   const { data, error } = await sb.from('income_items').insert({ month_id: state.currentMonthId, label: 'Other', amount: 0 }).select().single();
   if (error) { toast('Error adding'); return; }
   state.incomeItems.push(data);
+  pushUndo({ label: 'add income source', undo: async()=>{ await sb.from('income_items').delete().eq('id',data.id); state.incomeItems=state.incomeItems.filter(i=>i.id!==data.id); }, redo: async()=>{ await sb.from('income_items').insert(data); state.incomeItems.push(data); } });
   renderApp();
 }
 
 async function saveIncomeItemLabel(id, value) {
-  await sb.from('income_items').update({ label: value }).eq('id', id);
   const item = state.incomeItems.find(i => i.id === id);
+  const old = item ? item.label : '';
+  await sb.from('income_items').update({ label: value }).eq('id', id);
   if (item) item.label = value;
+  pushUndo({ label: 'rename income', undo: async()=>{ await sb.from('income_items').update({label:old}).eq('id',id); if(item)item.label=old; }, redo: async()=>{ await sb.from('income_items').update({label:value}).eq('id',id); if(item)item.label=value; } });
   renderApp();
   toast('Saved ✓');
 }
 
 async function saveIncomeItemAmount(id, value) {
   const num = parseFloat(value) || 0;
-  await sb.from('income_items').update({ amount: num }).eq('id', id);
   const item = state.incomeItems.find(i => i.id === id);
+  const old = item ? item.amount : 0;
+  await sb.from('income_items').update({ amount: num }).eq('id', id);
   if (item) item.amount = num;
+  pushUndo({ label: 'income amount', undo: async()=>{ await sb.from('income_items').update({amount:old}).eq('id',id); if(item)item.amount=old; }, redo: async()=>{ await sb.from('income_items').update({amount:num}).eq('id',id); if(item)item.amount=num; } });
   renderApp();
   toast('Saved ✓');
 }
 
 async function deleteIncomeItem(id) {
+  const item = state.incomeItems.find(i => i.id === id);
+  const snap = {...item};
   await sb.from('income_items').delete().eq('id', id);
   state.incomeItems = state.incomeItems.filter(i => i.id !== id);
+  pushUndo({ label: 'delete income source', undo: async()=>{ await sb.from('income_items').insert(snap); state.incomeItems.push(snap); }, redo: async()=>{ await sb.from('income_items').delete().eq('id',id); state.incomeItems=state.incomeItems.filter(i=>i.id!==id); } });
   renderApp();
 }
 
@@ -771,9 +791,11 @@ function renderAccountantTracker(current) {
 
 async function saveBizField(field, value) {
   const num = parseFloat(value) || 0;
+  const oldVal = state.biz ? state.biz[field] : 0;
   const { error } = await sb.from('biz_months').update({ [field]: num }).eq('id', state.biz.id);
   if (error) { toast('Error saving'); return; }
   state.biz[field] = num;
+  pushUndo({ label: 'biz '+field, undo: async()=>{ await sb.from('biz_months').update({[field]:oldVal}).eq('id',state.biz.id); state.biz[field]=oldVal; }, redo: async()=>{ await sb.from('biz_months').update({[field]:num}).eq('id',state.biz.id); state.biz[field]=num; } });
 
   // If confirmed_amount changes, also update income_private in main months table
   if (field === 'confirmed_amount') {
@@ -816,6 +838,10 @@ async function init() {
   }
 }
 
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
+  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z'&&e.shiftKey))) { e.preventDefault(); doRedo(); }
+});
 init();
 </script>
 </body>
