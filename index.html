@@ -519,6 +519,17 @@ function renderApp() {
                 <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Remaining</th></tr></thead>
                 <tbody>
                   <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
+                  ${(()=>{
+                    const bkB=state.budgets['savings_bank']||0, bkS=Number(current.savings_bank)||0;
+                    const invB=state.budgets['savings_invested']||0, invS=Number(current.savings_invested)||0;
+                    const gb=bkB+invB, gs=bkS+invS, gr=gb-gs;
+                    return `<tr class="sn-group" id="rsngrp-Savings-hdr" onclick="(function(){var rows=document.querySelectorAll('.rsngrp-Savings');var chev=document.querySelector('#rsngrp-Savings-hdr .sn-chev');var c=rows[0]&&rows[0].classList.contains('collapsed');rows.forEach(function(r){r.classList.toggle('collapsed')});if(chev)chev.textContent=c?'▼':'▶';})()">
+                      <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>🏦 Savings</td>
+                      <td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td>
+                    </tr>
+                    <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">🏦 In Bank</td><td>${bkB?n(bkB):''}</td><td>${n(bkS)}</td><td>${bkB?n(bkB-bkS):''}</td></tr>
+                    <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">📈 Invested</td><td>${invB?n(invB):''}</td><td>${n(invS)}</td><td>${invB?n(invB-invS):''}</td></tr>`;
+                  })()}
                   ${groupRows}
                 </tbody>
               </table>
