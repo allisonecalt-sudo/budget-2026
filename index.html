@@ -87,15 +87,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .cat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; cursor: pointer; }
 .cat-name { font-size: .84rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 .cat-emoji { font-size: 1rem; }
-.sn-table { width:100%; border-collapse:collapse; font-size:.82rem; }
-.sn-table th { text-align:left; padding:.5rem .75rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:2px solid var(--border); background:var(--surface2); }
+.sn-table { width:100%; border-collapse:collapse; font-size:.82rem; border:1px solid var(--border); }
+.sn-table th { text-align:left; padding:.5rem .75rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:2px solid var(--border); background:var(--surface2); border-right:1px solid var(--border); }
+.sn-table th:last-child { border-right:none; }
 .sn-table th:not(:first-child) { text-align:right; }
 .sn-section td { font-weight:700; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; padding:.9rem .75rem .4rem; color:var(--muted); border-top:2px solid var(--border); }
 .sn-group { cursor:pointer; }
 .sn-group:hover td { background: var(--border); }
-.sn-group td { font-weight:700; padding:.5rem .75rem; background:var(--surface2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
-.sn-cat td { padding:.4rem .75rem; border-bottom:1px solid var(--border); }
-.sn-cat:nth-child(odd) td { background: rgba(0,0,0,.015); }
+.sn-group td { font-weight:700; padding:.5rem .75rem; background:var(--surface2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); border-right:1px solid var(--border); }
+.sn-group td:last-child { border-right:none; }
+.sn-cat td { padding:.4rem .75rem; border-bottom:1px solid var(--border); border-right:1px solid var(--border); }
+.sn-cat td:last-child { border-right:none; }
+.sn-cat:nth-child(odd) td { background: rgba(0,0,0,.018); }
 .sn-cat.collapsed { display:none; }
 .sn-table td:not(:first-child) { text-align:right; font-family:'DM Mono',monospace; }
 .sn-ok { color: var(--accent); font-weight:600; }
