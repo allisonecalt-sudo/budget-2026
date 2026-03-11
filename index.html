@@ -533,33 +533,6 @@ function renderApp() {
     <div class="main">
       ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'biz' ? renderBizTab(current) : `
 
-      <!-- Top stats -->
-      ${(()=>{
-        const leftToBudget = income - totalBudgeted;
-        const remainingInBudget = totalBudgeted - totalSpent;
-        return `<div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-label">Income</div>
-            <div class="stat-val">${fmt(income)}</div>
-            <div class="stat-sub">This month</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Budgeted</div>
-            <div class="stat-val">${fmt(totalBudgeted)}</div>
-            <div class="stat-sub ${leftToBudget >= 0 ? '' : 'red'}">${leftToBudget >= 0 ? fmt(leftToBudget)+' unallocated' : fmt(Math.abs(leftToBudget))+' over income'}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Spent</div>
-            <div class="stat-val">${fmt(totalSpent)}</div>
-            <div class="stat-sub">Of budgeted</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Remaining</div>
-            <div class="stat-val ${remainingInBudget >= 0 ? 'green' : 'red'}">${fmt(remainingInBudget)}</div>
-            <div class="stat-sub">${remainingInBudget >= 0 ? 'In budget' : 'Over budget'}</div>
-          </div>
-        </div>`;
-      })()}
 
       <!-- Income breakdown -->
       <div class="card">
