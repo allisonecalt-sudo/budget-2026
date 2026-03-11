@@ -595,6 +595,52 @@ function renderApp() {
         Spending by Category — click to see transactions
       </div>
       <div class="categories">
+
+        <!-- Savings group (manual inputs) -->
+        ${(()=>{
+          const bankBudget = state.budgets['savings_bank'] || 0;
+          const investBudget = state.budgets['savings_invested'] || 0;
+          const bankSpent = Number(current.savings_bank) || 0;
+          const investSpent = Number(current.savings_invested) || 0;
+          const groupBudget = bankBudget + investBudget;
+          const groupSpent = bankSpent + investSpent;
+          const groupSt = status(groupSpent, groupBudget);
+          const savingsRow = (label, emoji, budgetKey, spentField, budgetVal, spentVal) => {
+            const r = budgetVal - spentVal;
+            const st = status(spentVal, budgetVal);
+            return `<div class="cat-row">
+              <div class="cat-top" style="cursor:default;">
+                <div class="cat-name"><span class="cat-emoji">${emoji}</span>${label} <span style="font-size:.65rem;color:var(--muted);margin-left:.3rem;">(manual)</span></div>
+                <div class="cat-amounts">
+                  <input type="number" class="budget-inline" value="${spentVal||''}" placeholder="actual" min="0" step="1"
+                    onchange="saveSavingsField('${spentField}', this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    style="width:80px" title="Actual amount saved">
+                  <span style="color:var(--muted)"> / </span>
+                  <input type="number" class="budget-inline" value="${budgetVal||''}" placeholder="budget" min="0" step="1"
+                    onchange="saveBudget('${budgetKey}', this.value)"
+                    onkeydown="if(event.key==='Enter')this.blur()"
+                    style="width:80px" title="Budgeted amount">
+                </div>
+              </div>
+              ${budgetVal > 0 ? `<div class="progress-bar"><div class="progress-fill ${st}" style="width:${pct(spentVal,budgetVal)}%"></div></div>
+              <div class="cat-remaining ${st}">${st==='over'?`₪${fmt(spentVal-budgetVal).replace('₪','')} over`:`₪${fmt(r).replace('₪','')} remaining`}</div>` : ''}
+            </div>`;
+          };
+          return `<div class="group-block">
+            <div class="group-header">
+              <span>🏦 Savings</span>
+              <span class="group-totals">
+                <span class="cat-spent-bold">${fmt(groupSpent)}</span>
+                ${groupBudget>0?`<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>`:''}
+                ${groupBudget>0?`<span class="group-rem ${groupSt}"> · ${fmt(Math.abs(groupBudget-groupSpent))} ${groupSt==='over'?'over':'left'}</span>`:''}
+              </span>
+            </div>
+            ${savingsRow('In Bank','🏦','savings_bank','savings_bank',bankBudget,bankSpent)}
+            ${savingsRow('Invested','📈','savings_invested','savings_invested',investBudget,investSpent)}
+          </div>`;
+        })()}
+
         ${CATEGORY_GROUPS.map(group => {
           const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
           const groupSpent = cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0);
@@ -709,6 +755,17 @@ function renderApp() {
       updateStoreSuggestions(catSel.value);
     });
   }
+}
+
+async function saveSavingsField(field, value) {
+  const num = parseFloat(value) || 0;
+  const month = state.months.find(m => m.id === state.currentMonthId);
+  const old = Number(month[field]) || 0;
+  await sb.from('months').update({ [field]: num }).eq('id', state.currentMonthId);
+  if (month) month[field] = num;
+  pushUndo({ label: 'savings '+field, undo: async()=>{ await sb.from('months').update({[field]:old}).eq('id',state.currentMonthId); if(month)month[field]=old; }, redo: async()=>{ await sb.from('months').update({[field]:num}).eq('id',state.currentMonthId); if(month)month[field]=num; } });
+  renderApp();
+  toast('Saved ✓');
 }
 
 async function saveBudget(catKey, amount) {
@@ -1087,6 +1144,9 @@ function openSnapshot() {
         <tr class="sn-cat"><td>Left to Budget</td><td class="${leftToBudget<0?'sn-over':'sn-ok'}">${n(leftToBudget)}</td><td></td><td></td></tr>
         <tr class="sn-cat"><td>Remaining in Budget</td><td></td><td></td><td class="${remainingInBudget>=0?'sn-ok':'sn-over'}">${n(remainingInBudget)}</td></tr>
         <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
+        <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))}</td><td>${n((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</td><td class="${((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-(( Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))>=0?'sn-ok':'sn-over'}">${n(((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0)))}</td></tr>
+        <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank']||0)}</td><td>${n(Number(current.savings_bank)||0)}</td><td>${n((state.budgets['savings_bank']||0)-(Number(current.savings_bank)||0))}</td></tr>
+        <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested']||0)}</td><td>${n(Number(current.savings_invested)||0)}</td><td>${n((state.budgets['savings_invested']||0)-(Number(current.savings_invested)||0))}</td></tr>
         ${groupRows}
       </tbody>
     </table>`;
