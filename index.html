@@ -644,7 +644,7 @@ function renderBizTab(current) {
   return `
     <div class="biz-card">
       <div class="biz-section-title">
-        Sessions Happened — ${prevMonthName} (after VV)
+        Sessions Happened — ${prevMonthName}
         <button class="biz-sync-btn" onclick="refreshBiz()">↻ Sync</button>
       </div>
       ${Object.keys(earnedByClient).length === 0
@@ -661,7 +661,7 @@ function renderBizTab(current) {
     </div>
 
     <div class="biz-card">
-      <div class="biz-section-title">Scheduled — ${current.month_name} (after VV)</div>
+      <div class="biz-section-title">Scheduled — ${current.month_name}</div>
       ${Object.keys(scheduledByClient).length === 0
         ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions scheduled for ${current.month_name}</div>`
         : Object.entries(scheduledByClient).map(([cid, sessions]) => `
