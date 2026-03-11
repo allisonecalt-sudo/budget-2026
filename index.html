@@ -239,7 +239,7 @@ async function switchMonth(monthId) {
   state.currentMonthId = monthId;
   state.loading = true;
   renderApp();
-  const loads = [loadTransactions(monthId), loadBudgets(monthId)];
+  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId)];
   if (state.activeTab === 'biz') loads.push(loadBizData());
   await Promise.all(loads);
   state.loading = false;
@@ -256,11 +256,17 @@ function spentByCategory() {
   return totals;
 }
 
+async function loadIncomeItems(monthId) {
+  const { data } = await sb.from('income_items').select('*').eq('month_id', monthId).order('created_at');
+  state.incomeItems = data || [];
+}
+
 function totalIncome(month) {
+  const extras = state.incomeItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   return (Number(month.income_petachya) || 0)
     + (Number(month.income_clalit) || 0)
     + (Number(month.income_private) || 0)
-    + (Number(month.income_other) || 0);
+    + extras;
 }
 
 // ── Add transaction ───────────────────────────────────────────────────
@@ -395,8 +401,16 @@ function renderApp() {
           <div class="income-row"><span class="income-source">Petachya</span><input class="income-input" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div>
           <div class="income-row"><span class="income-source">Clalit</span><input class="income-input" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div>
           <div class="income-row"><span class="income-source">Private (Vivi)</span><input class="income-input" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div>
-          <div class="income-row"><span class="income-source">Other</span><input class="income-input" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div>
+          ${state.incomeItems.map(item => `
+          <div class="income-row">
+            <input type="text" class="income-input" style="width:100px;text-align:left;" value="${item.label}" placeholder="Source" onchange="saveIncomeItemLabel('${item.id}', this.value)">
+            <div style="display:flex;align-items:center;gap:.3rem;">
+              <input class="income-input" type="number" value="${item.amount || ''}" placeholder="0" onchange="saveIncomeItemAmount('${item.id}', this.value)" min="0" step="1">
+              <button onclick="deleteIncomeItem('${item.id}')" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:1rem;padding:0 .2rem;">×</button>
+            </div>
+          </div>`).join('')}
         </div>
+        <button onclick="addIncomeItem()" style="margin-top:.6rem;font-size:.75rem;font-weight:600;color:var(--accent);background:var(--asoft);border:none;border-radius:6px;padding:.3rem .75rem;cursor:pointer;">+ Add income source</button>
       </div>
 
       <!-- Add transaction -->
@@ -522,6 +536,36 @@ async function saveIncomeField(field, value) {
   // Re-render stats only
   renderApp();
   toast('Saved ✓');
+}
+
+async function addIncomeItem() {
+  const { data, error } = await sb.from('income_items').insert({ month_id: state.currentMonthId, label: 'Other', amount: 0 }).select().single();
+  if (error) { toast('Error adding'); return; }
+  state.incomeItems.push(data);
+  renderApp();
+}
+
+async function saveIncomeItemLabel(id, value) {
+  await sb.from('income_items').update({ label: value }).eq('id', id);
+  const item = state.incomeItems.find(i => i.id === id);
+  if (item) item.label = value;
+  renderApp();
+  toast('Saved ✓');
+}
+
+async function saveIncomeItemAmount(id, value) {
+  const num = parseFloat(value) || 0;
+  await sb.from('income_items').update({ amount: num }).eq('id', id);
+  const item = state.incomeItems.find(i => i.id === id);
+  if (item) item.amount = num;
+  renderApp();
+  toast('Saved ✓');
+}
+
+async function deleteIncomeItem(id) {
+  await sb.from('income_items').delete().eq('id', id);
+  state.incomeItems = state.incomeItems.filter(i => i.id !== id);
+  renderApp();
 }
 
 function showEditIncome() {
