@@ -88,17 +88,25 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .cat-name { font-size: .84rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
 .cat-emoji { font-size: 1rem; }
 .sn-table { width:100%; border-collapse:collapse; font-size:.82rem; }
-.sn-table th { text-align:left; padding:.4rem .6rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:2px solid var(--border); }
+.sn-table th { text-align:left; padding:.5rem .75rem; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); border-bottom:2px solid var(--border); background:var(--surface2); }
 .sn-table th:not(:first-child) { text-align:right; }
-.sn-section td { font-weight:700; font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; padding:.7rem .6rem .3rem; color:var(--muted); border-top: 1px solid var(--border); }
-.sn-group td { font-weight:700; padding:.45rem .6rem; background:var(--surface2); }
-.sn-cat td { padding:.3rem .6rem; }
+.sn-section td { font-weight:700; font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; padding:.9rem .75rem .4rem; color:var(--muted); border-top:2px solid var(--border); }
+.sn-group { cursor:pointer; }
+.sn-group:hover td { background: var(--border); }
+.sn-group td { font-weight:700; padding:.5rem .75rem; background:var(--surface2); border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+.sn-cat td { padding:.4rem .75rem; border-bottom:1px solid var(--border); }
+.sn-cat:nth-child(odd) td { background: rgba(0,0,0,.015); }
+.sn-cat.collapsed { display:none; }
 .sn-table td:not(:first-child) { text-align:right; font-family:'DM Mono',monospace; }
 .sn-ok { color: var(--accent); font-weight:600; }
 .sn-over { color: #dc2626; font-weight:600; }
 @media print { #snapshot-modal { position:static!important; background:none!important; backdrop-filter:none!important; padding:0!important; } #snapshot-modal > div { box-shadow:none!important; max-width:100%!important; } button { display:none!important; } }
-.group-block { margin-bottom: 1.25rem; }
-.group-header { display:flex; justify-content:space-between; align-items:center; padding:.5rem .75rem; background:var(--surface2); border-radius:var(--r); margin-bottom:.35rem; font-size:.8rem; font-weight:700; color:var(--text); letter-spacing:.01em; }
+.group-block { margin-bottom: 1rem; }
+.group-block.collapsed .group-cats { display:none; }
+.group-header { display:flex; justify-content:space-between; align-items:center; padding:.55rem .75rem; background:var(--surface2); border-radius:var(--r); margin-bottom:.35rem; font-size:.8rem; font-weight:700; color:var(--text); letter-spacing:.01em; cursor:pointer; user-select:none; border:1px solid var(--border); }
+.group-header:hover { background:var(--border); }
+.group-chevron { font-size:.65rem; color:var(--muted); margin-right:.4rem; transition:transform .2s; }
+.group-block.collapsed .group-chevron { transform: rotate(-90deg); }
 .group-totals { font-family:'DM Mono',monospace; font-size:.75rem; font-weight:400; display:flex; gap:.3rem; align-items:center; }
 .group-rem { font-weight:600; }
 .group-rem.ok { color: var(--accent); }
@@ -627,17 +635,19 @@ function renderApp() {
               <div class="cat-remaining ${st}">${st==='over'?`₪${fmt(spentVal-budgetVal).replace('₪','')} over`:`₪${fmt(r).replace('₪','')} remaining`}</div>` : ''}
             </div>`;
           };
-          return `<div class="group-block">
-            <div class="group-header">
-              <span>🏦 Savings</span>
+          return `<div class="group-block" id="group-Savings">
+            <div class="group-header" onclick="toggleGroup('Savings')">
+              <span><span class="group-chevron">▼</span>🏦 Savings</span>
               <span class="group-totals">
                 <span class="cat-spent-bold">${fmt(groupSpent)}</span>
                 ${groupBudget>0?`<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>`:''}
                 ${groupBudget>0?`<span class="group-rem ${groupSt}"> · ${fmt(Math.abs(groupBudget-groupSpent))} ${groupSt==='over'?'over':'left'}</span>`:''}
               </span>
             </div>
-            ${savingsRow('In Bank','🏦','savings_bank','savings_bank',bankBudget,bankSpent)}
-            ${savingsRow('Invested','📈','savings_invested','savings_invested',investBudget,investSpent)}
+            <div class="group-cats">
+              ${savingsRow('In Bank','🏦','savings_bank','savings_bank',bankBudget,bankSpent)}
+              ${savingsRow('Invested','📈','savings_invested','savings_invested',investBudget,investSpent)}
+            </div>
           </div>`;
         })()}
 
@@ -647,15 +657,16 @@ function renderApp() {
           const groupBudget = cats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0);
           const groupSt = status(groupSpent, groupBudget);
           return `
-            <div class="group-block">
-              <div class="group-header">
-                <span>${group.emoji} ${group.label}</span>
+            <div class="group-block" id="group-${group.label.replace(/\s+/g,'-')}">
+              <div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g,'-')}')">
+                <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}</span>
                 <span class="group-totals">
                   <span class="cat-spent-bold">${fmt(groupSpent)}</span>
                   ${groupBudget > 0 ? `<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>` : ''}
                   ${groupBudget > 0 ? `<span class="group-rem ${groupSt}"> · ${groupSt === 'over' ? '-' : ''}${fmt(Math.abs(groupBudget - groupSpent))} ${groupSt === 'over' ? 'over' : 'left'}</span>` : ''}
                 </span>
               </div>
+              <div class="group-cats">
               ${cats.map(c => {
                 const s = spent[c.key] || 0;
                 const b = state.budgets[c.key] || 0;
@@ -706,6 +717,7 @@ function renderApp() {
                     </div>
                   </div>`;
               }).join('')}
+              </div>
             </div>`;
         }).join('')}
       </div>
@@ -1082,6 +1094,11 @@ async function saveBizField(field, value) {
   toast('Saved ✓');
 }
 
+function toggleGroup(key) {
+  const el = document.getElementById('group-' + key);
+  if (el) el.classList.toggle('collapsed');
+}
+
 function toggleRibbon() {
   const hidden = localStorage.getItem('ribbonHidden') === 'true';
   localStorage.setItem('ribbonHidden', !hidden);
@@ -1111,22 +1128,23 @@ function openSnapshot() {
     const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
     const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
     const gr = gb - gs;
+    const gid = 'sngrp-' + group.label.replace(/\s+/g,'-');
     const catRows = cats.map(c => {
       const s = spent[c.key] || 0;
       const b = state.budgets[c.key] || 0;
       const r = b - s;
-      return `<tr class="sn-cat">
-        <td>${c.emoji} ${c.label}</td>
+      return `<tr class="sn-cat ${gid}">
+        <td style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td>${b ? n(b) : ''}</td>
         <td>${s ? n(s) : '0'}</td>
         <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
       </tr>`;
     }).join('');
-    return `<tr class="sn-group">
-        <td>${group.emoji} ${group.label}</td>
+    return `<tr class="sn-group" onclick="document.querySelectorAll('.${gid}').forEach(r=>r.classList.toggle('collapsed'))">
+        <td><span style="font-size:.65rem;margin-right:.3rem">▼</span>${group.emoji} ${group.label}</td>
         <td>${gb ? n(gb) : ''}</td>
         <td>${n(gs)}</td>
-        <td class="${(gr)<0?'sn-over':gr>0?'sn-ok':''}">${gb ? n(gr) : ''}</td>
+        <td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb ? n(gr) : ''}</td>
       </tr>${catRows}`;
   }).join('');
 
