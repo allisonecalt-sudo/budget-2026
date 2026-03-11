@@ -637,7 +637,8 @@ function renderBizTab(current) {
   });
   const scheduledTotal = scheduled.reduce((sum, s) => sum + clientRate(s.client_id), 0);
 
-  const net = (biz.confirmed_amount || 0) - (biz.accountant_fee || 0) - (biz.spending || 0);
+  const afterVV = (biz.confirmed_amount || 0) * 0.85;
+  const net = afterVV - (biz.accountant_fee || 0) - (biz.spending || 0);
   const prevMonthName = current.month_num > 1 ? MONTHS[current.month_num - 2] : 'December';
 
   return `
@@ -680,6 +681,14 @@ function renderBizTab(current) {
         <span class="biz-label">Confirmed amount</span>
         <input class="biz-input" type="number" value="${biz.confirmed_amount || ''}" placeholder="0"
           onchange="saveBizField('confirmed_amount', this.value)">
+      </div>
+      <div class="biz-row" style="background:var(--rsoft);">
+        <span class="biz-label">VV tax (15%)</span>
+        <span class="biz-val" style="color:var(--red)">−${fmt((biz.confirmed_amount || 0) * 0.15)}</span>
+      </div>
+      <div class="biz-row" style="background:var(--gsoft);">
+        <span class="biz-label">After VV</span>
+        <span class="biz-val green">${fmt(afterVV)}</span>
       </div>
       <div class="biz-row">
         <span class="biz-label">Accountant fee</span>
@@ -736,13 +745,13 @@ async function saveBizField(field, value) {
 
   // If confirmed_amount changes, also update income_private in main months table
   if (field === 'confirmed_amount') {
-    const net = num - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
+    const net = num * 0.85 - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
     await sb.from('months').update({ income_private: net }).eq('id', state.currentMonthId);
     const month = state.months.find(m => m.id === state.currentMonthId);
     if (month) month.income_private = net;
   }
   if (field === 'accountant_fee' || field === 'spending') {
-    const net = (state.biz.confirmed_amount || 0) - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
+    const net = (state.biz.confirmed_amount || 0) * 0.85 - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
     await sb.from('months').update({ income_private: net }).eq('id', state.currentMonthId);
     const month = state.months.find(m => m.id === state.currentMonthId);
     if (month) month.income_private = net;
