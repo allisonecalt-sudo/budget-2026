@@ -246,6 +246,7 @@ async function loadBudgets(monthId) {
 
 async function switchMonth(monthId) {
   state.currentMonthId = monthId;
+  localStorage.setItem('activeMonthId', monthId);
   state.loading = true;
   renderApp();
   const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId)];
@@ -875,9 +876,12 @@ async function refreshBiz() {
 async function init() {
   await loadMonths();
   if (state.months.length > 0) {
-    // Default to current month or latest
+    // Restore last visited month, else default to current calendar month
+    const savedId = localStorage.getItem('activeMonthId');
     const now = new Date();
-    const currentMonth = state.months.find(m => m.month_num === now.getMonth() + 1) || state.months[state.months.length - 1];
+    const currentMonth = (savedId && state.months.find(m => m.id === savedId))
+      || state.months.find(m => m.month_num === now.getMonth() + 1)
+      || state.months[state.months.length - 1];
     await switchMonth(currentMonth.id);
     if (state.activeTab === 'biz') await loadBizData();
   } else {
