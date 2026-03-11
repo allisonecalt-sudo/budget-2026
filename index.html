@@ -713,20 +713,22 @@ function renderBizTab(current) {
 function renderAccountantTracker(current) {
   const allBiz = state.allBiz || [];
   const totalPaid = allBiz.reduce((sum, b) => sum + (b.accountant_fee || 0), 0);
-  const shouldBe = current.month_num * 200;
+  const todayMonth = new Date().getMonth() + 1; // 1-12
+  const shouldBe = todayMonth * 200;
   const diff = totalPaid - shouldBe;
   const diffLabel = diff === 0 ? 'on track' : diff > 0 ? `₪${diff} ahead` : `₪${Math.abs(diff)} behind`;
-  const diffColor = diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--amber)' : 'var(--red)';
+  const diffColor = diff === 0 ? 'var(--green)' : diff > 0 ? 'var(--green)' : 'var(--red)';
+  const todayMonthName = new Date().toLocaleDateString('en-IL',{month:'long'});
 
   return `
     <div class="biz-card">
       <div class="biz-section-title">Accountant Fee Tracker — ₪200/month</div>
       <div class="biz-row">
-        <span class="biz-label">Should have paid by ${current.month_name}</span>
+        <span class="biz-label">Should have paid by ${todayMonthName}</span>
         <span class="biz-val">${fmt(shouldBe)}</span>
       </div>
       <div class="biz-row">
-        <span class="biz-label">Actually paid (all months)</span>
+        <span class="biz-label">Actually paid</span>
         <span class="biz-val">${fmt(totalPaid)}</span>
       </div>
       <div class="biz-row" style="background:var(--surface3);">
