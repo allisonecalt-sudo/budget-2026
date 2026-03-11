@@ -493,7 +493,8 @@ function renderApp() {
           <div class="ribbon-stat"><div class="ribbon-label">Income</div><div class="ribbon-val">${fmt(income)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${(income-totalSpent)>=0?'var(--green)':'var(--red)'}">${fmt(income-totalSpent)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
             <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
@@ -506,10 +507,6 @@ function renderApp() {
               <table class="sn-table">
                 <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Remaining</th></tr></thead>
                 <tbody>
-                  <tr class="sn-section"><td colspan="4">📋 Budget Overview</td></tr>
-                  <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
-                  <tr class="sn-cat"><td>Budgeted</td><td>${n(totalBudgeted)}</td><td></td><td class="${leftToBudget<0?'sn-over':'sn-ok'}">${n(leftToBudget)} left</td></tr>
-                  <tr class="sn-cat"><td>Remaining in Budget</td><td></td><td></td><td class="${remainingInBudget>=0?'sn-ok':'sn-over'}">${n(remainingInBudget)}</td></tr>
                   <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
                   ${groupRows}
                 </tbody>
@@ -1169,10 +1166,6 @@ function openSnapshot() {
         <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
         <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
         <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income-totalSpent>=0?'sn-ok':'sn-over'}">${n(income-totalSpent)}</td></tr>
-        <tr class="sn-section"><td colspan="4">📋 Budget Overview</td></tr>
-        <tr class="sn-cat"><td>Budgeted</td><td>${n(totalBudgeted)}</td><td></td><td></td></tr>
-        <tr class="sn-cat"><td>Left to Budget</td><td class="${leftToBudget<0?'sn-over':'sn-ok'}">${n(leftToBudget)}</td><td></td><td></td></tr>
-        <tr class="sn-cat"><td>Remaining in Budget</td><td></td><td></td><td class="${remainingInBudget>=0?'sn-ok':'sn-over'}">${n(remainingInBudget)}</td></tr>
         <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
         <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))}</td><td>${n((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</td><td class="${((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-(( Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))>=0?'sn-ok':'sn-over'}">${n(((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0)))}</td></tr>
         <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank']||0)}</td><td>${n(Number(current.savings_bank)||0)}</td><td>${n((state.budgets['savings_bank']||0)-(Number(current.savings_bank)||0))}</td></tr>
