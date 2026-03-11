@@ -580,7 +580,7 @@ async function loadBizData() {
   if (bizRows && bizRows.length > 0) {
     state.biz = bizRows[0];
   } else {
-    const { data: newBiz } = await sb.from('biz_months').insert({ month_id: state.currentMonthId, accountant_fee: 200, spending: 0, confirmed_amount: 0 }).select().single();
+    const { data: newBiz } = await sb.from('biz_months').insert({ month_id: state.currentMonthId, accountant_fee: 0, spending: 0, confirmed_amount: 0 }).select().single();
     state.biz = newBiz;
   }
 
@@ -614,7 +614,7 @@ async function loadBizData() {
 
 // ── Biz tab render ────────────────────────────────────────────────────
 function renderBizTab(current) {
-  const biz = state.biz || { accountant_fee: 200, spending: 0, confirmed_amount: 0 };
+  const biz = state.biz || { accountant_fee: 0, spending: 0, confirmed_amount: 0 };
   const clients = state.ptClients;
   const { earned, scheduled } = state.ptSessions || { earned: [], scheduled: [] };
 
