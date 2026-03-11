@@ -189,7 +189,7 @@ let state = {
   transactions: [],
   budgets: {},
   loading: true,
-  activeTab: 'budget', // 'budget' or 'biz'
+  activeTab: localStorage.getItem('activeTab') || 'budget',
   biz: null,           // biz_months row for current month
   ptClients: [],       // private tracker clients
   ptSessions: [],      // private tracker sessions
@@ -561,6 +561,7 @@ function showAddMonth() {
 // ── Tab switching ─────────────────────────────────────────────────────
 async function switchTab(tab) {
   state.activeTab = tab;
+  localStorage.setItem('activeTab', tab);
   if (tab === 'biz') {
     state.loading = true;
     renderApp();
@@ -770,6 +771,7 @@ async function init() {
     const now = new Date();
     const currentMonth = state.months.find(m => m.month_num === now.getMonth() + 1) || state.months[state.months.length - 1];
     await switchMonth(currentMonth.id);
+    if (state.activeTab === 'biz') await loadBizData();
   } else {
     state.loading = false;
     renderApp();
