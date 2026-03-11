@@ -461,11 +461,13 @@ function renderApp() {
         const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
         const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
         const gr = gb - gs;
+        const gid = 'rsngrp-' + group.label.replace(/\s+/g,'-');
         const catRows = cats.map(c => {
           const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
-          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${s?n(s):'0'}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
+          return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${s?n(s):'0'}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
         }).join('');
-        return `<tr class="sn-group"><td>${group.emoji} ${group.label}</td><td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td></tr>${catRows}`;
+        return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){var rows=document.querySelectorAll('.'+gid);var hdr=document.getElementById(gid+'-hdr');var chev=hdr.querySelector('.sn-chev');var isCollapsed=rows[0]&&rows[0].classList.contains('collapsed');rows.forEach(function(r){r.classList.toggle('collapsed')});if(chev)chev.textContent=isCollapsed?'▼':'▶';})('${gid}')">
+          <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td></tr>${catRows}`;
       }).join('');
 
       // Leisure sub-ribbon
@@ -1136,15 +1138,22 @@ function openSnapshot() {
       const s = spent[c.key] || 0;
       const b = state.budgets[c.key] || 0;
       const r = b - s;
-      return `<tr class="sn-cat ${gid}">
+      return `<tr class="sn-cat ${gid} collapsed">
         <td style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td>${b ? n(b) : ''}</td>
         <td>${s ? n(s) : '0'}</td>
         <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
       </tr>`;
     }).join('');
-    return `<tr class="sn-group" onclick="document.querySelectorAll('.${gid}').forEach(r=>r.classList.toggle('collapsed'))">
-        <td><span style="font-size:.65rem;margin-right:.3rem">▼</span>${group.emoji} ${group.label}</td>
+    return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){
+        var rows=document.querySelectorAll('.'+gid);
+        var hdr=document.getElementById(gid+'-hdr');
+        var chev=hdr.querySelector('.sn-chev');
+        var isCollapsed=rows[0]&&rows[0].classList.contains('collapsed');
+        rows.forEach(function(r){r.classList.toggle('collapsed')});
+        if(chev)chev.textContent=isCollapsed?'▼':'▶';
+      })('${gid}')">
+        <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
         <td>${gb ? n(gb) : ''}</td>
         <td>${n(gs)}</td>
         <td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb ? n(gr) : ''}</td>
