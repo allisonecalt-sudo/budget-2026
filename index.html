@@ -67,6 +67,8 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .page-layout { display: flex; align-items: flex-start; }
 .side-nav { width: 148px; flex-shrink: 0; position: sticky; top: 150px; padding: 1.25rem .5rem 1rem 1rem; }
 .sidenav-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: 0 .5rem .4rem; }
+.sidenav-select { width: 100%; font-size: .72rem; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; margin-bottom: .5rem; }
+.sidenav-divider { height: 1px; background: var(--border); margin: .4rem .5rem .5rem; }
 .sidenav-item { display: block; padding: .35rem .55rem; font-size: .75rem; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: 6px; border-left: 2px solid transparent; margin-bottom: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidenav-item:hover { background: var(--surface2); color: var(--text); border-left-color: var(--border); }
 .sidenav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--asoft); font-weight: 600; }
@@ -668,6 +670,12 @@ function renderApp() {
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
         <div class="sidenav-label">Jump to</div>
+        <select class="sidenav-select" onchange="if(this.value){jumpTo(this.value);this.value=''}">
+          <option value="">— select —</option>
+          <option value="group-Savings">🏦 Savings</option>
+          ${CATEGORY_GROUPS.map(g => `<option value="group-${g.label.replace(/\s+/g,'-')}">${g.emoji} ${g.label}</option>`).join('')}
+        </select>
+        <div class="sidenav-divider"></div>
         <div class="sidenav-item" onclick="jumpTo('group-Savings')">🏦 Savings</div>
         ${CATEGORY_GROUPS.map(g => `<div class="sidenav-item" onclick="jumpTo('group-${g.label.replace(/\s+/g,'-')}')">${g.emoji} ${g.label}</div>`).join('')}
       </nav>
