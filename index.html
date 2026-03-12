@@ -818,7 +818,7 @@ function renderApp() {
                                 onclick="event.stopPropagation()"
                                 onchange="saveBudgetItem('${item.id}','amount',this.value)"
                                 onkeydown="if(event.key==='Enter')this.blur()">
-                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" data-tip="Save as default" title="Save as default for future months">★</button>
+                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" data-tip="Sets default for new months only — past months stay unchanged" title="Sets default for new months only — past months stay unchanged">★</button>
                               <button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem('${item.id}')">×</button>
                             </div>`).join('')}
                           <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
