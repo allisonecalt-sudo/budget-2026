@@ -108,17 +108,23 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .sn-over { color: #dc2626; font-weight:600; }
 @media print { #snapshot-modal { position:static!important; background:none!important; backdrop-filter:none!important; padding:0!important; } #snapshot-modal > div { box-shadow:none!important; max-width:100%!important; } button { display:none!important; } }
 .budget-items-list { border-top:1px solid var(--border); padding:.5rem 0; margin-bottom:.25rem; }
+.budget-items-header { display:flex; align-items:center; gap:.4rem; padding:.1rem .5rem .3rem; font-size:.65rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.budget-items-header span:first-child { flex:1; }
+.budget-items-header span:nth-child(2) { width:70px; text-align:right; }
 .budget-item-row { display:flex; align-items:center; gap:.4rem; padding:.2rem .5rem; }
-.bi-label { flex:1; font-size:.8rem; background:transparent; border:none; border-bottom:1px dashed var(--border); padding:.15rem .2rem; color:var(--text); outline:none; }
+.bi-label { flex:1; font-size:.8rem; background:var(--surface2); border:none; border-radius:4px; padding:.25rem .4rem; color:var(--text); outline:none; min-width:80px; }
+.bi-label:focus { background:var(--surface); box-shadow:0 0 0 1.5px var(--accent); }
 .bi-label:focus { border-bottom-color:var(--accent); }
 .bi-amount { width:70px; font-size:.8rem; font-family:'DM Mono',monospace; background:transparent; border:none; border-bottom:1px dashed var(--border); padding:.15rem .2rem; text-align:right; color:var(--text); outline:none; -moz-appearance:textfield; }
 .bi-amount::-webkit-outer-spin-button,.bi-amount::-webkit-inner-spin-button{-webkit-appearance:none}
 .bi-amount:focus { border-bottom-color:var(--accent); }
 .bi-del { background:none; border:none; color:var(--dim); cursor:pointer; font-size:1rem; padding:0 .2rem; line-height:1; }
 .bi-del:hover { color:var(--red); }
-.bi-default { background:none; border:none; color:var(--dim); cursor:pointer; font-size:.85rem; padding:0 .2rem; line-height:1; }
+.bi-default { background:none; border:none; color:var(--dim); cursor:pointer; font-size:.85rem; padding:0 .2rem; line-height:1; position:relative; }
 .bi-default:hover { color:var(--amber); }
 .bi-default.is-default { color:var(--amber); }
+.bi-default::after { content: attr(data-tip); position:absolute; bottom:125%; right:0; background:var(--text); color:#fff; font-size:.65rem; white-space:nowrap; padding:.2rem .4rem; border-radius:4px; opacity:0; pointer-events:none; transition:opacity .15s; }
+.bi-default:hover::after { opacity:1; }
 .bi-add { background:none; border:none; font-size:.72rem; color:var(--accent); cursor:pointer; padding:.25rem .5rem; font-weight:600; }
 .group-block { margin-bottom: 1rem; }
 .group-block.collapsed .group-cats { display:none; }
@@ -239,6 +245,7 @@ const CATEGORIES = [
   { key: 'health',       label: 'Health',               emoji: '🏥', hasStore: false },
   { key: 'therapy',      label: 'Therapy',              emoji: '🧠', hasStore: false },
   { key: 'housing',      label: 'Housing',              emoji: '🏠', hasStore: false, hasLines: true },
+  { key: 'household',    label: 'Household Items',      emoji: '🧹', hasStore: true, linkedLine: { parent: 'housing', label: 'Household' } },
   { key: 'recurring',    label: 'Recurring Payments',   emoji: '🔄', hasStore: false, hasLines: true },
   { key: 'charity',      label: 'Charity',              emoji: '💚', hasStore: false },
   { key: 'travel',       label: 'Travel',               emoji: '✈️', hasStore: false },
@@ -248,7 +255,7 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_GROUPS = [
-  { label: 'Essential Living',   emoji: '🏠', keys: ['groceries', 'housing', 'transport', 'health', 'therapy'] },
+  { label: 'Essential Living',   emoji: '🏠', keys: ['groceries', 'housing', 'household', 'transport', 'health', 'therapy'] },
   { label: 'Leisure & Lifestyle',emoji: '🎉', keys: ['takeout', 'eatingout', 'entertainment', 'retail', 'holiday', 'gifts'] },
   { label: 'Core Financial',     emoji: '🔄', keys: ['recurring'] },
   { label: 'Charity',            emoji: '💚', keys: ['charity'] },
@@ -334,6 +341,13 @@ function budgetItemsTotal(catKey) {
 }
 
 function catBudget(catKey) {
+  // For linked categories (e.g. Household → Housing line item), use the parent line item amount
+  const catDef = CATEGORIES.find(c => c.key === catKey);
+  if (catDef && catDef.linkedLine) {
+    const parentItems = state.budgetItems[catDef.linkedLine.parent] || [];
+    const linked = parentItems.find(i => i.label.toLowerCase() === catDef.linkedLine.label.toLowerCase());
+    if (linked) return Number(linked.amount) || 0;
+  }
   const fromItems = budgetItemsTotal(catKey);
   return fromItems !== null ? fromItems : (state.budgets[catKey] || 0);
 }
@@ -794,6 +808,7 @@ function renderApp() {
                     <div class="tx-list">
                       ${hasItems ? `
                         <div class="budget-items-list">
+                          <div class="budget-items-header"><span>Item</span><span>Amount</span><span style="width:48px"></span></div>
                           ${items.map(item => `
                             <div class="budget-item-row">
                               <input type="text" class="bi-label" value="${item.label}" placeholder="Item name"
@@ -803,7 +818,7 @@ function renderApp() {
                                 onclick="event.stopPropagation()"
                                 onchange="saveBudgetItem('${item.id}','amount',this.value)"
                                 onkeydown="if(event.key==='Enter')this.blur()">
-                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" title="Set as default for future months">★</button>
+                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" data-tip="Save as default" title="Save as default for future months">★</button>
                               <button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem('${item.id}')">×</button>
                             </div>`).join('')}
                           <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
