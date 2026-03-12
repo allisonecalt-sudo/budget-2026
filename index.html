@@ -63,7 +63,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .mtab.active { background: var(--asoft); color: var(--accent); font-weight: 600; }
 
 /* Layout */
-.main { padding: 1.5rem; max-width: 900px; margin: 0 auto; }
+.main { padding: 0; max-width: 1080px; margin: 0 auto; }
+.page-layout { display: flex; align-items: flex-start; }
+.side-nav { width: 148px; flex-shrink: 0; position: sticky; top: 150px; padding: 1.25rem .5rem 1rem 1rem; }
+.sidenav-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: 0 .5rem .4rem; }
+.sidenav-item { display: block; padding: .35rem .55rem; font-size: .75rem; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: 6px; border-left: 2px solid transparent; margin-bottom: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidenav-item:hover { background: var(--surface2); color: var(--text); border-left-color: var(--border); }
+.sidenav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--asoft); font-weight: 600; }
+.page-content { flex: 1; padding: 1.5rem; min-width: 0; }
 
 /* Top stats */
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
@@ -658,7 +665,13 @@ function renderApp() {
 
     <div class="main">
       ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'biz' ? renderBizTab(current) : `
-
+      <div class="page-layout">
+      <nav class="side-nav" id="side-nav">
+        <div class="sidenav-label">Jump to</div>
+        <div class="sidenav-item" onclick="jumpTo('group-Savings')">🏦 Savings</div>
+        ${CATEGORY_GROUPS.map(g => `<div class="sidenav-item" onclick="jumpTo('group-${g.label.replace(/\s+/g,'-')}')">${g.emoji} ${g.label}</div>`).join('')}
+      </nav>
+      <div class="page-content">
 
       <!-- Income breakdown -->
       <div class="card">
@@ -840,6 +853,7 @@ function renderApp() {
             </div>`;
         }).join('')}
       </div>
+      </div></div>
       `}
     </div>
 
@@ -1217,6 +1231,32 @@ function toggleGroup(key) {
   const el = document.getElementById('group-' + key);
   if (el) el.classList.toggle('collapsed');
 }
+
+function jumpTo(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('collapsed')) el.classList.remove('collapsed');
+  const hdrH = (document.querySelector('.hdr')?.offsetHeight || 57) + (document.querySelector('.ribbon-panel')?.offsetHeight || 0) + 12;
+  const top = el.getBoundingClientRect().top + window.scrollY - hdrH;
+  window.scrollTo({ top, behavior: 'smooth' });
+}
+
+// Highlight active sidebar item on scroll
+window.addEventListener('scroll', () => {
+  const items = document.querySelectorAll('.sidenav-item');
+  if (!items.length) return;
+  const offset = (document.querySelector('.hdr')?.offsetHeight || 57) + (document.querySelector('.ribbon-panel')?.offsetHeight || 0) + 40;
+  let active = null;
+  items.forEach(item => {
+    const fn = item.getAttribute('onclick') || '';
+    const m = fn.match(/jumpTo\('(.+?)'\)/);
+    if (!m) return;
+    const el = document.getElementById(m[1]);
+    if (el && el.getBoundingClientRect().top <= offset) active = item;
+  });
+  items.forEach(i => i.classList.remove('active'));
+  if (active) active.classList.add('active');
+}, { passive: true });
 
 function startRibbonDrag(e) {
   e.preventDefault();
