@@ -1053,7 +1053,7 @@ function renderApp() {
                           }
                           return html;
                         })()}
-                        <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
+                        <button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `(function(){var el=document.getElementById('sb-cat');if(el){el.value='${c.key}';document.getElementById('sb-amount').focus();el.scrollIntoView({behavior:'smooth',block:'center'});}})();`}">+ add line</button>
                       </div>
                       ${c.key === 'groceries' && txs.length > 0 ? (()=>{
                         const bigTotal = txs.reduce((sum,tx) => sum + (isBigStore(tx.store) ? Number(tx.amount) : 0), 0);
