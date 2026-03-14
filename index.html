@@ -810,11 +810,12 @@ function renderApp() {
         <div style="margin-bottom:.6rem;">
           <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);padding:0 .5rem .3rem;">Add ₪</div>
           <div style="display:flex;flex-direction:column;gap:.3rem;">
-            <select id="sb-cat" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
+            <datalist id="sb-store-list"></datalist>
+            <select id="sb-cat" onchange="updateSbStores(this.value)" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
               <option value="">Category…</option>
               ${[...CATEGORIES].sort((a,b)=>a.label.localeCompare(b.label)).map(c=>`<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('')}
             </select>
-            <input type="text" id="sb-store" placeholder="Store" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="text" id="sb-store" placeholder="Store" list="sb-store-list" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
             <input type="text" id="sb-item" placeholder="Item" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
             <input type="number" id="sb-amount" placeholder="Amount ₪" min="0" step="0.01" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
             <input type="date" id="sb-date" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
@@ -1221,6 +1222,13 @@ async function saveBudget(catKey, amount) {
 const PRESET_STORES = {
   groceries: ['Yochananof', 'יוחננוף', 'Shufersal', 'שופרסל', 'Osher Ad', 'אושר עד', 'Carrefour', 'קרפור', 'Rami Levy', 'רמי לוי', 'Victory', 'ויקטורי'],
 };
+
+function updateSbStores(catKey) {
+  const dl = document.getElementById('sb-store-list');
+  if (!dl) return;
+  const stores = [...new Set([...(PRESET_STORES[catKey]||[]), ...state.allStores.filter(tx=>tx.category===catKey&&tx.store).map(tx=>tx.store), ...state.transactions.filter(tx=>tx.category===catKey&&tx.store).map(tx=>tx.store)])];
+  dl.innerHTML = stores.map(s => `<option value="${s.replace(/"/g,'&quot;')}">`).join('');
+}
 
 function updateStoreSuggestions(catKey) {
   const dl = document.getElementById('store-suggestions');
