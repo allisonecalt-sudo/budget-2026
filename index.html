@@ -65,13 +65,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 /* Layout */
 .main { padding: 0; max-width: 1080px; margin: 0 auto; }
 .page-layout { display: flex; align-items: flex-start; }
-.side-nav { width: 148px; flex-shrink: 0; position: sticky; top: 150px; padding: 1.25rem .5rem 1rem 1rem; }
+.side-nav { width: 195px; flex-shrink: 0; position: sticky; top: 150px; padding: 1.25rem .75rem 1rem 1rem; }
 .sidenav-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: 0 .5rem .4rem; }
 .sidenav-select { width: 100%; font-size: .72rem; padding: .3rem .4rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; margin-bottom: .5rem; }
 .sidenav-divider { height: 1px; background: var(--border); margin: .4rem .5rem .5rem; }
-.sidenav-item { display: block; padding: .35rem .55rem; font-size: .75rem; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: 6px; border-left: 2px solid transparent; margin-bottom: .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidenav-item { display: block; padding: .35rem .55rem; font-size: .75rem; font-weight: 500; color: var(--muted); cursor: pointer; border-radius: 6px; border-left: 2px solid transparent; margin-bottom: .1rem; white-space: normal; }
 .sidenav-item:hover { background: var(--surface2); color: var(--text); border-left-color: var(--border); }
 .sidenav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--asoft); font-weight: 600; }
+.sidenav-divider2 { height: 1px; background: var(--border); margin: .5rem .5rem .4rem; }
+.sn-sum-row { display: flex; justify-content: space-between; align-items: center; padding: .15rem .55rem; font-size: .68rem; border-radius: 4px; cursor: pointer; }
+.sn-sum-row:hover { background: var(--surface2); }
+.sn-sum-label { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.sn-sum-val { font-family: 'DM Mono', monospace; font-size: .68rem; font-weight: 600; }
 .page-content { flex: 1; padding: 1.5rem; min-width: 0; }
 
 /* Top stats */
@@ -121,12 +126,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .budget-items-header span:first-child { flex:1; }
 .budget-items-header span:nth-child(2) { width:70px; text-align:right; }
 .budget-item-row { display:flex; align-items:center; gap:.4rem; padding:.2rem .5rem; }
-.bi-label { flex:1; font-size:.8rem; background:transparent; border:none; border-bottom:1px dashed var(--border); padding:.15rem .2rem; color:var(--text); outline:none; }
-.bi-label:focus { background:var(--surface); box-shadow:0 0 0 1.5px var(--accent); }
-.bi-label:focus { border-bottom-color:var(--accent); }
-.bi-amount { width:80px; flex-shrink:0; font-size:.8rem; font-family:'DM Mono',monospace; background:transparent; border:none; border-bottom:1px dashed var(--border); padding:.15rem .2rem; text-align:right; color:var(--text); outline:none; -moz-appearance:textfield; }
-.bi-amount::-webkit-outer-spin-button,.bi-amount::-webkit-inner-spin-button{-webkit-appearance:none}
-.bi-amount:focus { border-bottom-color:var(--accent); }
+input.bi-label { flex:1; font-size:.8rem; background:transparent !important; border:none !important; border-bottom:1px dashed var(--border) !important; padding:.15rem .2rem !important; color:var(--text) !important; outline:none; width:auto !important; border-radius:0 !important; }
+input.bi-label:focus { background:var(--surface) !important; box-shadow:0 0 0 1.5px var(--accent); border-bottom-color:var(--accent) !important; }
+input.bi-amount { width:80px !important; flex-shrink:0; font-size:.8rem; font-family:'DM Mono',monospace; background:transparent !important; border:none !important; border-bottom:1px dashed var(--border) !important; padding:.15rem .2rem !important; text-align:right; color:var(--text) !important; outline:none; -moz-appearance:textfield; border-radius:0 !important; }
+input.bi-amount::-webkit-outer-spin-button,input.bi-amount::-webkit-inner-spin-button{-webkit-appearance:none}
+input.bi-amount:focus { border-bottom-color:var(--accent) !important; }
 .bi-del { background:none; border:none; color:var(--dim); cursor:pointer; font-size:1rem; padding:0 .2rem; line-height:1; }
 .bi-del:hover { color:var(--red); }
 .bi-default { background:none; border:none; color:var(--dim); cursor:pointer; font-size:.85rem; padding:0 .2rem; line-height:1; position:relative; }
@@ -162,14 +166,28 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .cat-remaining.over { color: var(--red); }
 
 /* Transactions */
-.tx-list { display: none; border-top: 1px solid var(--border); margin-top: .75rem; padding-top: .75rem; }
+.tx-list { display: none; border-top: 1px solid var(--border); margin-top: .75rem; padding-top: .5rem; }
 .cat-row.open .tx-list { display: block; }
-.tx-item { display: flex; align-items: center; justify-content: space-between; padding: .4rem 0; border-bottom: 1px solid var(--border); font-size: .8rem; }
+.tx-header { display: grid; grid-template-columns: 105px 0.9fr 0.65fr 80px 22px; padding: .15rem .15rem .3rem; border-bottom: 1px solid var(--border); font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); gap: .25rem; }
+.tx-item { display: grid; grid-template-columns: 105px 0.9fr 0.65fr 80px 22px; align-items: center; padding: .22rem .15rem; border-bottom: 1px solid var(--border); gap: .25rem; }
 .tx-item:last-child { border-bottom: none; }
-.tx-left { display: flex; flex-direction: column; gap: .1rem; }
-.tx-store { font-weight: 500; }
-.tx-item-name { color: var(--muted); font-size: .73rem; }
-.tx-amt { font-family: 'DM Mono', monospace; font-weight: 500; }
+.tx-date-col { font-size: .68rem; color: var(--muted); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; }
+.tx-edit { font-size: .79rem; background: transparent; border: none; border-bottom: 1px solid transparent; padding: .1rem .15rem; color: var(--text); outline: none; width: 100%; font-family: 'DM Sans', sans-serif; }
+.tx-edit:hover { border-bottom-color: var(--border); }
+.tx-edit:focus { border-bottom-color: var(--accent); background: var(--surface2); border-radius: 3px 3px 0 0; }
+.tx-date-wrap { position: relative; display: flex; align-items: center; cursor: pointer; }
+.tx-date-display { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--muted); border-bottom: 1px solid transparent; padding: .1rem .15rem; white-space: nowrap; pointer-events: none; }
+.tx-date-wrap:hover .tx-date-display { border-bottom-color: var(--border); }
+input.tx-edit-date { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: none; background: transparent; padding: 0; }
+input.tx-edit-date::-webkit-calendar-picker-indicator { opacity: 0.4; width: 12px; height: 12px; }
+.tx-edit-amt { font-family: 'DM Mono', monospace; font-size: .79rem; font-weight: 500; text-align: right; -moz-appearance: textfield; }
+.tx-edit-amt::-webkit-outer-spin-button, .tx-edit-amt::-webkit-inner-spin-button { -webkit-appearance: none; }
+.tx-del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 1rem; padding: 0; line-height: 1; opacity: 0; transition: opacity .1s; }
+.tx-item:hover .tx-del { opacity: 1; }
+.tx-del:hover { color: var(--red); }
+.tx-sort-bar { display: flex; align-items: center; gap: .3rem; padding-bottom: .35rem; }
+.tx-sort-btn { background: none; border: 1px solid var(--border); border-radius: 4px; font-size: .64rem; padding: .1rem .3rem; cursor: pointer; color: var(--muted); font-family: 'DM Sans', sans-serif; }
+.tx-sort-btn.active { background: var(--asoft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
 .no-tx { color: var(--dim); font-size: .78rem; padding: .5rem 0; }
 
 /* Add transaction */
@@ -256,12 +274,19 @@ const CATEGORIES = [
   { key: 'housing',      label: 'Housing',              emoji: '🏠', hasStore: false, hasLines: true },
   { key: 'household',    label: 'Household Items',      emoji: '🧹', hasStore: true, linkedLine: { parent: 'housing', label: 'Household' } },
   { key: 'recurring',    label: 'Recurring Payments',   emoji: '🔄', hasStore: false, hasLines: true },
-  { key: 'charity',      label: 'Charity',              emoji: '💚', hasStore: false },
-  { key: 'travel',       label: 'Travel',               emoji: '✈️', hasStore: false },
-  { key: 'admin',        label: 'Admin & Professional', emoji: '📋', hasStore: false },
+  { key: 'charity',      label: 'Charity',              emoji: '💚', hasStore: false, hasTab: true },
+  { key: 'travel',       label: 'Travel',               emoji: '✈️', hasStore: false, hasTab: true },
+  { key: 'admin',        label: 'Admin & Professional', emoji: '📋', hasStore: false, hasTab: true },
   { key: 'gifts',        label: 'Gifts',                emoji: '🎁', hasStore: false },
   { key: 'holiday',      label: 'Holiday',              emoji: '🎉', hasStore: false },
 ];
+
+const BIG_STORES = ['yochananof','shufersal','osher ad','carrefour','שופרסל','יוחננוף','אושר עד','קרפור'];
+function isBigStore(store) {
+  if (!store) return false;
+  const s = store.toLowerCase().trim();
+  return BIG_STORES.some(b => s.includes(b));
+}
 
 const CATEGORY_GROUPS = [
   { label: 'Essential Living',   emoji: '🏠', keys: ['groceries', 'housing', 'household', 'transport', 'health', 'therapy'] },
@@ -293,15 +318,22 @@ let state = {
   ptSessions: [],      // private tracker sessions
   incomeItems: [],     // flexible extra income items
   budgetItems: {},     // { catKey: [{id, label, amount}] }
+  txSort: localStorage.getItem('txSort') || 'newest',
+  admin: { items: [], allocations: {}, payments: [], subItems: [] },
+  travel: { items: [], allocations: {}, payments: [], subItems: [] },
+  charity: { items: [], allocations: {}, payments: [], subItems: [] },
+  openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
-const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (spent, budget) => budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
 const status = (spent, budget) => {
   if (budget === 0) return 'ok';
+  const rem = Math.round(budget - spent);
+  if (rem < 0) return 'over';
+  if (rem === 0) return 'ok';
   const p = spent / budget;
-  if (p >= 1) return 'over';
   if (p >= 0.85) return 'warn';
   return 'ok';
 };
@@ -378,7 +410,8 @@ async function saveBudgetItem(id, field, value) {
   const catKey = Object.keys(state.budgetItems).find(k => state.budgetItems[k].find(i => i.id === id));
   const item = (state.budgetItems[catKey] || []).find(i => i.id === id);
   if (!item) return;
-  const val = field === 'amount' ? (parseFloat(value) || 0) : value;
+  const numericFields = ['amount'];
+  const val = numericFields.includes(field) ? (parseFloat(value) || 0) : value;
   await sb.from('budget_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
   // Sync label changes to template
@@ -432,7 +465,7 @@ async function switchMonth(monthId) {
   localStorage.setItem('activeMonthId', monthId);
   state.loading = true;
   renderApp();
-  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId))];
+  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId)), loadAdminData(), loadTravelData(), loadCharityData()];
   if (state.activeTab === 'biz') loads.push(loadBizData());
   await Promise.all(loads);
   state.loading = false;
@@ -446,6 +479,20 @@ function spentByCategory() {
   state.transactions.forEach(tx => {
     if (totals[tx.category] !== undefined) totals[tx.category] += Number(tx.amount);
   });
+  // For hasLines categories (fixed committed expenses like housing/recurring bills),
+  // treat the budget items total as minimum committed spend
+  CATEGORIES.filter(c => c.hasLines).forEach(c => {
+    const committed = budgetItemsTotal(c.key) || 0;
+    if (totals[c.key] < committed) totals[c.key] = committed;
+  });
+  // Sync tab-specific payments (admin, travel, charity) into the main budget
+  const currentMonth = state.months.find(m => m.id === state.currentMonthId);
+  if (currentMonth) {
+    const mn = currentMonth.month_num;
+    totals['travel'] += (state.travel.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
+    totals['admin'] += (state.admin.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
+    totals['charity'] += (state.charity.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
+  }
   return totals;
 }
 
@@ -499,6 +546,75 @@ async function addTransaction() {
   toast('Transaction saved ✓');
 }
 
+async function addTransactionSidebar() {
+  const cat = document.getElementById('sb-cat').value;
+  const store = document.getElementById('sb-store').value.trim();
+  const item = document.getElementById('sb-item').value.trim();
+  const amount = parseFloat(document.getElementById('sb-amount').value);
+  const date = document.getElementById('sb-date').value;
+
+  if (!cat || !amount || isNaN(amount)) { toast('Fill in category and amount'); return; }
+
+  const btn = document.getElementById('sb-btn');
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  const { data: txData, error } = await sb.from('transactions').insert({
+    month_id: state.currentMonthId,
+    category: cat,
+    store: store || null,
+    item: item || null,
+    amount,
+    date: date || null,
+  }).select().single();
+
+  if (error) { toast('Error saving — try again'); btn.disabled = false; btn.textContent = 'Save →'; return; }
+
+  document.getElementById('sb-store').value = '';
+  document.getElementById('sb-item').value = '';
+  document.getElementById('sb-amount').value = '';
+  document.getElementById('sb-date').value = '';
+  btn.disabled = false;
+  btn.textContent = 'Save →';
+
+  await loadTransactions(state.currentMonthId);
+  renderApp();
+  toast('Transaction saved ✓');
+}
+
+async function deleteTransaction(id) {
+  const tx = state.transactions.find(t => t.id === id);
+  if (!tx) return;
+  const snap = {...tx};
+  await sb.from('transactions').delete().eq('id', id);
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  pushUndo({ label: 'delete transaction', undo: async()=>{ await sb.from('transactions').insert(snap); await loadTransactions(state.currentMonthId); }, redo: async()=>{ await sb.from('transactions').delete().eq('id',snap.id); await loadTransactions(state.currentMonthId); } });
+  renderApp();
+  toast('Deleted ✓');
+}
+
+async function updateTx(id, field, value) {
+  const tx = state.transactions.find(t => t.id === id);
+  if (!tx) return;
+  const oldVal = tx[field];
+  const val = field === 'amount' ? (parseFloat(value) || 0) : (value.trim() || null);
+  await sb.from('transactions').update({ [field]: val }).eq('id', id);
+  tx[field] = val;
+  pushUndo({ label: 'edit '+field, undo: async()=>{ await sb.from('transactions').update({[field]:oldVal}).eq('id',id); const t=state.transactions.find(t=>t.id===id); if(t)t[field]=oldVal; }, redo: async()=>{ await sb.from('transactions').update({[field]:val}).eq('id',id); const t=state.transactions.find(t=>t.id===id); if(t)t[field]=val; } });
+  renderApp();
+}
+
+function setTxSort(sort) {
+  state.txSort = sort;
+  localStorage.setItem('txSort', sort);
+  // Sync open cats from DOM before re-render so sort doesn't close categories
+  document.querySelectorAll('.cat-row.open').forEach(el => {
+    const key = el.id.replace('cat-', '');
+    if (key) state.openCats.add(key);
+  });
+  renderApp();
+}
+
 // ── Setup: create month ───────────────────────────────────────────────
 async function createMonth(num) {
   const { data, error } = await sb.from('months').insert({
@@ -516,6 +632,7 @@ async function createMonth(num) {
 function renderApp() {
   const root = document.getElementById('root');
   requestAnimationFrame(applyRibbonHeight);
+  requestAnimationFrame(updateUndoButtons);
 
   if (state.months.length === 0) {
     root.innerHTML = `
@@ -543,8 +660,12 @@ function renderApp() {
   if (!state.currentMonthId) state.currentMonthId = current.id;
 
   const income = totalIncome(current);
+  // Sync charity % from localStorage into state.budgets so snapshot sees it immediately
+  const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
+  if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
   const spent = spentByCategory();
-  const totalSpent = Object.values(spent).reduce((a, b) => a + b, 0)
+  // For hasTab categories, use allocation (budget) not actual payments in top-line totals
+  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
   const remaining = income - totalSpent;
@@ -558,6 +679,9 @@ function renderApp() {
         <div class="page-tabs">
           <button class="ptab ${state.activeTab === 'budget' ? 'active' : ''}" onclick="switchTab('budget')">Budget</button>
           <button class="ptab ${state.activeTab === 'biz' ? 'active' : ''}" onclick="switchTab('biz')">Biz 💼</button>
+          <button class="ptab ${state.activeTab === 'admin' ? 'active' : ''}" onclick="switchTab('admin')">Admin 📋</button>
+          <button class="ptab ${state.activeTab === 'travel' ? 'active' : ''}" onclick="switchTab('travel')">Travel ✈️</button>
+          <button class="ptab ${state.activeTab === 'charity' ? 'active' : ''}" onclick="switchTab('charity')">Charity 💚</button>
         </div>
         <div style="display:flex;gap:.2rem;">
           <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">← Undo</button>
@@ -587,13 +711,17 @@ function renderApp() {
       const groupRows = CATEGORY_GROUPS.map(group => {
         const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
         const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
-        const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
+        const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
         const gr = gb - gs;
         const gid = 'rsngrp-' + group.label.replace(/\s+/g,'-');
         const catRows = cats.map(c => {
-          const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
-          return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${s?n(s):'0'}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
+          const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
+          return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
         }).join('');
+        if (cats.length === 1) {
+          const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
+          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
+        }
         return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){var rows=document.querySelectorAll('.'+gid);var hdr=document.getElementById(gid+'-hdr');var chev=hdr.querySelector('.sn-chev');var isCollapsed=rows[0]&&rows[0].classList.contains('collapsed');rows.forEach(function(r){r.classList.toggle('collapsed')});if(chev)chev.textContent=isCollapsed?'▼':'▶';})('${gid}')">
           <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td></tr>${catRows}`;
       }).join('');
@@ -630,6 +758,7 @@ function renderApp() {
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${(income-totalSpent)>=0?'var(--green)':'var(--red)'}">${fmt(income-totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div class="ribbon-stat" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</div></div>
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
             <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
@@ -666,7 +795,7 @@ function renderApp() {
     })()}
 
     <div class="main">
-      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'biz' ? renderBizTab(current) : `
+      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
         <div class="sidenav-label">Jump to</div>
@@ -676,8 +805,50 @@ function renderApp() {
           ${CATEGORY_GROUPS.map(g => `<option value="group-${g.label.replace(/\s+/g,'-')}">${g.emoji} ${g.label}</option>`).join('')}
         </select>
         <div class="sidenav-divider"></div>
+        <div style="margin-bottom:.6rem;">
+          <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);padding:0 .5rem .3rem;">Add ₪</div>
+          <div style="display:flex;flex-direction:column;gap:.3rem;">
+            <select id="sb-cat" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
+              <option value="">Category…</option>
+              ${[...CATEGORIES].sort((a,b)=>a.label.localeCompare(b.label)).map(c=>`<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('')}
+            </select>
+            <input type="text" id="sb-store" placeholder="Store" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="text" id="sb-item" placeholder="Item" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="number" id="sb-amount" placeholder="Amount ₪" min="0" step="0.01" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="date" id="sb-date" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <button id="sb-btn" onclick="addTransactionSidebar()" style="width:100%;padding:.4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.77rem;cursor:pointer;">Save →</button>
+          </div>
+        </div>
+        <div class="sidenav-divider"></div>
         <div class="sidenav-item" onclick="jumpTo('group-Savings')">🏦 Savings</div>
-        ${CATEGORY_GROUPS.map(g => `<div class="sidenav-item" onclick="jumpTo('group-${g.label.replace(/\s+/g,'-')}')">${g.emoji} ${g.label}</div>`).join('')}
+        ${CATEGORY_GROUPS.map(g => {
+          const gkey = g.label.replace(/\s+/g,'-');
+          const expanded = localStorage.getItem('sn-exp-'+gkey) !== 'false';
+          const cats = g.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
+          if (cats.length === 1) {
+            const c = cats[0];
+            let gapBadge = '';
+            if (c.hasTab && state[c.key]) {
+              const projected = (state[c.key].items || []).reduce((s,i) => s + (Number(i.projected_amount)||0), 0);
+              const allocated = Object.values(state[c.key].allocations || {}).reduce((s,a) => s + (Number(a.amount)||0), 0);
+              const gap = projected - allocated;
+              if (gap > 0) gapBadge = `<span style="font-size:.62rem;color:var(--red);font-family:'DM Mono',monospace;margin-left:auto;padding-left:.4rem;">−${fmt(gap)}</span>`;
+            }
+            return `<div class="sidenav-item" style="display:flex;align-items:center;" onclick="toggleCat('${c.key}');jumpTo('cat-${c.key}')">${c.emoji} ${c.label}${gapBadge}</div>`;
+          }
+          return `<div>
+            <div class="sidenav-item" style="display:flex;justify-content:space-between;align-items:center;"
+              onclick="(function(){var k='sn-exp-${gkey}';var cur=localStorage.getItem(k)!=='false';localStorage.setItem(k,!cur);renderApp();})()">
+              <span>${g.emoji} ${g.label}</span>
+              <span style="font-size:.6rem;color:var(--dim);margin-left:.3rem;">${expanded?'▾':'▸'}</span>
+            </div>
+            ${expanded ? cats.map(c => `
+              <div class="sidenav-item" style="padding-left:1.1rem;font-size:.7rem;border-left-color:transparent;margin-bottom:.05rem;"
+                onclick="event.stopPropagation();toggleCat('${c.key}');jumpTo('cat-${c.key}')">
+                ${c.emoji} ${c.label}
+              </div>`).join('') : ''}
+          </div>`;
+        }).join('')}
       </nav>
       <div class="page-content">
 
@@ -698,38 +869,6 @@ function renderApp() {
           </div>`).join('')}
         </div>
         <button onclick="addIncomeItem()" style="margin-top:.6rem;font-size:.75rem;font-weight:600;color:var(--accent);background:var(--asoft);border:none;border-radius:6px;padding:.3rem .75rem;cursor:pointer;">+ Add income source</button>
-      </div>
-
-      <!-- Add transaction -->
-      <div class="add-section">
-        <div class="add-title">Add Transaction</div>
-        <div class="form-row">
-          <div class="fg" style="min-width:140px;flex:1.5;">
-            <label>Category</label>
-            <select id="tx-cat">
-              <option value="">Select...</option>
-              ${CATEGORIES.map(c => `<option value="${c.key}">${c.emoji} ${c.label}</option>`).join('')}
-            </select>
-          </div>
-          <div class="fg">
-            <label>Store</label>
-            <input type="text" id="tx-store" placeholder="Makolet, Wolt..." list="store-suggestions" autocomplete="off">
-            <datalist id="store-suggestions"></datalist>
-          </div>
-          <div class="fg">
-            <label>Item</label>
-            <input type="text" id="tx-item" placeholder="Yogurt, rent...">
-          </div>
-          <div class="fg" style="max-width:110px;">
-            <label>Amount ₪</label>
-            <input type="number" id="tx-amount" placeholder="0" min="0" step="0.01">
-          </div>
-          <div class="fg" style="max-width:140px;">
-            <label>Date <span style="font-weight:400;color:var(--muted);font-size:.75rem;">(optional)</span></label>
-            <input type="date" id="tx-date" value="${today()}">
-          </div>
-          <button class="btn btn-primary" id="tx-btn" onclick="addTransaction()">Save</button>
-        </div>
       </div>
 
       <!-- Category groups -->
@@ -779,16 +918,17 @@ function renderApp() {
           const groupSpent = cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0);
           const groupBudget = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
           const groupSt = status(groupSpent, groupBudget);
+          const singleCat = cats.length === 1;
           return `
             <div class="group-block" id="group-${group.label.replace(/\s+/g,'-')}">
-              <div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g,'-')}')">
+              ${singleCat ? '' : `<div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g,'-')}')">
                 <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}</span>
                 <span class="group-totals">
                   <span class="cat-spent-bold">${fmt(groupSpent)}</span>
                   ${groupBudget > 0 ? `<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>` : ''}
                   ${groupBudget > 0 ? `<span class="group-rem ${groupSt}"> · ${groupSt === 'over' ? '-' : ''}${fmt(Math.abs(groupBudget - groupSpent))} ${groupSt === 'over' ? 'over' : 'left'}</span>` : ''}
                 </span>
-              </div>
+              </div>`}
               <div class="group-cats">
               ${cats.map(c => {
                 const s = spent[c.key] || 0;
@@ -798,15 +938,51 @@ function renderApp() {
                 const st = status(s, b);
                 const p = pct(s, b);
                 const txs = state.transactions.filter(tx => tx.category === c.key);
+                if (c.hasTab) {
+                  if (c.key === 'charity') {
+                    const charityPctKey = 'charityPct_' + state.currentMonthId;
+                    const charityPct = parseFloat(localStorage.getItem(charityPctKey)) || (state.budgets['charity'] && income ? +(state.budgets['charity'] / income * 100).toFixed(1) : '');
+                    const charityCalc = charityPct ? Math.round(income * charityPct / 100) : (state.budgets['charity'] || 0);
+                    return `<div class="cat-row" id="cat-charity">
+                      <div class="cat-top">
+                        <div class="cat-name"><span class="cat-emoji">💚</span>Charity</div>
+                        <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
+                          <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
+                            onclick="event.stopPropagation()"
+                            oninput="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);renderApp();})(this.value)"
+                            onblur="(function(v){const pct=parseFloat(v)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;})(this.value)"
+                            onkeydown="if(event.key==='Enter'){this.blur()}"
+                            style="width:50px">
+                          <span style="font-size:.8rem;color:var(--muted);">%</span>
+                          ${charityCalc ? `<span class="cat-spent-bold">= ${fmt(charityCalc)}</span>` : ''}
+                        </div>
+                      </div>
+                    </div>`;
+                  }
+                  return `<div class="cat-row" id="cat-${c.key}">
+                    <div class="cat-top">
+                      <div class="cat-name"><span class="cat-emoji">${c.emoji}</span>${c.label}</div>
+                      <div class="cat-amounts">
+                        <input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="this month" min="0" step="1"
+                          onclick="event.stopPropagation()"
+                          onchange="saveBudget('${c.key}', this.value)"
+                          onkeydown="if(event.key==='Enter'){this.blur()}"
+                          style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 95}px">
+                      </div>
+                    </div>
+                  </div>`;
+                }
                 return `
-                  <div class="cat-row" id="cat-${c.key}">
+                  <div class="cat-row${state.openCats.has(c.key) ? ' open' : ''}" id="cat-${c.key}">
                     <div class="cat-top" onclick="toggleCat('${c.key}')">
                       <div class="cat-name">
                         <span class="cat-emoji">${c.emoji}</span>
                         ${c.label}
                       </div>
                       <div class="cat-amounts">
-                        <span class="cat-spent-bold">${fmt(s)}</span>
+                        ${c.hasLines && hasItems
+                          ? `<span style="font-size:.65rem;color:var(--dim);margin-right:.25rem;">committed</span><span class="cat-spent-bold">${fmt(b)}</span>`
+                          : `<span class="cat-spent-bold">${fmt(s)}</span>
                         <span style="color:var(--muted)"> / </span>
                         ${hasItems
                           ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
@@ -816,44 +992,128 @@ function renderApp() {
                               onkeydown="if(event.key==='Enter'){this.blur()}"
                               style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 90}px">
                             ${c.hasLines ? `<button style="background:none;border:none;font-size:.65rem;color:var(--dim);cursor:pointer;padding:0 .3rem;" onclick="event.stopPropagation();addBudgetItem('${c.key}')" title="Add line items">+ lines</button>` : ''}`
-                        }
+                        }`}
                       </div>
                     </div>
-                    ${b > 0 ? `
+                    ${b > 0 && !c.hasTab ? `
                       <div class="progress-bar">
                         <div class="progress-fill ${st}" style="width:${p}%"></div>
                       </div>
                       <div class="cat-remaining ${st}">
-                        ${st === 'over' ? `₪${fmt(s - b).replace('₪','')} over budget` : `₪${fmt(b - s).replace('₪','')} remaining`}
+                        ${(()=>{ const rem=Math.round(b-s); return rem < 0 ? `₪${fmt(-rem).replace('₪','')} over budget` : `₪${fmt(rem).replace('₪','')} remaining`; })()}
                       </div>` : ''}
                     <div class="tx-list">
-                      ${hasItems ? `
-                        <div class="budget-items-list">
-                          <div class="budget-items-header"><span>Item</span><span>Amount</span><span style="width:48px"></span></div>
-                          ${items.map(item => `
-                            <div class="budget-item-row">
-                              <input type="text" class="bi-label" value="${item.label}" placeholder="Item name"
-                                onclick="event.stopPropagation()"
-                                onchange="saveBudgetItem('${item.id}','label',this.value)">
-                              <input type="number" class="bi-amount" value="${item.amount||''}" placeholder="0" min="0" step="1"
-                                onclick="event.stopPropagation()"
-                                onchange="saveBudgetItem('${item.id}','amount',this.value)"
-                                onkeydown="if(event.key==='Enter')this.blur()">
-                              <button class="bi-default${item.is_default?' is-default':''}" onclick="event.stopPropagation();setItemAsDefault('${item.id}')" data-tip="Sets default for new months only — past months stay unchanged" title="Sets default for new months only — past months stay unchanged">★</button>
-                              <button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem('${item.id}')">×</button>
-                            </div>`).join('')}
-                          <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
-                        </div>` : ''}
-                      ${txs.length === 0
-                        ? '<div class="no-tx">No transactions yet</div>'
-                        : txs.map(tx => `
+                      <div class="budget-items-list">
+                        ${(()=>{
+                          if (!hasItems) return '';
+                          const renderBudgetItemRow = item => {
+                            const subSel = '<select onchange="saveBudgetItem(\'' + item.id + '\',\'subcategory\',this.value)" onclick="event.stopPropagation()" style="font-size:.65rem;padding:.1rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);max-width:80px;">'
+                              + '<option value=""' + (!item.subcategory ? ' selected' : '') + '>--</option>'
+                              + '<option value="tashlumim"' + (item.subcategory === 'tashlumim' ? ' selected' : '') + '>תשלומים</option>'
+                              + '<option value="digital"' + (item.subcategory === 'digital' ? ' selected' : '') + '>Digital</option>'
+                              + '<option value="insurance"' + (item.subcategory === 'insurance' ? ' selected' : '') + '>Insurance</option>'
+                              + '<option value="bills"' + (item.subcategory === 'bills' ? ' selected' : '') + '>Bills</option>'
+                              + '</select>';
+                            const defaultCls = 'bi-default' + (item.is_default ? ' is-default' : '');
+                            return '<div class="budget-item-row">'
+                              + '<input type="text" class="bi-label" value="' + (item.label||'').replace(/"/g,'&quot;') + '" placeholder="Item name" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' + item.id + '\',\'label\',this.value)">'
+                              + '<input type="number" class="bi-amount" value="' + (item.amount||'') + '" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' + item.id + '\',\'amount\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()">'
+                              + subSel
+                              + '<button class="' + defaultCls + '" onclick="event.stopPropagation();setItemAsDefault(\'' + item.id + '\')" title="Sets default for new months only — past months stay unchanged">★</button>'
+                              + '<button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem(\'' + item.id + '\')">×</button>'
+                              + '</div>';
+                          };
+                          const header = '<div class="budget-items-header"><span>Item</span><span>Amount</span><span style="width:48px"></span></div>';
+                          if (c.key !== 'recurring') {
+                            return header + items.map(renderBudgetItemRow).join('');
+                          }
+                          // Recurring: group by subcategory
+                          const SUBCAT_ORDER = ['tashlumim','digital','insurance','bills'];
+                          const SUBCAT_LABELS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills' };
+                          const groups = {};
+                          const noSubcat = [];
+                          items.forEach(item => {
+                            const sc = item.subcategory || '';
+                            if (sc && SUBCAT_ORDER.includes(sc)) {
+                              if (!groups[sc]) groups[sc] = [];
+                              groups[sc].push(item);
+                            } else {
+                              noSubcat.push(item);
+                            }
+                          });
+                          let html = header;
+                          SUBCAT_ORDER.forEach(sc => {
+                            if (groups[sc] && groups[sc].length > 0) {
+                              html += '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' + SUBCAT_LABELS[sc] + '</div>';
+                              html += groups[sc].map(renderBudgetItemRow).join('');
+                            }
+                          });
+                          if (noSubcat.length > 0) {
+                            html += noSubcat.map(renderBudgetItemRow).join('');
+                          }
+                          return html;
+                        })()}
+                        <button class="bi-add" onclick="event.stopPropagation();addBudgetItem('${c.key}')">+ add line</button>
+                      </div>
+                      ${c.key === 'groceries' && txs.length > 0 ? (()=>{
+                        const bigTotal = txs.reduce((sum,tx) => sum + (isBigStore(tx.store) ? Number(tx.amount) : 0), 0);
+                        const otherTotal = txs.reduce((sum,tx) => sum + (!isBigStore(tx.store) ? Number(tx.amount) : 0), 0);
+                        const bigPct = s > 0 ? Math.round(bigTotal/s*100) : 0;
+                        return `<div style="display:flex;gap:.5rem;padding:.4rem .25rem .6rem;border-bottom:1px solid var(--border);margin-bottom:.3rem;">
+                          <div style="flex:1;background:var(--gsoft);border-radius:8px;padding:.4rem .6rem;">
+                            <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:.1rem;">🏪 Big stores</div>
+                            <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--accent);">${fmt(bigTotal)}</div>
+                            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${bigPct}% of groceries</div>
+                          </div>
+                          <div style="flex:1;background:var(--ambersoft);border-radius:8px;padding:.4rem .6rem;">
+                            <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);margin-bottom:.1rem;">🛒 Other stores</div>
+                            <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--amber);">${fmt(otherTotal)}</div>
+                            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${100-bigPct}% of groceries</div>
+                          </div>
+                        </div>`;
+                      })() : ''}
+                      ${(()=>{
+                        if (txs.length === 0) return '<div class="no-tx">No transactions yet</div>';
+                        const sort = state.txSort || 'newest';
+                        const sorted = [...txs].sort((a,b) => {
+                          if (sort === 'newest') return new Date(b.created_at) - new Date(a.created_at);
+                          if (sort === 'oldest') return new Date(a.created_at) - new Date(b.created_at);
+                          if (sort === 'high') return Number(b.amount) - Number(a.amount);
+                          if (sort === 'low') return Number(a.amount) - Number(b.amount);
+                          return 0;
+                        });
+                        const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        const fmtDate = d => { if(!d) return '—'; const dt=new Date(d+'T12:00:00'); return dt.getDate()+' '+MONS[dt.getMonth()]; };
+                        const esc = s => (s||'').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
+                        return `<div class="tx-sort-bar">
+                          <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
+                          <button class="tx-sort-btn ${sort==='newest'?'active':''}" onclick="event.stopPropagation();setTxSort('newest')">Newest</button>
+                          <button class="tx-sort-btn ${sort==='oldest'?'active':''}" onclick="event.stopPropagation();setTxSort('oldest')">Oldest</button>
+                          <button class="tx-sort-btn ${sort==='high'?'active':''}" onclick="event.stopPropagation();setTxSort('high')">Highest</button>
+                          <button class="tx-sort-btn ${sort==='low'?'active':''}" onclick="event.stopPropagation();setTxSort('low')">Lowest</button>
+                        </div>
+                        <div class="tx-header"><span>Date</span><span>Store</span><span>Item</span><span style="text-align:right">Amount</span><span></span></div>
+                        ${sorted.map(tx => `
                           <div class="tx-item">
-                            <div class="tx-left">
-                              <span class="tx-store">${tx.store || tx.item || '—'}</span>
-                              ${tx.store && tx.item ? `<span class="tx-item-name">${tx.item}</span>` : ''}
+                            <div class="tx-date-wrap" onclick="event.stopPropagation()">
+                              <span class="tx-date-display">${fmtDate(tx.date)}</span>
+                              <input class="tx-edit-date" type="date" value="${tx.date||''}" onchange="updateTx('${tx.id}','date',this.value)">
                             </div>
-                            <span class="tx-amt">${fmt(tx.amount)}</span>
-                          </div>`).join('')}
+                            <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store"
+                              style="font-size:.7rem;"
+                              onclick="event.stopPropagation()"
+                              onchange="updateTx('${tx.id}','store',this.value)">
+                            <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item"
+                              style="font-size:.7rem;"
+                              onclick="event.stopPropagation()"
+                              onchange="updateTx('${tx.id}','item',this.value)">
+                            <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01"
+                              style="font-size:.88rem;font-weight:600;"
+                              onclick="event.stopPropagation()"
+                              onchange="updateTx('${tx.id}','amount',this.value)">
+                            <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
+                          </div>`).join('')}`;
+                      })()}
                     </div>
                   </div>`;
               }).join('')}
@@ -954,8 +1214,13 @@ function updateStoreSuggestions(catKey) {
 }
 
 function toggleCat(key) {
-  const el = document.getElementById('cat-' + key);
-  if (el) el.classList.toggle('open');
+  if (state.openCats.has(key)) {
+    state.openCats.delete(key);
+  } else {
+    state.openCats.add(key);
+  }
+  localStorage.setItem('openCats', JSON.stringify([...state.openCats]));
+  renderApp();
 }
 
 async function saveIncomeField(field, value) {
@@ -1052,6 +1317,21 @@ async function switchTab(tab) {
     renderApp();
     await loadBizData();
     state.loading = false;
+  } else if (tab === 'admin') {
+    state.loading = true;
+    renderApp();
+    await loadAdminData();
+    state.loading = false;
+  } else if (tab === 'travel') {
+    state.loading = true;
+    renderApp();
+    await loadTravelData();
+    state.loading = false;
+  } else if (tab === 'charity') {
+    state.loading = true;
+    renderApp();
+    await loadCharityData();
+    state.loading = false;
   }
   renderApp();
 }
@@ -1091,6 +1371,1157 @@ async function loadBizData() {
   const monthIds = state.months.map(m => m.id);
   const { data: allBiz } = await sb.from('biz_months').select('*').in('month_id', monthIds);
   state.allBiz = allBiz || [];
+}
+
+// ── Admin data loading ────────────────────────────────────────────────
+async function loadAdminData() {
+  const { data: items } = await sb.from('admin_items').select('*').eq('year', 2026).order('created_at');
+  state.admin.items = items || [];
+
+  const { data: allocs } = await sb.from('admin_allocations').select('*').eq('year', 2026);
+  state.admin.allocations = {};
+  (allocs || []).forEach(a => { state.admin.allocations[a.month_num] = a; });
+
+  const { data: payments } = await sb.from('admin_payments').select('*').eq('year', 2026).order('month_num,created_at');
+  state.admin.payments = payments || [];
+
+  const { data: subs } = await sb.from('admin_sub_items').select('*').order('created_at');
+  state.admin.subItems = subs || [];
+}
+
+// ── Travel data loading ────────────────────────────────────────────────
+async function loadTravelData() {
+  const { data: items } = await sb.from('travel_items').select('*').eq('year', 2026).order('created_at');
+  state.travel.items = items || [];
+  const { data: payments } = await sb.from('travel_payments').select('*').eq('year', 2026).order('month_num,created_at');
+  state.travel.payments = payments || [];
+  const { data: subs } = await sb.from('travel_sub_items').select('*').order('created_at');
+  state.travel.subItems = subs || [];
+  // allocations from budgets table
+  const { data: budgetRows } = await sb.from('budgets').select('month_id,amount').eq('category','travel');
+  state.travel.allocations = {};
+  (budgetRows || []).forEach(b => {
+    const m = state.months.find(m => m.id === b.month_id);
+    if (m) state.travel.allocations[m.month_num] = { month_id: b.month_id, amount: b.amount };
+  });
+}
+
+// ── Charity data loading ──────────────────────────────────────────────
+async function loadCharityData() {
+  const { data: items } = await sb.from('charity_items').select('*').eq('year', 2026).order('created_at');
+  state.charity.items = items || [];
+  const { data: payments } = await sb.from('charity_payments').select('*').eq('year', 2026).order('month_num,created_at');
+  state.charity.payments = payments || [];
+  const { data: subs } = await sb.from('charity_sub_items').select('*').order('created_at');
+  state.charity.subItems = subs || [];
+  // allocations from budgets table
+  const { data: budgetRows } = await sb.from('budgets').select('month_id,amount').eq('category','charity');
+  state.charity.allocations = {};
+  (budgetRows || []).forEach(b => {
+    const m = state.months.find(m => m.id === b.month_id);
+    if (m) state.charity.allocations[m.month_num] = { month_id: b.month_id, amount: b.amount };
+  });
+}
+
+// ── Charity CRUD ──────────────────────────────────────────────────────
+async function addCharityItem() {
+  const { data, error } = await sb.from('charity_items').insert({ year: 2026, label: 'New item', projected_amount: 0 }).select().single();
+  if (error) { toast('Error adding item'); return; }
+  state.charity.items.push(data);
+  renderApp();
+}
+
+async function saveCharityItem(id, field, value) {
+  const item = state.charity.items.find(i => i.id === id);
+  if (!item) return;
+  const oldVal = item[field];
+  const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
+  await sb.from('charity_items').update({ [field]: val }).eq('id', id);
+  item[field] = val;
+  pushUndo({
+    label: 'edit ' + field,
+    undo: async () => { await sb.from('charity_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('charity_items').update({ [field]: val }).eq('id', id); item[field] = val; renderApp(); }
+  });
+  renderApp();
+}
+
+async function deleteCharityItem(id) {
+  const snap = state.charity.items.find(i => i.id === id);
+  if (!snap) return;
+  await sb.from('charity_items').delete().eq('id', id);
+  state.charity.items = state.charity.items.filter(i => i.id !== id);
+  pushUndo({
+    label: 'delete charity item',
+    undo: async () => { const { data } = await sb.from('charity_items').insert(snap).select().single(); if (data) { state.charity.items.push(data); } renderApp(); },
+    redo: async () => { await sb.from('charity_items').delete().eq('id', id); state.charity.items = state.charity.items.filter(i => i.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function addCharitySub(itemId) {
+  const { data, error } = await sb.from('charity_sub_items').insert({ item_id: itemId, label: '', amount: 0 }).select().single();
+  if (error) { toast('Error'); return; }
+  state.charity.subItems.push(data);
+  localStorage.setItem('sn-chr-'+itemId, '1');
+  renderApp();
+}
+
+async function updateCharitySub(id, field, value) {
+  const s = state.charity.subItems.find(s => s.id === id);
+  if (!s) return;
+  const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_paid' ? Boolean(value) : value;
+  await sb.from('charity_sub_items').update({ [field]: val }).eq('id', id);
+  s[field] = val;
+  renderApp();
+}
+
+async function deleteCharitySub(id) {
+  await sb.from('charity_sub_items').delete().eq('id', id);
+  state.charity.subItems = state.charity.subItems.filter(s => s.id !== id);
+  renderApp();
+}
+
+async function saveCharityAllocation(monthNum, value) {
+  const num = parseFloat(value) || 0;
+  const existing = state.charity.allocations[monthNum];
+  const oldNum = existing ? Number(existing.amount) : 0;
+  if (existing) {
+    await sb.from('budgets').update({ amount: num }).eq('month_id', existing.month_id).eq('category','charity');
+    existing.amount = num;
+  } else {
+    const month = state.months.find(m => m.month_num === monthNum);
+    if (!month) return;
+    await sb.from('budgets').insert({ month_id: month.id, category: 'charity', amount: num });
+    state.charity.allocations[monthNum] = { month_id: month.id, amount: num };
+  }
+  state.budgets['charity'] = num;
+  pushUndo({
+    label: 'edit charity allocation',
+    undo: async () => { const ex = state.charity.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: oldNum }).eq('month_id', ex.month_id).eq('category','charity'); ex.amount = oldNum; } renderApp(); },
+    redo: async () => { const ex = state.charity.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: num }).eq('month_id', ex.month_id).eq('category','charity'); ex.amount = num; } renderApp(); }
+  });
+  renderApp();
+}
+
+async function addCharityPayment() {
+  const monthNum = parseInt(document.getElementById('cp-month').value);
+  const label = document.getElementById('cp-label').value.trim();
+  const dateVal = document.getElementById('cp-date').value || null;
+  const amount = parseFloat(document.getElementById('cp-amount').value);
+  if (!label || !amount || isNaN(amount)) { toast('Fill in name and amount'); return; }
+  const { data, error } = await sb.from('charity_payments').insert({ year: 2026, month_num: monthNum, label, amount, payment_date: dateVal }).select().single();
+  if (error) { toast('Error saving'); return; }
+  state.charity.payments.push(data);
+  state.charity.payments.sort((a,b) => a.month_num - b.month_num);
+  document.getElementById('cp-label').value = '';
+  document.getElementById('cp-date').value = '';
+  document.getElementById('cp-amount').value = '';
+  renderApp();
+  toast('Payment logged ✓');
+}
+
+async function deleteCharityPayment(id) {
+  const snap = {...state.charity.payments.find(p => p.id === id)};
+  await sb.from('charity_payments').delete().eq('id', id);
+  state.charity.payments = state.charity.payments.filter(p => p.id !== id);
+  pushUndo({
+    label: 'delete charity payment',
+    undo: async () => { const { data } = await sb.from('charity_payments').insert(snap).select().single(); if (data) { state.charity.payments.push(data); state.charity.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
+    redo: async () => { await sb.from('charity_payments').delete().eq('id', id); state.charity.payments = state.charity.payments.filter(p => p.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function updateCharityPayment(id, field, value) {
+  const p = state.charity.payments.find(p => p.id === id);
+  if (!p) return;
+  const oldVal = p[field];
+  const val = field === 'amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'has_receipt' || field === 'is_given') ? Boolean(value) : value;
+  await sb.from('charity_payments').update({ [field]: val }).eq('id', id);
+  p[field] = val;
+  pushUndo({
+    label: 'edit charity payment',
+    undo: async () => { await sb.from('charity_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('charity_payments').update({ [field]: val }).eq('id', id); p[field] = val; renderApp(); }
+  });
+  renderApp();
+}
+
+// ── Travel CRUD ────────────────────────────────────────────────────────
+async function addTravelItem() {
+  const { data, error } = await sb.from('travel_items').insert({ year: 2026, label: 'New item', projected_amount: 0 }).select().single();
+  if (error) { toast('Error adding item'); return; }
+  state.travel.items.push(data);
+  renderApp();
+}
+
+async function saveTravelItem(id, field, value) {
+  const item = state.travel.items.find(i => i.id === id);
+  if (!item) return;
+  const oldVal = item[field];
+  const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
+  await sb.from('travel_items').update({ [field]: val }).eq('id', id);
+  item[field] = val;
+  pushUndo({
+    label: 'edit ' + field,
+    undo: async () => { await sb.from('travel_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('travel_items').update({ [field]: val }).eq('id', id); item[field] = val; renderApp(); }
+  });
+  renderApp();
+}
+
+async function deleteTravelItem(id) {
+  const snap = state.travel.items.find(i => i.id === id);
+  if (!snap) return;
+  await sb.from('travel_items').delete().eq('id', id);
+  state.travel.items = state.travel.items.filter(i => i.id !== id);
+  pushUndo({
+    label: 'delete travel item',
+    undo: async () => { const { data } = await sb.from('travel_items').insert(snap).select().single(); if (data) { state.travel.items.push(data); } renderApp(); },
+    redo: async () => { await sb.from('travel_items').delete().eq('id', id); state.travel.items = state.travel.items.filter(i => i.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function addTravelSub(itemId) {
+  const { data, error } = await sb.from('travel_sub_items').insert({ item_id: itemId, label: '', amount: 0 }).select().single();
+  if (error) { toast('Error'); return; }
+  state.travel.subItems.push(data);
+  localStorage.setItem('sn-trv-'+itemId, '1');
+  renderApp();
+}
+
+async function updateTravelSub(id, field, value) {
+  const s = state.travel.subItems.find(s => s.id === id);
+  if (!s) return;
+  const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_paid' ? Boolean(value) : value;
+  await sb.from('travel_sub_items').update({ [field]: val }).eq('id', id);
+  s[field] = val;
+  renderApp();
+}
+
+async function deleteTravelSub(id) {
+  await sb.from('travel_sub_items').delete().eq('id', id);
+  state.travel.subItems = state.travel.subItems.filter(s => s.id !== id);
+  renderApp();
+}
+
+async function saveTravelAllocation(monthNum, value) {
+  const num = parseFloat(value) || 0;
+  const existing = state.travel.allocations[monthNum];
+  const oldNum = existing ? Number(existing.amount) : 0;
+  if (existing) {
+    await sb.from('budgets').update({ amount: num }).eq('month_id', existing.month_id).eq('category', 'travel');
+    existing.amount = num;
+  } else {
+    const month = state.months.find(m => m.month_num === monthNum);
+    if (!month) return;
+    await sb.from('budgets').upsert({ month_id: month.id, category: 'travel', amount: num });
+    state.travel.allocations[monthNum] = { month_id: month.id, amount: num };
+  }
+  state.budgets['travel'] = num;
+  pushUndo({
+    label: 'edit travel allocation',
+    undo: async () => { const ex = state.travel.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: oldNum }).eq('month_id', ex.month_id).eq('category','travel'); ex.amount = oldNum; } renderApp(); },
+    redo: async () => { const ex = state.travel.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: num }).eq('month_id', ex.month_id).eq('category','travel'); ex.amount = num; } renderApp(); }
+  });
+  renderApp();
+}
+
+async function addTravelPayment() {
+  const monthNum = parseInt(document.getElementById('tp-month').value);
+  const label = document.getElementById('tp-label').value.trim();
+  const destination = document.getElementById('tp-dest').value.trim();
+  const amount = parseFloat(document.getElementById('tp-amount').value);
+  if (!label || !amount || isNaN(amount)) { toast('Fill in what and amount'); return; }
+  const { data, error } = await sb.from('travel_payments').insert({ year: 2026, month_num: monthNum, label, destination, amount }).select().single();
+  if (error) { toast('Error saving'); return; }
+  state.travel.payments.push(data);
+  state.travel.payments.sort((a,b) => a.month_num - b.month_num);
+  document.getElementById('tp-label').value = '';
+  document.getElementById('tp-dest').value = '';
+  document.getElementById('tp-amount').value = '';
+  renderApp();
+  toast('Payment logged ✓');
+}
+
+async function deleteTravelPayment(id) {
+  const snap = {...state.travel.payments.find(p => p.id === id)};
+  await sb.from('travel_payments').delete().eq('id', id);
+  state.travel.payments = state.travel.payments.filter(p => p.id !== id);
+  pushUndo({
+    label: 'delete travel payment',
+    undo: async () => { const { data } = await sb.from('travel_payments').insert(snap).select().single(); if (data) { state.travel.payments.push(data); state.travel.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
+    redo: async () => { await sb.from('travel_payments').delete().eq('id', id); state.travel.payments = state.travel.payments.filter(p => p.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function updateTravelPayment(id, field, value) {
+  const p = state.travel.payments.find(p => p.id === id);
+  if (!p) return;
+  const oldVal = p[field];
+  const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_estimate' ? Boolean(value) : value;
+  await sb.from('travel_payments').update({ [field]: val }).eq('id', id);
+  p[field] = val;
+  pushUndo({
+    label: 'edit travel payment',
+    undo: async () => { await sb.from('travel_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('travel_payments').update({ [field]: val }).eq('id', id); p[field] = val; renderApp(); }
+  });
+  renderApp();
+}
+
+// ── Travel tab render ──────────────────────────────────────────────────
+function renderTravelTab() {
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const items = state.travel.items || [];
+  const allocs = state.travel.allocations || {};
+  const currentMonthObj = state.months.find(m => m.id === state.currentMonthId);
+  const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
+  const payments = state.travel.payments || [];
+
+  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
+  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
+  const gap = budget - totalAlloc;
+  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const remaining = budget - totalSpent;
+
+  const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+
+  const tvSort = localStorage.getItem('travelItemSort') || 'created';
+  const sortedItems = [...items].sort((a,b) => {
+    if (tvSort==='alpha') return (a.label||'').localeCompare(b.label||'');
+    if (tvSort==='alpha-desc') return (b.label||'').localeCompare(a.label||'');
+    if (tvSort==='amount-high') return Number(b.projected_amount)-Number(a.projected_amount);
+    if (tvSort==='amount-low') return Number(a.projected_amount)-Number(b.projected_amount);
+    return 0;
+  });
+  const itemsTravelHtml = sortedItems.map(item => {
+    const subs = (state.travel.subItems || []).filter(s => s.item_id === item.id);
+    const isOpen = localStorage.getItem('sn-trv-'+item.id) === '1';
+    const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
+    const subBadge = subs.length > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+subs.filter(s=>s.is_paid).length+'/'+subs.length+' paid</span>' : '';
+    const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
+    const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
+    const amtColor = item.is_estimate ? 'var(--amber)' : 'var(--text)';
+    const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
+    const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
+    const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
+    const estWeight = item.is_estimate ? '700' : '400';
+    const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
+    const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
+    const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
+    const logIcon = item.is_logged ? '✓' : '○';
+    let subsHtml = '';
+    if (isOpen) {
+      const subRows = subs.map(s => {
+        const sPaid = s.is_paid;
+        const sRowOp = sPaid ? 'opacity:.5;' : '';
+        const sStrike = sPaid ? 'text-decoration:line-through;' : '';
+        const sBg = sPaid ? 'var(--gsoft)' : 'none';
+        const sBorder = sPaid ? 'var(--accent)' : 'var(--border)';
+        const sColor = sPaid ? 'var(--accent)' : 'var(--dim)';
+        const sIcon = sPaid ? '✓' : '○';
+        return '<div style="display:grid;grid-template-columns:1fr 80px 28px 28px;gap:.25rem;align-items:center;padding:.2rem 0;'+sRowOp+'">'
+          + '<input type="text" value="'+esc(s.label)+'" placeholder="note (optional)" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelSub(\''+s.id+'\',\'label\',this.value)">'
+          + '<input type="number" value="'+(s.amount||'')+'" placeholder="₪" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelSub(\''+s.id+'\',\'amount\',this.value)">'
+          + '<button onclick="updateTravelSub(\''+s.id+'\',\'is_paid\','+(!s.is_paid)+')" title="'+(sPaid?'Mark as unpaid':'Mark as paid')+'" style="background:'+sBg+';border:1px solid '+sBorder+';border-radius:4px;color:'+sColor+';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+sIcon+'</button>'
+          + '<button onclick="deleteTravelSub(\''+s.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;">×</button>'
+          + '</div>';
+      }).join('');
+      const paidSummary = subs.length > 0 ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid '+fmtA(paidTotal)+' of '+fmtA(Number(item.projected_amount||0))+'</div>' : '';
+      subsHtml = '<div style="padding:.3rem .5rem .5rem 1.5rem;background:var(--surface2);border-radius:0 0 6px 6px;">'
+        + subRows
+        + '<button onclick="addTravelSub(\''+item.id+'\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
+        + paidSummary
+        + '</div>';
+    }
+    return '<div style="border-bottom:1px solid var(--border);">'
+      + '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;'+rowOpacity+'">'
+      + '<button onclick="var k=\'sn-trv-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
+      + '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveTravelItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+'</div>'
+      + '<input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveTravelItem(\''+item.id+'\',\'projected_amount\',this.value)">'
+      + '<button onclick="saveTravelItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'Marked as estimate — click to confirm exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:4px;color:'+estColor+';cursor:pointer;font-size:.65rem;padding:.1rem .2rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+      + '<button onclick="deleteTravelItem(\''+item.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>'
+      + '<button onclick="saveTravelItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not logged':'Mark as logged/done')+'" style="background:'+logBg+';border:1px solid '+logBorder+';border-radius:4px;color:'+logColor+';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+logIcon+'</button>'
+      + '</div>'
+      + subsHtml
+      + '</div>';
+  }).join('');
+
+  // Pre-compute payment log HTML
+  let payLogHtml = '';
+  if (payments.length === 0) {
+    payLogHtml = '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>';
+  } else {
+    const ps = localStorage.getItem('travelPaySort') || 'month';
+    const sorted = [...payments].sort((a,b) => {
+      if (ps==='month') return a.month_num - b.month_num;
+      if (ps==='month-desc') return b.month_num - a.month_num;
+      if (ps==='high') return Number(b.amount) - Number(a.amount);
+      if (ps==='low') return Number(a.amount) - Number(b.amount);
+      return 0;
+    });
+    const sb2 = (key, label) => '<button onclick="localStorage.setItem(\'travelPaySort\',\''+key+'\');renderApp()" style="background:none;border:1px solid '+(ps===key?'var(--accent)':'var(--border)')+';border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:'+(ps===key?'var(--accent)':'var(--muted)')+';font-family:\'DM Sans\',sans-serif;font-weight:'+(ps===key?'600':'400')+';">'+label+'</button>';
+    const destFilter = (localStorage.getItem('travelDestFilter') || '').toLowerCase();
+    const filtered = destFilter ? sorted.filter(p => (p.destination||'').toLowerCase().includes(destFilter)) : sorted;
+    const payRows = filtered.map(p => {
+      const destVal = esc(p.destination||'');
+      const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
+      const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
+      const amtWeightP = p.is_estimate ? '700' : '400';
+      const estBtnBg = p.is_estimate ? 'var(--ambersoft,#fff3cd)' : 'none';
+      const estBtnBorder = p.is_estimate ? 'var(--amber)' : 'var(--border)';
+      const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
+      const estBtnWeight = p.is_estimate ? '700' : '400';
+      return '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;'+estBgP+'">'
+        + '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">'+MONTH_NAMES[p.month_num-1]+'</span>'
+        + '<input type="text" value="'+destVal+'" placeholder="Where" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\''+p.id+'\',\'destination\',this.value)">'
+        + '<input type="text" value="'+esc(p.label)+'" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\''+p.id+'\',\'label\',this.value)">'
+        + '<input type="number" value="'+p.amount+'" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:'+amtColorP+';font-weight:'+amtWeightP+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\''+p.id+'\',\'amount\',this.value)">'
+        + '<button onclick="updateTravelPayment(\''+p.id+'\',\'is_estimate\','+(!(p.is_estimate))+')" title="'+(p.is_estimate?'Marked as estimate — click to confirm':'Mark as estimate')+'" style="background:'+estBtnBg+';border:1px solid '+estBtnBorder+';border-radius:4px;color:'+estBtnColor+';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:'+estBtnWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+        + '<button onclick="deleteTravelPayment(\''+p.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>'
+        + '</div>';
+    }).join('');
+    const destFilterDisplay = localStorage.getItem('travelDestFilter') || '';
+    payLogHtml = '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">'
+      + '<input type="text" value="'+esc(destFilterDisplay)+'" placeholder="🔍 Filter by destination…" style="flex:1;font-size:.74rem;padding:.25rem .5rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:\'DM Sans\',sans-serif;outline:none;" oninput="localStorage.setItem(\'travelDestFilter\',this.value);renderApp()">'
+      + (destFilterDisplay ? '<button onclick="localStorage.removeItem(\'travelDestFilter\');renderApp()" style="font-size:.7rem;padding:.2rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;">✕ clear</button>' : '')
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">'
+      + '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>'
+      + sb2('month','Mo ↑') + sb2('month-desc','Mo ↓') + sb2('high','Highest') + sb2('low','Lowest')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">'
+      + '<span>Mo</span><span>Where</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>'
+      + '</div>'
+      + payRows
+      + '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">'
+      + '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>'
+      + '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">'+fmtA(totalSpent)+'</span>'
+      + '</div>';
+  }
+
+  // Pre-compute allocation grid HTML
+  const allocGridHtml = MONTH_NAMES.map((mn, i) => {
+    const mnum = i + 1;
+    const val = allocs[mnum] ? allocs[mnum].amount : '';
+    const isCurrent = mnum === currentMonthNum;
+    const rowBg = isCurrent ? 'var(--gsoft)' : 'var(--surface2)';
+    const rowBorder = isCurrent ? 'var(--accent)' : 'transparent';
+    const labelColor = isCurrent ? 'var(--accent)' : 'var(--muted)';
+    const labelWeight = isCurrent ? '700' : '600';
+    const inputColor = isCurrent ? 'var(--accent)' : 'var(--text)';
+    const inputWeight = isCurrent ? '600' : '400';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
+      + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
+      + '<input type="number" value="'+val+'" placeholder="0" min="0" step="1"'
+      + ' style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:'+inputColor+';outline:none;-moz-appearance:textfield;font-weight:'+inputWeight+';"'
+      + ' onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'"'
+      + ' onchange="saveTravelAllocation('+mnum+', this.value)">'
+      + '</div>';
+  }).join('');
+
+  const gapColor = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const gapText = gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓';
+  const allocTotalColor = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const monthSelectHtml = MONTH_NAMES.map((mn,i) => '<option value="'+(i+1)+'"'+(i+1===currentMonthNum?' selected':'')+'>'+mn+'</option>').join('');
+
+  const sortBtnsHtml = [['created','Added'],['alpha','A→Z'],['alpha-desc','Z→A'],['amount-high','High'],['amount-low','Low']].map(([k,lbl]) => {
+    const active = tvSort === k;
+    return '<button onclick="localStorage.setItem(\'travelItemSort\',\''+k+'\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid '+(active?'var(--accent)':'var(--border)')+';border-radius:4px;background:'+(active?'var(--gsoft)':'none')+';color:'+(active?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+lbl+'</button>';
+  }).join('');
+
+  return `
+  <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Summary Bar -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected total</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gapColor};">${fmtA(Math.abs(gap))}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+
+      <!-- LEFT: Yearly Items -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
+          <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
+        </div>
+        <div style="font-size:.6rem;color:var(--dim);margin-bottom:.6rem;">~est = estimate &nbsp;|&nbsp; × = delete &nbsp;|&nbsp; ○ = mark done</div>
+        <div style="display:grid;grid-template-columns:1fr 90px 42px 28px 28px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+          <span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">~est</span><span></span><span style="text-align:center;">✓</span>
+        </div>
+        ${itemsTravelHtml}
+        <button onclick="addTravelItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
+        <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Allocations + Payments -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+
+        <!-- Monthly Allocations -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
+          <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
+            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColor};">${fmtA(totalAlloc)} ${gapText}</span>
+          </div>
+        </div>
+
+        <!-- Payment Log -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
+
+          <!-- Add payment form -->
+          <div style="display:grid;grid-template-columns:70px 1fr 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+            <select id="tp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
+            <input type="text" id="tp-dest" placeholder="Where" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addTravelPayment()">
+            <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addTravelPayment()">
+            <input type="number" id="tp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addTravelPayment()">
+            <button onclick="addTravelPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
+          </div>
+
+          ${payLogHtml}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Charity tab render ────────────────────────────────────────────────
+function renderCharityTab() {
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const items = state.charity.items || [];
+  const allocs = state.charity.allocations || {};
+  const currentMonthObj = state.months.find(m => m.id === state.currentMonthId);
+  const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
+  const payments = state.charity.payments || [];
+
+  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
+  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
+  const gap = budget - totalAlloc;
+  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const remaining = budget - totalSpent;
+
+  const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+
+  // Pre-compute sort buttons HTML
+  const ciSort = localStorage.getItem('charityItemSort') || 'created';
+  const sortBtnsHtml = [['created','Added'],['alpha','A→Z'],['alpha-desc','Z→A'],['amount-high','High'],['amount-low','Low']].map(([k,lbl]) => {
+    const active = ciSort === k;
+    return '<button onclick="localStorage.setItem(\'charityItemSort\',\''+k+'\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid '+(active?'var(--accent)':'var(--border)')+';border-radius:4px;background:'+(active?'var(--gsoft)':'none')+';color:'+(active?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+lbl+'</button>';
+  }).join('');
+
+  // Pre-compute items HTML
+  const sortedItems = [...items].sort((a,b) => {
+    if (ciSort==='alpha') return (a.label||'').localeCompare(b.label||'');
+    if (ciSort==='alpha-desc') return (b.label||'').localeCompare(a.label||'');
+    if (ciSort==='amount-high') return Number(b.projected_amount)-Number(a.projected_amount);
+    if (ciSort==='amount-low') return Number(a.projected_amount)-Number(b.projected_amount);
+    return 0;
+  });
+  const itemsCharityHtml = sortedItems.map(item => {
+    const subs = (state.charity.subItems || []).filter(s => s.item_id === item.id);
+    const isOpen = localStorage.getItem('sn-chr-'+item.id) === '1';
+    const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
+    const subBadge = subs.length > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+subs.filter(s=>s.is_paid).length+'/'+subs.length+' paid</span>' : '';
+    const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
+    const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
+    const amtColor = item.is_estimate ? 'var(--amber)' : 'var(--text)';
+    const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
+    const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
+    const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
+    const estWeight = item.is_estimate ? '700' : '400';
+    const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
+    const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
+    const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
+    const logIcon = item.is_logged ? '✓' : '○';
+    let subsHtml = '';
+    if (isOpen) {
+      const subRows = subs.map(s => {
+        const sPaid = s.is_paid;
+        const sRowOp = sPaid ? 'opacity:.5;' : '';
+        const sStrike = sPaid ? 'text-decoration:line-through;' : '';
+        const sBg = sPaid ? 'var(--gsoft)' : 'none';
+        const sBorder = sPaid ? 'var(--accent)' : 'var(--border)';
+        const sColor = sPaid ? 'var(--accent)' : 'var(--dim)';
+        const sIcon = sPaid ? '✓' : '○';
+        return '<div style="display:grid;grid-template-columns:1fr 80px 28px 28px;gap:.25rem;align-items:center;padding:.2rem 0;'+sRowOp+'">'
+          + '<input type="text" value="'+esc(s.label)+'" placeholder="note (optional)" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharitySub(\''+s.id+'\',\'label\',this.value)">'
+          + '<input type="number" value="'+(s.amount||'')+'" placeholder="₪" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharitySub(\''+s.id+'\',\'amount\',this.value)">'
+          + '<button onclick="updateCharitySub(\''+s.id+'\',\'is_paid\','+(!s.is_paid)+')" title="'+(sPaid?'Mark as unpaid':'Mark as paid')+'" style="background:'+sBg+';border:1px solid '+sBorder+';border-radius:4px;color:'+sColor+';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+sIcon+'</button>'
+          + '<button onclick="deleteCharitySub(\''+s.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;">×</button>'
+          + '</div>';
+      }).join('');
+      const paidSummary = subs.length > 0 ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid '+fmtA(paidTotal)+' of '+fmtA(Number(item.projected_amount||0))+'</div>' : '';
+      subsHtml = '<div style="padding:.3rem .5rem .5rem 1.5rem;background:var(--surface2);border-radius:0 0 6px 6px;">'
+        + subRows
+        + '<button onclick="addCharitySub(\''+item.id+'\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
+        + paidSummary
+        + '</div>';
+    }
+    return '<div style="border-bottom:1px solid var(--border);">'
+      + '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;'+rowOpacity+'">'
+      + '<button onclick="var k=\'sn-chr-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
+      + '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveCharityItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+'</div>'
+      + '<input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveCharityItem(\''+item.id+'\',\'projected_amount\',this.value)">'
+      + '<button onclick="saveCharityItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'Marked as estimate — click to confirm exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:4px;color:'+estColor+';cursor:pointer;font-size:.65rem;padding:.1rem .2rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+      + '<button onclick="deleteCharityItem(\''+item.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>'
+      + '<button onclick="saveCharityItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not logged':'Mark as logged/done')+'" style="background:'+logBg+';border:1px solid '+logBorder+';border-radius:4px;color:'+logColor+';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+logIcon+'</button>'
+      + '</div>'
+      + subsHtml
+      + '</div>';
+  }).join('');
+
+  // Pre-compute payment log HTML
+  let payLogHtml = '';
+  if (payments.length === 0) {
+    payLogHtml = '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>';
+  } else {
+    const ps = localStorage.getItem('charityPaySort') || 'month';
+    const sorted = [...payments].sort((a,b) => {
+      if (ps==='month') return a.month_num - b.month_num;
+      if (ps==='month-desc') return b.month_num - a.month_num;
+      if (ps==='high') return Number(b.amount) - Number(a.amount);
+      if (ps==='low') return Number(a.amount) - Number(b.amount);
+      return 0;
+    });
+    const sb2 = (key, label) => '<button onclick="localStorage.setItem(\'charityPaySort\',\''+key+'\');renderApp()" style="background:none;border:1px solid '+(ps===key?'var(--accent)':'var(--border)')+';border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:'+(ps===key?'var(--accent)':'var(--muted)')+';font-family:\'DM Sans\',sans-serif;font-weight:'+(ps===key?'600':'400')+';">'+label+'</button>';
+    const payRows = sorted.map(p => {
+      const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
+      const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
+      const amtWeightP = p.is_estimate ? '700' : '400';
+      const estBtnBg = p.is_estimate ? 'var(--ambersoft,#fff3cd)' : 'none';
+      const estBtnBorder = p.is_estimate ? 'var(--amber)' : 'var(--border)';
+      const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
+      const estBtnWeight = p.is_estimate ? '700' : '400';
+      return '<div style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;'+estBgP+'">'
+        + '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">'+MONTH_NAMES[p.month_num-1]+'</span>'
+        + '<input type="text" value="'+esc(p.label)+'" placeholder="Charity" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\''+p.id+'\',\'label\',this.value)">'
+        + '<input type="date" value="'+(p.payment_date||'')+'" style="font-size:.74rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\''+p.id+'\',\'payment_date\',this.value)">'
+        + '<input type="number" value="'+p.amount+'" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:'+amtColorP+';font-weight:'+amtWeightP+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\''+p.id+'\',\'amount\',this.value)">'
+        + '<button onclick="updateCharityPayment(\''+p.id+'\',\'has_receipt\','+(!(p.has_receipt))+')" title="Has receipt" style="background:'+(p.has_receipt?'var(--gsoft)':'none')+';border:1px solid '+(p.has_receipt?'var(--accent)':'var(--border)')+';border-radius:4px;color:'+(p.has_receipt?'var(--accent)':'var(--dim)')+';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;">'+(p.has_receipt?'🧾':'□')+'</button>'
+        + '<button onclick="updateCharityPayment(\''+p.id+'\',\'is_given\','+(!(p.is_given))+')" title="Mark as given" style="background:'+(p.is_given?'var(--gsoft)':'none')+';border:1px solid '+(p.is_given?'var(--accent)':'var(--border)')+';border-radius:4px;color:'+(p.is_given?'var(--accent)':'var(--dim)')+';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+(p.is_given?'✓':'○')+'</button>'
+        + '<button onclick="updateCharityPayment(\''+p.id+'\',\'is_estimate\','+(!(p.is_estimate))+')" title="'+(p.is_estimate?'Marked as estimate — click to confirm':'Mark as estimate')+'" style="background:'+estBtnBg+';border:1px solid '+estBtnBorder+';border-radius:4px;color:'+estBtnColor+';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:'+estBtnWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+        + '<button onclick="deleteCharityPayment(\''+p.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>'
+        + '</div>';
+    }).join('');
+    payLogHtml = '<div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">'
+      + '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>'
+      + sb2('month','Mo ↑') + sb2('month-desc','Mo ↓') + sb2('high','Highest') + sb2('low','Lowest')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">'
+      + '<span>Mo</span><span>Charity</span><span>Date</span><span style="text-align:right">Amount</span><span style="text-align:center">🧾</span><span style="text-align:center">✓</span><span style="text-align:center">~est</span><span></span>'
+      + '</div>'
+      + payRows
+      + '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">'
+      + '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total given</span>'
+      + '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">'+fmtA(totalSpent)+'</span>'
+      + '</div>';
+  }
+
+  // Pre-compute allocation grid HTML
+  const allocGridHtml = MONTH_NAMES.map((mn, i) => {
+    const mnum = i + 1;
+    const val = allocs[mnum] ? allocs[mnum].amount : '';
+    const isCurrent = mnum === currentMonthNum;
+    const rowBg = isCurrent ? 'var(--gsoft)' : 'var(--surface2)';
+    const rowBorder = isCurrent ? 'var(--accent)' : 'transparent';
+    const labelColor = isCurrent ? 'var(--accent)' : 'var(--muted)';
+    const labelWeight = isCurrent ? '700' : '600';
+    const inputColor = isCurrent ? 'var(--accent)' : 'var(--text)';
+    const inputWeight = isCurrent ? '600' : '400';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
+      + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
+      + '<input type="number" value="'+val+'" placeholder="0" min="0" step="1"'
+      + ' style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:'+inputColor+';outline:none;-moz-appearance:textfield;font-weight:'+inputWeight+';"'
+      + ' onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'"'
+      + ' onchange="saveCharityAllocation('+mnum+', this.value)">'
+      + '</div>';
+  }).join('');
+
+  const gapColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const gapTextC = gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓';
+  const allocTotalColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const monthSelectHtml = MONTH_NAMES.map((mn,i) => '<option value="'+(i+1)+'"'+(i+1===currentMonthNum?' selected':'')+'>'+mn+'</option>').join('');
+
+  return `
+  <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Summary Bar -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected total</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gapColorC};">${fmtA(Math.abs(gap))}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Given</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − given</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+
+      <!-- LEFT: Yearly Items -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
+          <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
+        </div>
+        <div style="font-size:.6rem;color:var(--dim);margin-bottom:.6rem;">~est = estimate &nbsp;|&nbsp; × = delete &nbsp;|&nbsp; ○ = mark done</div>
+        <div style="display:grid;grid-template-columns:1fr 90px 42px 28px 28px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+          <span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">~est</span><span></span><span style="text-align:center;">✓</span>
+        </div>
+        ${itemsCharityHtml}
+        <button onclick="addCharityItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
+        <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Allocations + Payments -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+
+        <!-- Monthly Allocations -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
+          <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
+            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColorC};">${fmtA(totalAlloc)} ${gapTextC}</span>
+          </div>
+        </div>
+
+        <!-- Payment Log -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
+
+          <!-- Add payment form -->
+          <div style="display:grid;grid-template-columns:70px 1fr 90px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+            <select id="cp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
+            <input type="text" id="cp-label" placeholder="Charity name" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addCharityPayment()">
+            <input type="date" id="cp-date" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            <input type="number" id="cp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addCharityPayment()">
+            <button onclick="addCharityPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
+          </div>
+
+          ${payLogHtml}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Admin tab render ──────────────────────────────────────────────────
+function renderAdminTab() {
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const items = state.admin.items || [];
+  const allocs = state.admin.allocations || {};
+  const currentMonthObj = state.months.find(m => m.id === state.currentMonthId);
+  const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
+  const payments = state.admin.payments || [];
+
+  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
+  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
+  const gap = budget - totalAlloc;
+  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const remaining = budget - totalSpent;
+
+  const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const esc = s => (s||'').replace(/"/g,'&quot;');
+
+  // Pre-compute sort buttons HTML
+  const aiSort = localStorage.getItem('adminItemSort') || 'created';
+  const sortBtnsHtml = [['created','Added'],['alpha','A→Z'],['alpha-desc','Z→A'],['amount-high','High'],['amount-low','Low']].map(([k,lbl]) => {
+    const active = aiSort === k;
+    return '<button onclick="localStorage.setItem(\'adminItemSort\',\''+k+'\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid '+(active?'var(--accent)':'var(--border)')+';border-radius:4px;background:'+(active?'var(--gsoft)':'none')+';color:'+(active?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+lbl+'</button>';
+  }).join('');
+
+  // Pre-compute items HTML
+  const sortedItems = [...items].sort((a,b) => {
+    if (aiSort==='alpha') return (a.label||'').localeCompare(b.label||'');
+    if (aiSort==='alpha-desc') return (b.label||'').localeCompare(a.label||'');
+    if (aiSort==='amount-high') return Number(b.projected_amount)-Number(a.projected_amount);
+    if (aiSort==='amount-low') return Number(a.projected_amount)-Number(b.projected_amount);
+    return 0;
+  });
+  const itemsHtml = sortedItems.map(item => {
+    const subs = (state.admin.subItems || []).filter(s => s.item_id === item.id);
+    const isOpen = localStorage.getItem('sn-adm-'+item.id) === '1';
+    const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
+    const subBadge = subs.length > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+subs.filter(s=>s.is_paid).length+'/'+subs.length+' paid</span>' : '';
+    const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
+    const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
+    const amtColor = item.is_estimate ? 'var(--amber)' : 'var(--text)';
+    const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
+    const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
+    const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
+    const estWeight = item.is_estimate ? '700' : '400';
+    const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
+    const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
+    const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
+    const logIcon = item.is_logged ? '✓' : '○';
+    let subsHtml = '';
+    if (isOpen) {
+      const subRows = subs.map(s => {
+        const sPaid = s.is_paid;
+        const sRowOp = sPaid ? 'opacity:.5;' : '';
+        const sStrike = sPaid ? 'text-decoration:line-through;' : '';
+        const sBg = sPaid ? 'var(--gsoft)' : 'none';
+        const sBorder = sPaid ? 'var(--accent)' : 'var(--border)';
+        const sColor = sPaid ? 'var(--accent)' : 'var(--dim)';
+        const sIcon = sPaid ? '✓' : '○';
+        return '<div style="display:grid;grid-template-columns:1fr 80px 28px 28px;gap:.25rem;align-items:center;padding:.2rem 0;'+sRowOp+'">'
+          + '<input type="text" value="'+esc(s.label)+'" placeholder="note (optional)" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'label\',this.value)">'
+          + '<input type="number" value="'+(s.amount||'')+'" placeholder="₪" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'amount\',this.value)">'
+          + '<button onclick="updateAdminSub(\''+s.id+'\',\'is_paid\','+(!s.is_paid)+')" title="'+(sPaid?'Mark as unpaid':'Mark as paid')+'" style="background:'+sBg+';border:1px solid '+sBorder+';border-radius:4px;color:'+sColor+';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+sIcon+'</button>'
+          + '<button onclick="deleteAdminSub(\''+s.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;">×</button>'
+          + '</div>';
+      }).join('');
+      const paidSummary = subs.length > 0 ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid '+fmtA(paidTotal)+' of '+fmtA(Number(item.projected_amount||0))+'</div>' : '';
+      subsHtml = '<div style="padding:.3rem .5rem .5rem 1.5rem;background:var(--surface2);border-radius:0 0 6px 6px;">'
+        + subRows
+        + '<button onclick="addAdminSub(\''+item.id+'\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
+        + paidSummary
+        + '</div>';
+    }
+    return '<div style="border-bottom:1px solid var(--border);">'
+      + '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;'+rowOpacity+'">'
+      + '<button onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
+      + '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+'</div>'
+      + '<input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'projected_amount\',this.value)">'
+      + '<button onclick="saveAdminItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'Marked as estimate — click to confirm exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:4px;color:'+estColor+';cursor:pointer;font-size:.65rem;padding:.1rem .2rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+      + '<button onclick="deleteAdminItem(\''+item.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>'
+      + '<button onclick="saveAdminItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not logged':'Mark as logged/done')+'" style="background:'+logBg+';border:1px solid '+logBorder+';border-radius:4px;color:'+logColor+';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+logIcon+'</button>'
+      + '</div>'
+      + subsHtml
+      + '</div>';
+  }).join('');
+
+  return `
+  <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Summary Bar -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected total</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(gap))}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+
+      <!-- LEFT: Yearly Items -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
+          <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
+        </div>
+        <div style="font-size:.6rem;color:var(--dim);margin-bottom:.6rem;">~est = estimate &nbsp;|&nbsp; × = delete &nbsp;|&nbsp; ○ = mark done</div>
+        <div style="display:grid;grid-template-columns:1fr 90px 42px 28px 28px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+          <span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">~est</span><span></span><span style="text-align:center;">✓</span>
+        </div>
+        ${itemsHtml}
+        <button onclick="addAdminItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
+        <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Allocations + Payments -->
+      <div style="display:flex;flex-direction:column;gap:1rem;">
+
+        <!-- Monthly Allocations -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">
+            ${MONTH_NAMES.map((mn, i) => {
+              const mnum = i + 1;
+              const val = allocs[mnum] ? allocs[mnum].amount : '';
+              const isCurrent = mnum === currentMonthNum;
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent?'var(--gsoft)':'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent?'var(--accent)':'transparent'};">
+                <span style="font-size:.72rem;color:${isCurrent?'var(--accent)':'var(--muted)'};font-weight:${isCurrent?'700':'600'};">${mn}</span>
+                <input type="number" value="${val}" placeholder="0" min="0" step="1"
+                  style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};outline:none;-moz-appearance:textfield;font-weight:${isCurrent?'600':'400'};"
+                  onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
+                  onchange="saveAdminAllocation(${mnum}, this.value)">
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
+            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓'}</span>
+          </div>
+        </div>
+
+        <!-- Payment Log -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
+
+          <!-- Add payment form -->
+          <div style="display:grid;grid-template-columns:70px 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+            <select id="ap-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
+              ${MONTH_NAMES.map((mn,i) => `<option value="${i+1}"${i+1===currentMonthNum?' selected':''}>${mn}</option>`).join('')}
+            </select>
+            <input type="text" id="ap-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addAdminPayment()">
+            <input type="number" id="ap-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addAdminPayment()">
+            <button onclick="addAdminPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
+          </div>
+
+          ${payments.length === 0 ? '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>' : (()=>{
+            const ps = localStorage.getItem('adminPaySort') || 'month';
+            const sorted = [...payments].sort((a,b) => {
+              if (ps==='month') return a.month_num - b.month_num;
+              if (ps==='month-desc') return b.month_num - a.month_num;
+              if (ps==='high') return Number(b.amount) - Number(a.amount);
+              if (ps==='low') return Number(a.amount) - Number(b.amount);
+              return 0;
+            });
+            const sb2 = (key, label) => `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps===key?'var(--accent)':'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps===key?'600':'400'};border-color:${ps===key?'var(--accent)':'var(--border)'};">${label}</button>`;
+            return `
+            <div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
+              <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
+              ${sb2('month','Mo ↑')}${sb2('month-desc','Mo ↓')}${sb2('high','Highest')}${sb2('low','Lowest')}
+            </div>
+            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
+              <span>Mo</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>
+            </div>
+            ${sorted.map(p => `
+            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;${p.is_estimate?'background:var(--ambersoft,#fffbf0);':''}">
+              <span style="font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace;">${MONTH_NAMES[p.month_num-1]}</span>
+              <input type="text" value="${esc(p.label)}" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;width:100%;"
+                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
+                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
+                onchange="updateAdminPayment('${p.id}','label',this.value)">
+              <input type="number" value="${p.amount}" min="0" step="0.01" style="font-size:.8rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:${p.is_estimate?'var(--amber)':'var(--text)'};font-weight:${p.is_estimate?'700':'400'};outline:none;text-align:right;width:100%;-moz-appearance:textfield;"
+                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
+                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
+                onchange="updateAdminPayment('${p.id}','amount',this.value)">
+              <button onclick="updateAdminPayment('${p.id}','is_estimate',${!p.is_estimate})"
+                title="${p.is_estimate?'Marked as estimate — click to confirm':'Mark as estimate'}"
+                style="background:${p.is_estimate?'var(--ambersoft,#fff3cd)':'none'};border:1px solid ${p.is_estimate?'var(--amber)':'var(--border)'};border-radius:4px;color:${p.is_estimate?'var(--amber)':'var(--dim)'};cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:${p.is_estimate?'700':'400'};font-family:'DM Sans',sans-serif;width:100%;">~est</button>
+              <button onclick="deleteAdminPayment('${p.id}')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>
+            </div>`).join('')}
+            <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
+              <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>
+              <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;">${fmtA(totalSpent)}</span>
+            </div>`;
+          })()}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Admin CRUD ────────────────────────────────────────────────────────
+async function addAdminItem() {
+  const { data, error } = await sb.from('admin_items').insert({ year: 2026, label: 'New item', projected_amount: 0 }).select().single();
+  if (error) { toast('Error adding item'); return; }
+  state.admin.items.push(data);
+  renderApp();
+}
+
+async function saveAdminItem(id, field, value) {
+  const item = state.admin.items.find(i => i.id === id);
+  if (!item) return;
+  const oldVal = item[field];
+  const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
+  await sb.from('admin_items').update({ [field]: val }).eq('id', id);
+  item[field] = val;
+  pushUndo({
+    label: 'edit ' + field,
+    undo: async () => { await sb.from('admin_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('admin_items').update({ [field]: val }).eq('id', id); item[field] = val; renderApp(); }
+  });
+  renderApp();
+}
+
+async function deleteAdminItem(id) {
+  const snap = state.admin.items.find(i => i.id === id);
+  if (!snap) return;
+  await sb.from('admin_items').delete().eq('id', id);
+  state.admin.items = state.admin.items.filter(i => i.id !== id);
+  pushUndo({
+    label: 'delete admin item',
+    undo: async () => { const { data } = await sb.from('admin_items').insert(snap).select().single(); if (data) { state.admin.items.push(data); } renderApp(); },
+    redo: async () => { await sb.from('admin_items').delete().eq('id', id); state.admin.items = state.admin.items.filter(i => i.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function addAdminSub(itemId) {
+  const { data, error } = await sb.from('admin_sub_items').insert({ item_id: itemId, label: '', amount: 0 }).select().single();
+  if (error) { toast('Error'); return; }
+  state.admin.subItems.push(data);
+  localStorage.setItem('sn-adm-'+itemId, '1');
+  renderApp();
+}
+
+async function updateAdminSub(id, field, value) {
+  const s = state.admin.subItems.find(s => s.id === id);
+  if (!s) return;
+  const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_paid' ? Boolean(value) : value;
+  await sb.from('admin_sub_items').update({ [field]: val }).eq('id', id);
+  s[field] = val;
+  renderApp();
+}
+
+async function deleteAdminSub(id) {
+  await sb.from('admin_sub_items').delete().eq('id', id);
+  state.admin.subItems = state.admin.subItems.filter(s => s.id !== id);
+  renderApp();
+}
+
+async function saveAdminAllocation(monthNum, value) {
+  const num = parseFloat(value) || 0;
+  const existing = state.admin.allocations[monthNum];
+  const oldNum = existing ? Number(existing.amount) : 0;
+  if (existing) {
+    await sb.from('admin_allocations').update({ amount: num }).eq('id', existing.id);
+    existing.amount = num;
+  } else {
+    const { data } = await sb.from('admin_allocations').insert({ year: 2026, month_num: monthNum, amount: num }).select().single();
+    if (data) state.admin.allocations[monthNum] = data;
+  }
+  // Also sync to budgets table so main page stays in sync
+  const month = state.months.find(m => m.month_num === monthNum);
+  if (month) {
+    await sb.from('budgets').upsert({ month_id: month.id, category: 'admin', amount: num }, { onConflict: 'month_id,category' });
+    state.budgets['admin'] = num;
+  }
+  pushUndo({
+    label: 'edit allocation',
+    undo: async () => { const ex = state.admin.allocations[monthNum]; if (ex) { await sb.from('admin_allocations').update({ amount: oldNum }).eq('id', ex.id); ex.amount = oldNum; } renderApp(); },
+    redo: async () => { const ex = state.admin.allocations[monthNum]; if (ex) { await sb.from('admin_allocations').update({ amount: num }).eq('id', ex.id); ex.amount = num; } renderApp(); }
+  });
+  renderApp();
+}
+
+async function addAdminPayment() {
+  const monthNum = parseInt(document.getElementById('ap-month').value);
+  const label = document.getElementById('ap-label').value.trim();
+  const amount = parseFloat(document.getElementById('ap-amount').value);
+  if (!label || !amount || isNaN(amount)) { toast('Fill in what and amount'); return; }
+  const { data, error } = await sb.from('admin_payments').insert({ year: 2026, month_num: monthNum, label, amount }).select().single();
+  if (error) { toast('Error saving'); return; }
+  state.admin.payments.push(data);
+  state.admin.payments.sort((a,b) => a.month_num - b.month_num);
+  document.getElementById('ap-label').value = '';
+  document.getElementById('ap-amount').value = '';
+  renderApp();
+  toast('Payment logged ✓');
+}
+
+async function deleteAdminPayment(id) {
+  const snap = {...state.admin.payments.find(p => p.id === id)};
+  await sb.from('admin_payments').delete().eq('id', id);
+  state.admin.payments = state.admin.payments.filter(p => p.id !== id);
+  pushUndo({
+    label: 'delete payment',
+    undo: async () => { const { data } = await sb.from('admin_payments').insert(snap).select().single(); if (data) { state.admin.payments.push(data); state.admin.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
+    redo: async () => { await sb.from('admin_payments').delete().eq('id', id); state.admin.payments = state.admin.payments.filter(p => p.id !== id); renderApp(); }
+  });
+  renderApp();
+}
+
+async function updateAdminPayment(id, field, value) {
+  const p = state.admin.payments.find(p => p.id === id);
+  if (!p) return;
+  const oldVal = p[field];
+  const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_estimate' ? Boolean(value) : value;
+  await sb.from('admin_payments').update({ [field]: val }).eq('id', id);
+  p[field] = val;
+  pushUndo({
+    label: 'edit payment',
+    undo: async () => { await sb.from('admin_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
+    redo: async () => { await sb.from('admin_payments').update({ [field]: val }).eq('id', id); p[field] = val; renderApp(); }
+  });
+  renderApp();
 }
 
 // ── Biz tab render ────────────────────────────────────────────────────
@@ -1175,6 +2606,14 @@ function renderBizTab(current) {
       <div class="biz-net">
         <span class="biz-net-label">Net → Private (Vivi)</span>
         <span class="biz-net-val">${fmt(net)}</span>
+      </div>
+    </div>
+
+    <div class="biz-card">
+      <div class="biz-section-title">Monthly Biz Costs</div>
+      <div class="biz-row">
+        <span class="biz-label">Receipts-biz</span>
+        <span class="biz-val" style="color:var(--muted);">₪11.68</span>
       </div>
     </div>
 
@@ -1322,20 +2761,24 @@ function openSnapshot() {
   const groupRows = CATEGORY_GROUPS.map(group => {
     const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
     const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
-    const gb = cats.reduce((sum,c) => sum + (state.budgets[c.key]||0), 0);
+    const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
     const gr = gb - gs;
     const gid = 'sngrp-' + group.label.replace(/\s+/g,'-');
     const catRows = cats.map(c => {
-      const s = spent[c.key] || 0;
-      const b = state.budgets[c.key] || 0;
+      const b = catBudget(c.key)||0;
+      const s = c.hasTab ? b : (spent[c.key]||0);
       const r = b - s;
       return `<tr class="sn-cat ${gid} collapsed">
         <td style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td>${b ? n(b) : ''}</td>
-        <td>${s ? n(s) : '0'}</td>
+        <td>${b ? n(s) : ''}</td>
         <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
       </tr>`;
     }).join('');
+    if (cats.length === 1) {
+      const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
+      return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
+    }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){
         var rows=document.querySelectorAll('.'+gid);
         var hdr=document.getElementById(gid+'-hdr');
@@ -1378,6 +2821,8 @@ async function refreshBiz() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────
+// MIGRATION REQUIRED (run once in Supabase SQL editor):
+//   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
 async function init() {
   await loadMonths();
   if (state.months.length > 0) {
