@@ -1054,15 +1054,19 @@ function renderApp() {
                           }
                           return html;
                         })()}
-                        ${!c.hasLines && state.inlineAddCat === c.key ? `
+                        ${!c.hasLines && state.inlineAddCat === c.key ? (()=>{
+                          const _ps = [...new Set(state.transactions.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store))];
+                          const _dlId = 'inline-stores-'+c.key;
+                          return `<datalist id="${_dlId}">${_ps.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">`).join('')}</datalist>
                           <div style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
-                            <input id="inline-store-${c.key}" type="text" placeholder="Store" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
+                            <input id="inline-store-${c.key}" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <input id="inline-item-${c.key}" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <input id="inline-amount-${c.key}" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <input id="inline-date-${c.key}" type="date" onclick="event.stopPropagation()" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <button onclick="event.stopPropagation();saveInlineAdd('${c.key}')" style="font-size:.7rem;padding:.25rem .4rem;background:var(--accent);color:white;border:none;border-radius:4px;cursor:pointer;font-family:'DM Sans',sans-serif;">Save</button>
                             <button onclick="event.stopPropagation();state.inlineAddCat=null;renderApp()" style="font-size:.8rem;background:none;border:none;cursor:pointer;color:var(--dim);">×</button>
-                          </div>` : ''}
+                          </div>`;
+                        })() : ''}
                         <button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>
                       </div>
                       ${c.key === 'groceries' && txs.length > 0 ? (()=>{
