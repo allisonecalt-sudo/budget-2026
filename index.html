@@ -324,6 +324,7 @@ let state = {
   charity: { items: [], allocations: {}, payments: [], subItems: [] },
   openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
   inlineAddCat: null,
+  allStores: [],
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -1055,7 +1056,7 @@ function renderApp() {
                           return html;
                         })()}
                         ${!c.hasLines && state.inlineAddCat === c.key ? (()=>{
-                          const _ps = [...new Set(state.transactions.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store))];
+                          const _ps = [...new Set([...(PRESET_STORES[c.key]||[]), ...state.allStores.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store), ...state.transactions.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store)])];
                           const _dlId = 'inline-stores-'+c.key;
                           return `<datalist id="${_dlId}">${_ps.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">`).join('')}</datalist>
                           <div style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
@@ -1218,7 +1219,7 @@ async function saveBudget(catKey, amount) {
 }
 
 const PRESET_STORES = {
-  groceries: ['Shufersal', 'Osher Ad', 'Carrefour'],
+  groceries: ['Yochananof', 'יוחננוף', 'Shufersal', 'שופרסל', 'Osher Ad', 'אושר עד', 'Carrefour', 'קרפור', 'Rami Levy', 'רמי לוי', 'Victory', 'ויקטורי'],
 };
 
 function updateStoreSuggestions(catKey) {
@@ -2868,6 +2869,10 @@ async function refreshBiz() {
 // MIGRATION REQUIRED (run once in Supabase SQL editor):
 //   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
 async function init() {
+  // Load all store names used across all months for autocomplete
+  sb.from('transactions').select('category,store').not('store','is',null).then(({data}) => {
+    if (data) state.allStores = data;
+  });
   await loadMonths();
   if (state.months.length > 0) {
     // Restore last visited month, else default to current calendar month
