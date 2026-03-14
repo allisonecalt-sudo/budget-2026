@@ -1099,34 +1099,39 @@ function renderApp() {
                         const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                         const fmtDate = d => { if(!d) return '—'; const dt=new Date(d+'T12:00:00'); return dt.getDate()+' '+MONS[dt.getMonth()]; };
                         const esc = s => (s||'').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
+                        const renderTxRow = tx => `
+                          <div class="tx-item">
+                            <div class="tx-date-wrap" onclick="event.stopPropagation()">
+                              <span class="tx-date-display">${fmtDate(tx.date)}</span>
+                              <input class="tx-edit-date" type="date" value="${tx.date||''}" onchange="updateTx('${tx.id}','date',this.value)">
+                            </div>
+                            <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','store',this.value)">
+                            <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','item',this.value)">
+                            <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01" style="font-size:.88rem;font-weight:600;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','amount',this.value)">
+                            <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
+                          </div>`;
+                        const sectionHdr = (emoji, label, total) => `<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;display:flex;justify-content:space-between;"><span>${emoji} ${label}</span><span style="font-family:'DM Mono',monospace;">${fmt(total)}</span></div>`;
+                        let txRows = '';
+                        if (c.key === 'groceries' && sort === 'type') {
+                          const big = sorted.filter(tx => isBigStore(tx.store));
+                          const local = sorted.filter(tx => !isBigStore(tx.store));
+                          const bigAmt = big.reduce((s,tx)=>s+Number(tx.amount),0);
+                          const localAmt = local.reduce((s,tx)=>s+Number(tx.amount),0);
+                          txRows = (big.length ? sectionHdr('🏪','Supermarket', bigAmt) + big.map(renderTxRow).join('') : '')
+                                 + (local.length ? sectionHdr('🛒','Local & Makolet', localAmt) + local.map(renderTxRow).join('') : '');
+                        } else {
+                          txRows = sorted.map(renderTxRow).join('');
+                        }
                         return `<div class="tx-sort-bar">
                           <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
                           <button class="tx-sort-btn ${sort==='newest'?'active':''}" onclick="event.stopPropagation();setTxSort('newest')">Newest</button>
                           <button class="tx-sort-btn ${sort==='oldest'?'active':''}" onclick="event.stopPropagation();setTxSort('oldest')">Oldest</button>
                           <button class="tx-sort-btn ${sort==='high'?'active':''}" onclick="event.stopPropagation();setTxSort('high')">Highest</button>
                           <button class="tx-sort-btn ${sort==='low'?'active':''}" onclick="event.stopPropagation();setTxSort('low')">Lowest</button>
+                          ${c.key === 'groceries' ? `<button class="tx-sort-btn ${sort==='type'?'active':''}" onclick="event.stopPropagation();setTxSort('type')">By Type</button>` : ''}
                         </div>
                         <div class="tx-header"><span>Date</span><span>Store</span><span>Item</span><span style="text-align:right">Amount</span><span></span></div>
-                        ${sorted.map(tx => `
-                          <div class="tx-item">
-                            <div class="tx-date-wrap" onclick="event.stopPropagation()">
-                              <span class="tx-date-display">${fmtDate(tx.date)}</span>
-                              <input class="tx-edit-date" type="date" value="${tx.date||''}" onchange="updateTx('${tx.id}','date',this.value)">
-                            </div>
-                            <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store"
-                              style="font-size:.7rem;"
-                              onclick="event.stopPropagation()"
-                              onchange="updateTx('${tx.id}','store',this.value)">
-                            <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item"
-                              style="font-size:.7rem;"
-                              onclick="event.stopPropagation()"
-                              onchange="updateTx('${tx.id}','item',this.value)">
-                            <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01"
-                              style="font-size:.88rem;font-weight:600;"
-                              onclick="event.stopPropagation()"
-                              onchange="updateTx('${tx.id}','amount',this.value)">
-                            <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
-                          </div>`).join('')}`;
+                        ${txRows}`;
                       })()}
                     </div>
                   </div>`;
