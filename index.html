@@ -1053,7 +1053,7 @@ function renderApp() {
                           }
                           return html;
                         })()}
-                        <button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `(function(){var el=document.getElementById('sb-cat');if(el){el.value='${c.key}';document.getElementById('sb-amount').focus();el.scrollIntoView({behavior:'smooth',block:'center'});}})();`}">+ add line</button>
+                        <button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>
                       </div>
                       ${c.key === 'groceries' && txs.length > 0 ? (()=>{
                         const bigTotal = txs.reduce((sum,tx) => sum + (isBigStore(tx.store) ? Number(tx.amount) : 0), 0);
@@ -1211,6 +1211,15 @@ function updateStoreSuggestions(catKey) {
     .map(tx => tx.store);
   const stores = [...new Set([...presets, ...fromHistory])];
   dl.innerHTML = stores.map(s => `<option value="${s}">`).join('');
+}
+
+function quickAddFor(catKey) {
+  var el = document.getElementById('sb-cat');
+  var amt = document.getElementById('sb-amount');
+  if (el) { el.value = catKey; }
+  if (amt) { amt.focus(); }
+  var form = document.querySelector('.side-nav');
+  if (form) { form.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 
 function toggleCat(key) {
