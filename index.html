@@ -318,6 +318,8 @@ let state = {
   ptSessions: [],      // private tracker sessions
   incomeItems: [],     // flexible extra income items
   budgetItems: {},     // { catKey: [{id, label, amount}] }
+  allRecurringItems: {}, // { month_id: [{id, label, amount, subcategory}] } for grid view
+  recurringGridMode: localStorage.getItem('recurringGridMode') === 'true',
   txSort: localStorage.getItem('txSort') || 'newest',
   admin: { items: [], allocations: {}, payments: [], subItems: [] },
   travel: { items: [], allocations: {}, payments: [], subItems: [] },
@@ -375,6 +377,125 @@ async function loadBudgetItems(monthId) {
     if (!state.budgetItems[item.category]) state.budgetItems[item.category] = [];
     state.budgetItems[item.category].push(item);
   });
+}
+
+async function loadAllRecurringItems() {
+  const { data } = await sb.from('budget_items').select('*').eq('category', 'recurring').order('sort_order');
+  state.allRecurringItems = {};
+  (data || []).forEach(item => {
+    if (!state.allRecurringItems[item.month_id]) state.allRecurringItems[item.month_id] = [];
+    state.allRecurringItems[item.month_id].push(item);
+  });
+}
+
+async function toggleRecurringGrid() {
+  state.recurringGridMode = !state.recurringGridMode;
+  localStorage.setItem('recurringGridMode', state.recurringGridMode);
+  if (state.recurringGridMode && Object.keys(state.allRecurringItems).length === 0) {
+    await loadAllRecurringItems();
+  }
+  renderApp();
+}
+
+async function saveRecurringFromMonth(label, fromMonthNum, newAmount, forward) {
+  const num = parseFloat(newAmount) || 0;
+  const targetMonths = forward
+    ? state.months.filter(m => m.month_num >= fromMonthNum)
+    : state.months.filter(m => m.month_num === fromMonthNum);
+  for (const month of targetMonths) {
+    const items = state.allRecurringItems[month.id] || [];
+    const item = items.find(i => i.label === label);
+    if (item) {
+      await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
+      item.amount = num;
+    }
+  }
+  // Also sync current month's budgetItems
+  const currentMonth = state.months.find(m => m.id === state.currentMonthId);
+  if (currentMonth && currentMonth.month_num >= fromMonthNum) {
+    const cur = (state.budgetItems['recurring'] || []).find(i => i.label === label);
+    if (cur) cur.amount = num;
+  }
+  renderApp();
+  toast('Updated ✓');
+}
+
+function renderRecurringGrid() {
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const SUBCAT_ORDER = ['tashlumim','digital','insurance','bills','fitness'];
+  const SUBCAT_LABELS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills', fitness: 'Fitness' };
+  const today = new Date().getMonth() + 1; // current month num
+
+  // Get all unique items with their subcategory (from any month that has them)
+  const itemMap = {}; // label -> subcategory
+  Object.values(state.allRecurringItems).forEach(items => {
+    items.forEach(i => { if (!itemMap[i.label]) itemMap[i.label] = i.subcategory || ''; });
+  });
+
+  // Group items by subcategory
+  const groups = {};
+  const noSubcat = [];
+  Object.entries(itemMap).forEach(([label, sc]) => {
+    if (sc && SUBCAT_ORDER.includes(sc)) {
+      if (!groups[sc]) groups[sc] = [];
+      groups[sc].push(label);
+    } else {
+      noSubcat.push(label);
+    }
+  });
+
+  // Build month columns — only show months that exist
+  const existingMonths = state.months.slice().sort((a,b) => a.month_num - b.month_num);
+
+  const headerCells = '<th style="text-align:left;padding:.3rem .5rem;font-size:.65rem;font-weight:700;color:var(--muted);position:sticky;left:0;background:var(--surface);z-index:2;min-width:130px;">Item</th>'
+    + existingMonths.map(m => {
+      const isCur = m.month_num === today;
+      const isPast = m.month_num < today;
+      return '<th style="text-align:right;padding:.3rem .4rem;font-size:.65rem;font-weight:700;color:'+(isCur?'var(--accent)':isPast?'var(--dim)':'var(--muted)')+';min-width:60px;">' + MONTH_NAMES[m.month_num-1] + '</th>';
+    }).join('');
+
+  const renderRow = (label) => {
+    const cells = existingMonths.map(m => {
+      const items = state.allRecurringItems[m.id] || [];
+      const item = items.find(i => i.label === label);
+      const val = item ? Number(item.amount) : null;
+      const isCur = m.month_num === today;
+      const isPast = m.month_num < today;
+      const bgColor = isCur ? 'var(--gsoft)' : 'transparent';
+      const txtColor = isPast ? 'var(--dim)' : (isCur ? 'var(--accent)' : 'var(--text)');
+      const cellContent = val !== null ? fmt(val).replace('₪','') : '<span style="color:var(--dim)">—</span>';
+      if (isPast || val === null) {
+        return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;">'+cellContent+'</td>';
+      }
+      // Future/current: clickable to edit
+      const escapedLabel = label.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;cursor:pointer;" onclick="editRecurringCell(\''+escapedLabel+'\','+m.month_num+','+( val||0 )+')" title="Click to edit">'+cellContent+'</td>';
+    }).join('');
+    return '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">'+label+'</td>'+cells+'</tr>';
+  };
+
+  let rows = '';
+  SUBCAT_ORDER.forEach(sc => {
+    if (groups[sc] && groups[sc].length > 0) {
+      rows += '<tr><td colspan="'+(existingMonths.length+1)+'" style="padding:.3rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--surface2);">'+SUBCAT_LABELS[sc]+'</td></tr>';
+      rows += groups[sc].map(renderRow).join('');
+    }
+  });
+  if (noSubcat.length > 0) rows += noSubcat.map(renderRow).join('');
+
+  return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
+    + '<thead><tr style="border-bottom:2px solid var(--border);">'+headerCells+'</tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table></div>';
+}
+
+function editRecurringCell(label, monthNum, currentVal) {
+  const month = state.months.find(m => m.month_num === monthNum);
+  if (!month) return;
+  const newVal = prompt('New amount for "' + label + '" from ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthNum-1] + '?\n\nCurrent: ₪' + currentVal, currentVal);
+  if (newVal === null) return;
+  const forward = confirm('Apply to ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][monthNum-1] + ' and all future months?\n\nOK = this month forward\nCancel = this month only');
+  saveRecurringFromMonth(label, monthNum, newVal, forward);
 }
 
 function budgetItemsTotal(catKey) {
@@ -1032,7 +1153,12 @@ function renderApp() {
                           if (c.key !== 'recurring') {
                             return header + items.map(renderBudgetItemRow).join('');
                           }
-                          // Recurring: group by subcategory
+                          // Recurring: grid toggle button
+                          const gridBtn = '<div style="text-align:right;margin-bottom:.4rem;"><button onclick="event.stopPropagation();toggleRecurringGrid()" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:'+(state.recurringGridMode?'var(--accent)':'none')+';color:'+(state.recurringGridMode?'white':'var(--muted)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+(state.recurringGridMode?'✕ List view':'📊 Year grid')+'</button></div>';
+                          if (state.recurringGridMode) {
+                            return gridBtn + renderRecurringGrid();
+                          }
+                          // Recurring list: group by subcategory
                           const SUBCAT_ORDER = ['tashlumim','digital','insurance','bills','fitness'];
                           const SUBCAT_LABELS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills', fitness: 'Fitness' };
                           const groups = {};
@@ -1046,7 +1172,7 @@ function renderApp() {
                               noSubcat.push(item);
                             }
                           });
-                          let html = header;
+                          let html = gridBtn + header;
                           SUBCAT_ORDER.forEach(sc => {
                             if (groups[sc] && groups[sc].length > 0) {
                               html += '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' + SUBCAT_LABELS[sc] + '</div>';
