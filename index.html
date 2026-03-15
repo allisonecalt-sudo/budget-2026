@@ -489,10 +489,6 @@ function renderRecurringGrid() {
       const bgColor = isCur ? 'var(--gsoft)' : 'transparent';
       const txtColor = isPast ? 'var(--dim)' : (isCur ? 'var(--accent)' : 'var(--text)');
       const cellContent = val !== null ? fmt(val).replace('₪','') : '<span style="color:var(--dim)">—</span>';
-      if (isPast) {
-        return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;">'+cellContent+'</td>';
-      }
-      // Future/current: clickable to edit (even if item doesn't exist yet)
       const escapedLabel = label.replace(/'/g,"\\'").replace(/"/g,'&quot;');
       return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;cursor:pointer;" onclick="editRecurringCell(\''+escapedLabel+'\','+m.month_num+','+( val||0 )+')" title="Click to edit">'+cellContent+'</td>';
     }).join('');
@@ -631,7 +627,7 @@ function renderHousingGrid() {
       const isCur = m.month_num === today;
       const bgColor = isCur ? 'var(--asoft)' : 'transparent';
       const txtColor = isPast ? 'var(--dim)' : 'var(--text)';
-      const cellContent = val != null ? '₪' + Number(val).toLocaleString('en-IL',{minimumFractionDigits:0,maximumFractionDigits:0}) : '<span style="color:var(--border)">—</span>';
+      const cellContent = val != null ? Number(val).toLocaleString('en-IL',{minimumFractionDigits:0,maximumFractionDigits:0}) : '<span style="color:var(--border)">—</span>';
       return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;cursor:pointer;" onclick="editHousingCell(\''+label.replace(/'/g,"\\'").replace(/"/g,'&quot;')+'\','+m.month_num+','+(val||0)+')" title="Click to edit">'+cellContent+'</td>';
     }).join('');
     return '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">'+label+'</td>'+cells+'</tr>';
