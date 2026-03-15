@@ -1215,6 +1215,20 @@ async function saveBudget(catKey, amount) {
     await sb.from('budgets').insert({ month_id: monthId, category: catKey, amount: num });
   }
   state.budgets[catKey] = num;
+  // Keep admin_allocations in sync when budget tab is edited
+  if (catKey === 'admin') {
+    const month = state.months.find(m => m.id === monthId);
+    if (month) {
+      const existingAlloc = state.admin.allocations[month.month_num];
+      if (existingAlloc) {
+        await sb.from('admin_allocations').update({ amount: num }).eq('id', existingAlloc.id);
+        existingAlloc.amount = num;
+      } else {
+        const { data } = await sb.from('admin_allocations').insert({ year: 2026, month_num: month.month_num, amount: num }).select().single();
+        if (data) state.admin.allocations[month.month_num] = data;
+      }
+    }
+  }
   pushUndo({ label: 'budget '+catKey, undo: async()=>{ await saveBudget(catKey, old); }, redo: async()=>{ await saveBudget(catKey, num); } });
   renderApp();
   toast('Budget saved ✓');
