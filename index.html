@@ -2390,10 +2390,7 @@ function renderAdminTab() {
               const isCurrent = mnum === currentMonthNum;
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent?'var(--gsoft)':'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent?'var(--accent)':'transparent'};">
                 <span style="font-size:.72rem;color:${isCurrent?'var(--accent)':'var(--muted)'};font-weight:${isCurrent?'700':'600'};">${mn}</span>
-                <input type="number" value="${val}" placeholder="0" min="0" step="1"
-                  style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};outline:none;-moz-appearance:textfield;font-weight:${isCurrent?'600':'400'};"
-                  onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
-                  onchange="saveAdminAllocation(${mnum}, this.value)">
+                <span style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};font-weight:${isCurrent?'600':'400'};display:inline-block;" title="Set from Budget page">${val || 0}</span>
               </div>`;
             }).join('')}
           </div>
