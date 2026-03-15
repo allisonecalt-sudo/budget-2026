@@ -495,14 +495,36 @@ function renderRecurringGrid() {
     return '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">'+label+'</td>'+cells+'</tr>';
   };
 
+  // Sort tashlumim by base name then installment number
+  const installSort = labels => labels.slice().sort((a, b) => {
+    const baseA = a.replace(/\s*[\(]?\d+\/\d+[\)]?$/, '').trim();
+    const baseB = b.replace(/\s*[\(]?\d+\/\d+[\)]?$/, '').trim();
+    if (baseA !== baseB) return baseA.localeCompare(baseB);
+    const numA = parseInt((a.match(/(\d+)\/\d+/) || [,'0'])[1]) || 0;
+    const numB = parseInt((b.match(/(\d+)\/\d+/) || [,'0'])[1]) || 0;
+    return numA - numB;
+  });
+
   let rows = '';
   SUBCAT_ORDER.forEach(sc => {
     if (groups[sc] && groups[sc].length > 0) {
+      const labels = sc === 'tashlumim' ? installSort(groups[sc]) : groups[sc];
       rows += '<tr><td colspan="'+(existingMonths.length+1)+'" style="padding:.3rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--surface2);">'+SUBCAT_LABELS[sc]+'</td></tr>';
-      rows += groups[sc].map(renderRow).join('');
+      rows += labels.map(renderRow).join('');
     }
   });
   if (noSubcat.length > 0) rows += noSubcat.map(renderRow).join('');
+
+  // Totals row
+  const totalCells = existingMonths.map(m => {
+    const items = state.allRecurringItems[m.id] || [];
+    const total = items.reduce((sum, i) => sum + Number(i.amount||0), 0);
+    const isCur = m.month_num === today;
+    const isPast = m.month_num < today;
+    const txtColor = isPast ? 'var(--dim)' : isCur ? 'var(--accent)' : 'var(--text)';
+    return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;font-weight:700;color:'+txtColor+';font-family:\'DM Mono\',monospace;">'+(total ? fmt(total).replace('₪','') : '—')+'</td>';
+  }).join('');
+  rows += '<tr style="border-top:2px solid var(--border);"><td style="padding:.3rem .5rem;font-size:.72rem;font-weight:700;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);">TOTAL</td>'+totalCells+'</tr>';
 
   const addLineBtn = '<div style="padding:.4rem .5rem;display:flex;gap:.75rem;align-items:center;">'
     + '<button onclick="event.stopPropagation();addBudgetItem(\'recurring\')" style="font-size:.72rem;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;">+ add line</button>'
@@ -1181,7 +1203,7 @@ function renderApp() {
           const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
           return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
         }
-        return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){var rows=document.querySelectorAll('.'+gid);var hdr=document.getElementById(gid+'-hdr');var chev=hdr.querySelector('.sn-chev');var isCollapsed=rows[0]&&rows[0].classList.contains('collapsed');rows.forEach(function(r){r.classList.toggle('collapsed')});if(chev)chev.textContent=isCollapsed?'▼':'▶';})('${gid}')">
+        return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
           <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td></tr>${catRows}`;
       }).join('');
 
@@ -1236,7 +1258,7 @@ function renderApp() {
                     const bkB=state.budgets['savings_bank']||0, bkS=Number(current.savings_bank)||0;
                     const invB=state.budgets['savings_invested']||0, invS=Number(current.savings_invested)||0;
                     const gb=bkB+invB, gs=bkS+invS, gr=gb-gs;
-                    return `<tr class="sn-group" id="rsngrp-Savings-hdr" onclick="(function(){var rows=document.querySelectorAll('.rsngrp-Savings');var chev=document.querySelector('#rsngrp-Savings-hdr .sn-chev');var c=rows[0]&&rows[0].classList.contains('collapsed');rows.forEach(function(r){r.classList.toggle('collapsed')});if(chev)chev.textContent=c?'▼':'▶';})()">
+                    return `<tr class="sn-group" id="rsngrp-Savings-hdr" onclick="snToggle('rsngrp-Savings')">
                       <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>🏦 Savings</td>
                       <td>${gb?n(gb):''}</td><td>${n(gs)}</td><td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb?n(gr):''}</td>
                     </tr>
@@ -3268,6 +3290,15 @@ function toggleRibbonExpand() {
   renderApp();
 }
 
+function snToggle(gid) {
+  var rows = document.querySelectorAll('.' + gid);
+  var hdr = document.getElementById(gid + '-hdr');
+  var chev = hdr && hdr.querySelector('.sn-chev');
+  var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
+  rows.forEach(function(r) { r.classList.toggle('collapsed'); });
+  if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
+}
+
 function openSnapshot() {
   const current = state.months.find(m => m.id === state.currentMonthId);
   if (!current) return;
@@ -3301,14 +3332,7 @@ function openSnapshot() {
       const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
       return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
     }
-    return `<tr class="sn-group" id="${gid}-hdr" onclick="(function(gid){
-        var rows=document.querySelectorAll('.'+gid);
-        var hdr=document.getElementById(gid+'-hdr');
-        var chev=hdr.querySelector('.sn-chev');
-        var isCollapsed=rows[0]&&rows[0].classList.contains('collapsed');
-        rows.forEach(function(r){r.classList.toggle('collapsed')});
-        if(chev)chev.textContent=isCollapsed?'▼':'▶';
-      })('${gid}')">
+    return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
         <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
         <td>${gb ? n(gb) : ''}</td>
         <td>${n(gs)}</td>
