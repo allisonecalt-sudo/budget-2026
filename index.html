@@ -402,12 +402,28 @@ async function saveRecurringFromMonth(label, fromMonthNum, newAmount, forward) {
   const targetMonths = forward
     ? state.months.filter(m => m.month_num >= fromMonthNum)
     : state.months.filter(m => m.month_num === fromMonthNum);
+
+  // Find subcategory and sort_order from any existing item with this label
+  let subcategory = '';
+  let sort_order = 999;
+  for (const items of Object.values(state.allRecurringItems)) {
+    const ref = items.find(i => i.label === label);
+    if (ref) { subcategory = ref.subcategory || ''; sort_order = ref.sort_order || 999; break; }
+  }
+
   for (const month of targetMonths) {
-    const items = state.allRecurringItems[month.id] || [];
+    if (!state.allRecurringItems[month.id]) state.allRecurringItems[month.id] = [];
+    const items = state.allRecurringItems[month.id];
     const item = items.find(i => i.label === label);
     if (item) {
       await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
       item.amount = num;
+    } else {
+      // Item doesn't exist for this month — create it
+      const { data: newItem } = await sb.from('budget_items').insert({
+        month_id: month.id, category: 'recurring', label, amount: num, subcategory, sort_order
+      }).select().single();
+      if (newItem) items.push(newItem);
     }
   }
   // Also sync current month's budgetItems
