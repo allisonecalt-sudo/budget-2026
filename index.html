@@ -97,9 +97,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .income-amt { font-family: 'DM Mono', monospace; font-size: .88rem; font-weight: 500; }
 .income-input { font-family: 'DM Mono', monospace; font-size: .88rem; font-weight: 500; width: 110px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-align: right; outline: none; }
 .income-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--asoft); }
-.income-input.is-est { border-color: #f59e0b; color: #d97706; background: #fffbeb; }
-.est-pill { font-size: .6rem; font-weight: 700; letter-spacing: .05em; padding: .15rem .35rem; border-radius: 4px; border: none; cursor: pointer; transition: all .15s; flex-shrink: 0; }
-.est-pill.est { background: #fef3c7; color: #b45309; }
+.income-input.is-est { border-color: #e5c97a; color: var(--text); background: #fdfaf2; }
+.est-pill { font-size: .6rem; font-weight: 600; letter-spacing: .05em; padding: .15rem .35rem; border-radius: 4px; border: none; cursor: pointer; transition: all .15s; flex-shrink: 0; }
+.est-pill.est { background: #f5efd6; color: #9a7c3a; }
 .est-pill.act { background: var(--surface2); color: var(--muted); }
 
 /* Category bars */
@@ -1021,7 +1021,7 @@ function renderApp() {
       <div class="card">
         <div class="card-title">
           <span>Income Breakdown</span>
-          ${isAnyEstimated(state.currentMonthId) ? '<span style="font-size:.65rem;font-weight:700;color:#b45309;background:#fef3c7;padding:.2rem .5rem;border-radius:4px;letter-spacing:.04em;">~ PROJECTED</span>' : ''}
+          ${isAnyEstimated(state.currentMonthId) ? '<span style="font-size:.8rem;color:#c4a35a;" title="Some values are estimated">~</span>' : ''}
         </div>
         <div class="income-grid">
           ${(()=>{ const _est = getIncomeEst(state.currentMonthId); return `
