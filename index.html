@@ -1172,7 +1172,7 @@ function renderApp() {
         const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
         const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
         const gr = gb - gs;
-        const gid = 'rsngrp-' + group.label.replace(/\s+/g,'-');
+        const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
         const catRows = cats.map(c => {
           const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
           return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
@@ -3285,7 +3285,7 @@ function openSnapshot() {
     const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
     const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
     const gr = gb - gs;
-    const gid = 'sngrp-' + group.label.replace(/\s+/g,'-');
+    const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
     const catRows = cats.map(c => {
       const b = catBudget(c.key)||0;
       const s = c.hasTab ? b : (spent[c.key]||0);
