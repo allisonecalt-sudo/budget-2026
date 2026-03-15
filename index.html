@@ -757,6 +757,7 @@ function renderApp() {
         <div class="ribbon">
           <div class="ribbon-stat"><div class="ribbon-label">Income</div><div class="ribbon-val">${fmt(income)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${(income-totalSpent)>=0?'var(--green)':'var(--red)'}">${fmt(income-totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
