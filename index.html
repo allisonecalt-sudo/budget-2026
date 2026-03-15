@@ -489,10 +489,10 @@ function renderRecurringGrid() {
       const bgColor = isCur ? 'var(--gsoft)' : 'transparent';
       const txtColor = isPast ? 'var(--dim)' : (isCur ? 'var(--accent)' : 'var(--text)');
       const cellContent = val !== null ? fmt(val).replace('₪','') : '<span style="color:var(--dim)">—</span>';
-      if (isPast || val === null) {
+      if (isPast) {
         return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;">'+cellContent+'</td>';
       }
-      // Future/current: clickable to edit
+      // Future/current: clickable to edit (even if item doesn't exist yet)
       const escapedLabel = label.replace(/'/g,"\\'").replace(/"/g,'&quot;');
       return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+txtColor+';background:'+bgColor+';font-family:\'DM Mono\',monospace;cursor:pointer;" onclick="editRecurringCell(\''+escapedLabel+'\','+m.month_num+','+( val||0 )+')" title="Click to edit">'+cellContent+'</td>';
     }).join('');
@@ -508,7 +508,10 @@ function renderRecurringGrid() {
   });
   if (noSubcat.length > 0) rows += noSubcat.map(renderRow).join('');
 
-  const addLineBtn = '<div style="padding:.4rem .5rem;"><button onclick="event.stopPropagation();addBudgetItem(\'recurring\')" style="font-size:.72rem;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;">+ add line</button></div>';
+  const addLineBtn = '<div style="padding:.4rem .5rem;display:flex;gap:.75rem;align-items:center;">'
+    + '<button onclick="event.stopPropagation();addBudgetItem(\'recurring\')" style="font-size:.72rem;font-weight:600;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;">+ add line</button>'
+    + '<button onclick="event.stopPropagation();addTashlum()" style="font-size:.72rem;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;">+ add תשלום</button>'
+    + '</div>';
   return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
     + '<thead><tr style="border-bottom:2px solid var(--border);">'+headerCells+'</tr></thead>'
     + '<tbody>'+rows+'</tbody>'
@@ -779,14 +782,59 @@ function catBudget(catKey) {
   return fromItems !== null ? fromItems : (state.budgets[catKey] || 0);
 }
 
+async function addTashlum() {
+  const name = prompt('שם התשלום (e.g. Mattress):');
+  if (!name?.trim()) return;
+  const amount = parseFloat(prompt('סכום לחודש (₪):'));
+  if (!amount) return;
+  const total = parseInt(prompt('כמה תשלומים?'));
+  if (!total || total < 1) return;
+  const startMonth = parseInt(prompt('חודש התחלה (1=Jan, 3=Mar, ...):'));
+  if (!startMonth || startMonth < 1 || startMonth > 12) return;
+  const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const targetMonths = state.months.filter(m => m.month_num >= startMonth)
+    .sort((a,b) => a.month_num - b.month_num).slice(0, total);
+  const endIdx = startMonth - 1 + total - 1;
+  const endLabel = endIdx < 12 ? MNAMES[endIdx] : MNAMES[11] + '+';
+  if (!confirm(`Create ${total} payments of ₪${amount} for "${name.trim()}", from ${MNAMES[startMonth-1]} → ends ${endLabel}. OK?`)) return;
+  for (let i = 0; i < targetMonths.length; i++) {
+    const month = targetMonths[i];
+    const label = `${name.trim()} ${i+1}/${total}`;
+    const { data } = await sb.from('budget_items').insert({
+      month_id: month.id, category: 'recurring', label, amount, subcategory: 'tashlumim', sort_order: 999
+    }).select().single();
+    if (data) {
+      if (!state.allRecurringItems[month.id]) state.allRecurringItems[month.id] = [];
+      state.allRecurringItems[month.id].push(data);
+      if (month.id === state.currentMonthId) {
+        if (!state.budgetItems['recurring']) state.budgetItems['recurring'] = [];
+        state.budgetItems['recurring'].push(data);
+      }
+    }
+  }
+  renderApp();
+  toast('תשלומים נוספו ✓');
+}
+
 async function addBudgetItem(catKey) {
+  const labelInput = prompt('Item name:');
+  if (!labelInput?.trim()) return;
+  const label = labelInput.trim();
   const sortOrder = (state.budgetItems[catKey] || []).length;
   // Add to this month
   const { data } = await sb.from('budget_items').insert({
-    month_id: state.currentMonthId, category: catKey, label: 'New item', amount: 0, sort_order: sortOrder
+    month_id: state.currentMonthId, category: catKey, label, amount: 0, sort_order: sortOrder
   }).select().single();
   if (!state.budgetItems[catKey]) state.budgetItems[catKey] = [];
   state.budgetItems[catKey].push(data);
+  // Also add to allRecurringItems / allHousingItems so grid propagation works immediately
+  if (catKey === 'recurring') {
+    if (!state.allRecurringItems[state.currentMonthId]) state.allRecurringItems[state.currentMonthId] = [];
+    state.allRecurringItems[state.currentMonthId].push(data);
+  } else if (catKey === 'housing') {
+    if (!state.allHousingItems[state.currentMonthId]) state.allHousingItems[state.currentMonthId] = [];
+    state.allHousingItems[state.currentMonthId].push(data);
+  }
   // Also save to template
   await sb.from('budget_item_templates').insert({ category: catKey, label: 'New item', amount: 0, sort_order: sortOrder });
   renderApp();
