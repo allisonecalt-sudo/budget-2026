@@ -1016,6 +1016,7 @@ function renderApp() {
                               + '<option value="digital"' + (item.subcategory === 'digital' ? ' selected' : '') + '>Digital</option>'
                               + '<option value="insurance"' + (item.subcategory === 'insurance' ? ' selected' : '') + '>Insurance</option>'
                               + '<option value="bills"' + (item.subcategory === 'bills' ? ' selected' : '') + '>Bills</option>'
+                              + '<option value="fitness"' + (item.subcategory === 'fitness' ? ' selected' : '') + '>Fitness</option>'
                               + '</select>';
                             const defaultCls = 'bi-default' + (item.is_default ? ' is-default' : '');
                             return '<div class="budget-item-row">'
@@ -1031,8 +1032,8 @@ function renderApp() {
                             return header + items.map(renderBudgetItemRow).join('');
                           }
                           // Recurring: group by subcategory
-                          const SUBCAT_ORDER = ['tashlumim','digital','insurance','bills'];
-                          const SUBCAT_LABELS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills' };
+                          const SUBCAT_ORDER = ['tashlumim','digital','insurance','bills','fitness'];
+                          const SUBCAT_LABELS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills', fitness: 'Fitness' };
                           const groups = {};
                           const noSubcat = [];
                           items.forEach(item => {
