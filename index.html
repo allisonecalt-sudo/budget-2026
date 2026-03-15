@@ -97,6 +97,10 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .income-amt { font-family: 'DM Mono', monospace; font-size: .88rem; font-weight: 500; }
 .income-input { font-family: 'DM Mono', monospace; font-size: .88rem; font-weight: 500; width: 110px; padding: .3rem .5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-align: right; outline: none; }
 .income-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--asoft); }
+.income-input.is-est { border-color: #f59e0b; color: #d97706; background: #fffbeb; }
+.est-pill { font-size: .6rem; font-weight: 700; letter-spacing: .05em; padding: .15rem .35rem; border-radius: 4px; border: none; cursor: pointer; transition: all .15s; flex-shrink: 0; }
+.est-pill.est { background: #fef3c7; color: #b45309; }
+.est-pill.act { background: #dcfce7; color: #16a34a; }
 
 /* Category bars */
 .categories { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
@@ -640,6 +644,26 @@ async function loadIncomeItems(monthId) {
   state.incomeItems = data || [];
 }
 
+// Est/Act state stored in localStorage per month
+function getIncomeEst(monthId) {
+  try { return JSON.parse(localStorage.getItem('incomeEst_' + monthId)) || {}; } catch { return {}; }
+}
+function setIncomeEst(monthId, obj) {
+  localStorage.setItem('incomeEst_' + monthId, JSON.stringify(obj));
+}
+function toggleIncomeEst(source, itemId) {
+  const mid = state.currentMonthId;
+  const est = getIncomeEst(mid);
+  const key = itemId || source;
+  est[key] = !est[key];
+  setIncomeEst(mid, est);
+  renderApp();
+}
+function isAnyEstimated(monthId) {
+  const est = getIncomeEst(monthId);
+  return Object.values(est).some(Boolean);
+}
+
 function totalIncome(month) {
   const extras = state.incomeItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   return (Number(month.income_petachya) || 0)
@@ -892,7 +916,7 @@ function renderApp() {
 
       return `<div class="ribbon-panel">
         <div class="ribbon">
-          <div class="ribbon-stat"><div class="ribbon-label">Income</div><div class="ribbon-val">${fmt(income)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId)?' <span style="color:#b45309;font-size:.55rem;">~EST</span>':''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId)?'color:#d97706;':''}">${isAnyEstimated(state.currentMonthId)?'~':''}${fmt(income)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
@@ -995,27 +1019,30 @@ function renderApp() {
 
       <!-- Income breakdown -->
       <div class="card">
-        <div class="card-title">Income Breakdown</div>
+        <div class="card-title">
+          <span>Income Breakdown</span>
+          ${isAnyEstimated(state.currentMonthId) ? '<span style="font-size:.65rem;font-weight:700;color:#b45309;background:#fef3c7;padding:.2rem .5rem;border-radius:4px;letter-spacing:.04em;">~ PROJECTED</span>' : ''}
+        </div>
         <div class="income-grid">
-          <div class="income-row"><span class="income-source">Petachya</span><input class="income-input" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div>
-          <div class="income-row"><span class="income-source">Clalit</span><input class="income-input" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div>
-          <div class="income-row"><span class="income-source">Private (Vivi)</span><input class="income-input" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div>
-          ${state.incomeItems.map(item => `
+          ${(()=>{ const _est = getIncomeEst(state.currentMonthId); return `
+          <div class="income-row"><span class="income-source">Petachya</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['petachya']?'est':'act'}" onclick="toggleIncomeEst('petachya')" title="Toggle estimated/actual">${_est['petachya']?'EST':'ACT'}</button><input class="income-input${_est['petachya']?' is-est':''}" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div></div>
+          <div class="income-row"><span class="income-source">Clalit</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['clalit']?'est':'act'}" onclick="toggleIncomeEst('clalit')" title="Toggle estimated/actual">${_est['clalit']?'EST':'ACT'}</button><input class="income-input${_est['clalit']?' is-est':''}" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div></div>
+          <div class="income-row"><span class="income-source">Private (Vivi)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['private']?'est':'act'}" onclick="toggleIncomeEst('private')" title="Toggle estimated/actual">${_est['private']?'EST':'ACT'}</button><input class="income-input${_est['private']?' is-est':''}" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div></div>
+          `; })()}
+          ${state.incomeItems.map(item => { const _est2 = getIncomeEst(state.currentMonthId); return `
           <div class="income-row">
-            <input type="text" class="income-input" style="width:100px;text-align:left;" value="${item.label}" placeholder="Source" onchange="saveIncomeItemLabel('${item.id}', this.value)">
+            <input type="text" class="income-input" style="width:90px;text-align:left;" value="${item.label}" placeholder="Source" onchange="saveIncomeItemLabel('${item.id}', this.value)">
             <div style="display:flex;align-items:center;gap:.3rem;">
-              <input class="income-input" type="number" value="${item.amount || ''}" placeholder="0" onchange="saveIncomeItemAmount('${item.id}', this.value)" min="0" step="1">
+              <button class="est-pill ${_est2[item.id]?'est':'act'}" onclick="toggleIncomeEst(null,'${item.id}')" title="Toggle estimated/actual">${_est2[item.id]?'EST':'ACT'}</button>
+              <input class="income-input${_est2[item.id]?' is-est':''}" type="number" value="${item.amount || ''}" placeholder="0" onchange="saveIncomeItemAmount('${item.id}', this.value)" min="0" step="1">
               <button onclick="deleteIncomeItem('${item.id}')" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:1rem;padding:0 .2rem;">×</button>
             </div>
-          </div>`).join('')}
+          </div>`; }).join('')}
         </div>
         <button onclick="addIncomeItem()" style="margin-top:.6rem;font-size:.75rem;font-weight:600;color:var(--accent);background:var(--asoft);border:none;border-radius:6px;padding:.3rem .75rem;cursor:pointer;">+ Add income source</button>
       </div>
 
       <!-- Category groups -->
-      <div class="card-title" style="padding:.5rem 0 .75rem;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);">
-        Spending by Category — click to see transactions
-      </div>
       <div class="categories">
 
         <!-- Savings group (manual inputs) -->
