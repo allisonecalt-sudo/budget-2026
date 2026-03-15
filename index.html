@@ -518,10 +518,11 @@ function editRecurringCell(label, monthNum, currentVal) {
   const month = state.months.find(m => m.month_num === monthNum);
   if (!month) return;
   const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const raw = prompt(MNAMES[monthNum-1] + ' — ' + label + '\nEnter amount (add * to apply forward, e.g. 280*):', currentVal);
-  if (raw === null) return;
-  const forward = raw.trim().endsWith('*');
-  const amount = forward ? raw.trim().slice(0, -1) : raw.trim();
+  const raw = prompt(MNAMES[monthNum-1] + ' — ' + label + '\nAmount:', currentVal || '');
+  if (raw === null || raw.trim() === '') return;
+  const amount = raw.trim();
+  const isFuture = monthNum >= (new Date().getMonth() + 1);
+  const forward = isFuture && confirm('Apply ' + amount + ' to ' + MNAMES[monthNum-1] + ' and all future months?');
   saveRecurringFromMonth(label, monthNum, amount, forward);
 }
 
@@ -585,10 +586,11 @@ function editHousingCell(label, monthNum, currentVal) {
   const month = state.months.find(m => m.month_num === monthNum);
   if (!month) return;
   const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const raw = prompt(MNAMES[monthNum-1] + ' — ' + label + '\nEnter amount (add * to apply forward, e.g. 2125*):', currentVal);
-  if (raw === null) return;
-  const forward = raw.trim().endsWith('*');
-  const amount = forward ? raw.trim().slice(0, -1) : raw.trim();
+  const raw = prompt(MNAMES[monthNum-1] + ' — ' + label + '\nAmount:', currentVal || '');
+  if (raw === null || raw.trim() === '') return;
+  const amount = raw.trim();
+  const isFuture = monthNum >= (new Date().getMonth() + 1);
+  const forward = isFuture && confirm('Apply ' + amount + ' to ' + MNAMES[monthNum-1] + ' and all future months?');
   saveHousingFromMonth(label, monthNum, amount, forward);
 }
 
