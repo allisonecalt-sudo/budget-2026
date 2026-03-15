@@ -3345,19 +3345,18 @@ function snToggle(gid) {
 async function loadYearData() {
   if (state.yearData) return;
   const monthIds = state.months.map(m => m.id);
-  const [txRes, biRes] = await Promise.all([
+  const [txRes, biRes, budgetRes] = await Promise.all([
     sb.from('transactions').select('*').in('month_id', monthIds),
     sb.from('budget_items').select('*').in('month_id', monthIds),
+    sb.from('budgets').select('*').in('month_id', monthIds),
   ]);
-  if (!state.charity.payments.length) await loadCharityData();
   if (!state.admin.items.length) await loadAdminData();
-  if (!state.travel.items.length) await loadTravelData();
-  state.yearData = { txns: txRes.data || [], budgetItems: biRes.data || [] };
+  state.yearData = { txns: txRes.data || [], budgetItems: biRes.data || [], allBudgets: budgetRes.data || [] };
 }
 
 function renderYearSnapshot() {
   if (!state.yearData) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
-  const { txns, budgetItems } = state.yearData;
+  const { txns, budgetItems, allBudgets } = state.yearData;
   const months = [...state.months].sort((a,b) => a.month_num - b.month_num);
   const todayMonth = new Date().getMonth() + 1;
   const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
@@ -3365,11 +3364,28 @@ function renderYearSnapshot() {
 
   const txSum  = (mid, cats) => txns.filter(t => t.month_id===mid && cats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
   const biSum  = (mid, cats) => budgetItems.filter(b => b.month_id===mid && cats.includes(b.category)).reduce((s,b)=>s+(Number(b.amount)||0),0);
-  const spendV = (m, cats, future) => (future && !showProjected) ? 0 : (future ? biSum(m.id, cats) : txSum(m.id, cats));
 
-  const charityV = (mn, future) => (!showProjected && future) ? 0 : Number(state.charity.allocations?.[mn]||0);
+  // Budget lookup from budgets table: { month_id: { category: amount } }
+  const budgetMap = {};
+  (allBudgets || []).forEach(b => { if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {}; budgetMap[b.month_id][b.category] = b.amount; });
+  const budgetV = (mid, cats) => cats.reduce((s, cat) => s + (budgetMap[mid]?.[cat] || 0), 0);
+
+  const spendV = (m, cats, future) => {
+    if (future && !showProjected) return 0;
+    if (future) return budgetV(m.id, cats) || biSum(m.id, cats);
+    return txSum(m.id, cats);
+  };
+  const charityV = (mn, future) => {
+    if (!showProjected && future) return 0;
+    const m = months.find(mo => mo.month_num === mn);
+    return m ? (budgetMap[m.id]?.['charity'] || 0) : 0;
+  };
   const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]||0);
-  const travelV  = (mn, future) => (!showProjected && future) ? 0 : Number(state.travel.allocations?.[mn]||0);
+  const travelV  = (mn, future) => {
+    if (!showProjected && future) return 0;
+    const m = months.find(mo => mo.month_num === mn);
+    return m ? (budgetMap[m.id]?.['travel'] || 0) : 0;
+  };
   const incFor   = m  => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0);
 
   const fmtY   = n => !n ? '\u2014' : '\u20aa'+Math.round(n).toLocaleString('en-US');
