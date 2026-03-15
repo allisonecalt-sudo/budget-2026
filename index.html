@@ -961,8 +961,8 @@ async function switchMonth(monthId) {
   state.loading = true;
   renderApp();
   const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId))];
-  // Load year-level tabs in background (do not block)
-  loadAdminData(); loadTravelData(); loadCharityData();
+  // Load year-level data in background, re-render when done
+  Promise.all([loadAdminData(), loadTravelData(), loadCharityData()]).then(() => renderApp());
   if (state.activeTab === 'biz') loads.push(loadBizData());
   await Promise.all(loads);
   state.loading = false;
