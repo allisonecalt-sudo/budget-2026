@@ -728,9 +728,14 @@ function renderSpendingGrid(catKey) {
       }).join('')
     + '</tr>';
 
+  const fmtV2 = v => v > 0 ? '₪'+Number(v).toLocaleString('en-IL',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—';
+  const budgetRow = '<tr style="border-bottom:1px solid var(--border);"><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>'
+    + existingMonths.map(m => { const v = state.budgets['groceries']||0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--text)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV2(v)+'</td>'; }).join('')
+    + '</tr>';
+
   return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
     + '<thead><tr style="border-bottom:2px solid var(--border);">'+headerCells+'</tr></thead>'
-    + '<tbody>'+stores.map(renderRow).join('')+totalRow+'</tbody>'
+    + '<tbody>'+budgetRow+stores.map(renderRow).join('')+totalRow+'</tbody>'
     + '</table></div>';
 }
 
