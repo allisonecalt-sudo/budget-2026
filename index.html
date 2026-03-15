@@ -1281,8 +1281,8 @@ function renderApp() {
                           ? `<span style="font-size:.65rem;color:var(--dim);margin-right:.25rem;">committed</span><span class="cat-spent-bold">${fmt(b)}</span>`
                           : `<span class="cat-spent-bold">${fmt(s)}</span>
                         <span style="color:var(--muted)"> / </span>
-                        ${hasItems
-                          ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
+                        ${(hasItems || c.linkedLine)
+                          ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>${c.linkedLine ? '<span style="font-size:.58rem;color:var(--muted);margin-left:.2rem;">from housing</span>' : ''}`
                           : `<input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set budget" min="0" step="1"
                               onclick="event.stopPropagation()"
                               onchange="saveBudget('${c.key}', this.value)"
