@@ -960,7 +960,7 @@ async function switchMonth(monthId) {
   localStorage.setItem('activeMonthId', monthId);
   state.loading = true;
   renderApp();
-  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId)), loadAdminData(), loadTravelData(), loadCharityData()];
+  const loads = [loadTransactions(monthId), loadBudgets(monthId), loadIncomeItems(monthId), loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId))];
   if (state.activeTab === 'biz') loads.push(loadBizData());
   await Promise.all(loads);
   state.loading = false;
@@ -3546,7 +3546,12 @@ async function init() {
       || state.months.find(m => m.month_num === now.getMonth() + 1)
       || state.months[state.months.length - 1];
     await switchMonth(currentMonth.id);
-    if (state.activeTab === 'biz') await loadBizData();
+    const tab = state.activeTab;
+    if (tab === 'biz') await loadBizData();
+    else if (tab === 'admin') await loadAdminData();
+    else if (tab === 'travel') await loadTravelData();
+    else if (tab === 'charity') await loadCharityData();
+    else if (tab === 'year') await loadYearData();
   } else {
     state.loading = false;
     renderApp();
