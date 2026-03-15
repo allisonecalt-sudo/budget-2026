@@ -245,7 +245,7 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .loading { text-align: center; padding: 3rem; color: var(--muted); font-size: .9rem; }
 
 @media (max-width: 600px) {
-  body { overflow-x: hidden; max-width: 100vw; }
+  html, body { overflow-x: hidden; max-width: 100vw; }
   .hdr { flex-direction: column; gap: .4rem; align-items: flex-start; padding: .5rem .75rem; }
   .hdr h1 { font-size: .88rem; }
   .hdr-nav { flex-wrap: wrap !important; overflow-x: visible !important; gap: .3rem !important; }
@@ -1405,6 +1405,7 @@ function renderApp() {
           <div class="income-row"><span class="income-source">Petachya</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['petachya']?'est':'act'}" onclick="toggleIncomeEst('petachya')" title="Toggle estimated/actual">${_est['petachya']?'EST':'ACT'}</button><input class="income-input${_est['petachya']?' is-est':''}" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Clalit</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['clalit']?'est':'act'}" onclick="toggleIncomeEst('clalit')" title="Toggle estimated/actual">${_est['clalit']?'EST':'ACT'}</button><input class="income-input${_est['clalit']?' is-est':''}" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Private (Vivi)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['private']?'est':'act'}" onclick="toggleIncomeEst('private')" title="Toggle estimated/actual">${_est['private']?'EST':'ACT'}</button><input class="income-input${_est['private']?' is-est':''}" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div></div>
+          <div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other']?'est':'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other']?'EST':'ACT'}</button><input class="income-input${_est['other']?' is-est':''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>
           `; })()}
           ${state.incomeItems.map(item => { const _est2 = getIncomeEst(state.currentMonthId); return `
           <div class="income-row">
@@ -2487,7 +2488,7 @@ function renderTravelTab() {
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
     <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
@@ -2732,7 +2733,7 @@ function renderCharityTab() {
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
     <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
@@ -2880,7 +2881,7 @@ function renderAdminTab() {
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
     <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
