@@ -1219,14 +1219,8 @@ async function saveBudget(catKey, amount) {
   const month = state.months.find(m => m.id === monthId);
   if (month) {
     if (catKey === 'admin') {
-      const existingAlloc = state.admin.allocations[month.month_num];
-      if (existingAlloc) {
-        await sb.from('admin_allocations').update({ amount: num }).eq('id', existingAlloc.id);
-        existingAlloc.amount = num;
-      } else {
-        const { data } = await sb.from('admin_allocations').insert({ year: 2026, month_num: month.month_num, amount: num }).select().single();
-        if (data) state.admin.allocations[month.month_num] = data;
-      }
+      const { data } = await sb.from('admin_allocations').upsert({ year: 2026, month_num: month.month_num, amount: num }, { onConflict: 'year,month_num' }).select().single();
+      if (data) state.admin.allocations[month.month_num] = data;
     } else if (catKey === 'travel') {
       const existingAlloc = state.travel.allocations[month.month_num];
       if (existingAlloc) {
