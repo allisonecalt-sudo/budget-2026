@@ -64,6 +64,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
 /* Layout */
 .main { padding: 0; max-width: 1080px; margin: 0 auto; }
+.main-full { padding: 0 1rem; max-width: 100%; margin: 0; }
 .page-layout { display: flex; align-items: flex-start; }
 .side-nav { width: 195px; flex-shrink: 0; position: sticky; top: 150px; padding: 1.25rem .75rem 1rem 1rem; }
 .sidenav-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: 0 .5rem .4rem; }
@@ -1310,7 +1311,7 @@ function renderApp() {
       </div>`;
     })()}
 
-    <div class="main">
+    <div class="${state.activeTab === 'year' ? 'main-full' : 'main'}">
       ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'year' ? renderYearSnapshot() : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
@@ -3357,15 +3358,16 @@ function renderYearSnapshot() {
   const { txns, budgetItems } = state.yearData;
   const months = [...state.months].sort((a,b) => a.month_num - b.month_num);
   const todayMonth = new Date().getMonth() + 1;
+  const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
   const LEISURE = ['takeout','eatingout','entertainment','retail','holiday','gifts'];
 
   const txSum  = (mid, cats) => txns.filter(t => t.month_id===mid && cats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
   const biSum  = (mid, cats) => budgetItems.filter(b => b.month_id===mid && cats.includes(b.category)).reduce((s,b)=>s+(Number(b.amount)||0),0);
-  const spendV = (m, cats, future) => future ? biSum(m.id, cats) : txSum(m.id, cats);
+  const spendV = (m, cats, future) => (future && !showProjected) ? 0 : (future ? biSum(m.id, cats) : txSum(m.id, cats));
 
-  const charityV = mn => Number(state.charity.allocations?.[mn]||0);
-  const adminV   = mn => Number(state.admin.allocations?.[mn]||0);
-  const travelV  = mn => Number(state.travel.allocations?.[mn]||0);
+  const charityV = (mn, future) => (!showProjected && future) ? 0 : Number(state.charity.allocations?.[mn]||0);
+  const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]||0);
+  const travelV  = (mn, future) => (!showProjected && future) ? 0 : Number(state.travel.allocations?.[mn]||0);
   const incFor   = m  => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0);
 
   const fmtY   = n => !n ? '\u2014' : '\u20aa'+Math.round(n).toLocaleString('en-US');
@@ -3378,7 +3380,7 @@ function renderYearSnapshot() {
     { type:'sub',            label:'\u2937 Clalit',           valFn: m      => Number(m.income_clalit)||0 },
     { type:'sub',            label:'\u2937 Private',          valFn: m      => Number(m.income_private)||0 },
     { type:'section', label:'\u{1F4B0} Savings' },
-    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: m      => Number(m.savings_bank)||0 },
+    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0) },
     { type:'section', label:'\u{1F4CA} Spending' },
     { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f) },
     { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => biSum(m.id,['housing'])+(f?biSum(m.id,['household']):txSum(m.id,['household'])) },
@@ -3386,9 +3388,9 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f) },
     { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => biSum(m.id,['recurring']) },
     { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f) },
-    { type:'row',            label:'\u{1F49A} Charity',       valFn: m      => charityV(m.month_num) },
-    { type:'row',            label:'\u2708\uFE0F Travel',     valFn: m      => travelV(m.month_num) },
-    { type:'row',            label:'\u{1F4CB} Admin',         valFn: m      => adminV(m.month_num) },
+    { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f) },
+    { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f) },
+    { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f) },
     { type:'section', label:'\u2696\uFE0F Balance' },
     { type:'net', bold:true, label:'Net Balance',
       valFn: (m, future) => {
@@ -3399,7 +3401,7 @@ function renderYearSnapshot() {
           + spendV(m,['health','therapy'],future)
           + biSum(m.id,['recurring'])
           + spendV(m,LEISURE,future)
-          + charityV(m.month_num)+travelV(m.month_num)+adminV(m.month_num);
+          + charityV(m.month_num,future)+travelV(m.month_num,future)+adminV(m.month_num,future);
         return inc - sav - sp;
       }
     },
@@ -3452,7 +3454,12 @@ function renderYearSnapshot() {
     return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="'+totCls+'">'+(total ? fmtY(total) : '\u2014')+'</td><td class="year-cell-avg">'+(avg ? fmtY(avg) : '\u2014')+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
   }).join('');
 
-  return '<div class="year-tab-wrap">'+summaryHtml+'<div class="year-table-wrap"><table class="year-table">'+thead+'<tbody>'+tbody+'</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>';
+  const toggleHtml = '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;">'
+    + '<span style="font-size:.72rem;color:var(--dim);">View:</span>'
+    + '<button onclick="localStorage.setItem(\'yearViewMode\',\'projected\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(showProjected?'var(--accent)':'var(--border)')+';background:'+(showProjected?'var(--accent)':'none')+';color:'+(showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Full Year (Projected)</button>'
+    + '<button onclick="localStorage.setItem(\'yearViewMode\',\'actual\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(!showProjected?'var(--accent)':'var(--border)')+';background:'+(!showProjected?'var(--accent)':'none')+';color:'+(!showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Actual Only</button>'
+    + '</div>';
+  return '<div class="year-tab-wrap">'+toggleHtml+summaryHtml+'<div class="year-table-wrap"><table class="year-table">'+thead+'<tbody>'+tbody+'</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>';
 }
 
 function openSnapshot() {
