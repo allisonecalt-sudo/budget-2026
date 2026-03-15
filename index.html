@@ -2277,10 +2277,11 @@ function renderAdminTab() {
     const subs = (state.admin.subItems || []).filter(s => s.item_id === item.id);
     const isOpen = localStorage.getItem('sn-adm-'+item.id) === '1';
     const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
-    const subBadge = subs.length > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+subs.filter(s=>s.is_paid).length+'/'+subs.length+' paid</span>' : '';
+    const remaining = Number(item.projected_amount||0) - paidTotal;
+    const subBadge = paidTotal > 0 ? '<span style="font-size:.6rem;color:var(--accent);margin-left:.3rem;">'+fmtA(paidTotal)+' paid</span>' : '';
     const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
     const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
-    const amtColor = item.is_estimate ? 'var(--amber)' : 'var(--text)';
+    const amtColor = paidTotal > 0 ? 'var(--muted)' : (item.is_estimate ? 'var(--amber)' : 'var(--text)');
     const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
     const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
     const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
