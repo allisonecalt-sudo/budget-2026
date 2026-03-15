@@ -1462,7 +1462,7 @@ function renderApp() {
                             <button onclick="event.stopPropagation();state.inlineAddCat=null;renderApp()" style="font-size:.8rem;background:none;border:none;cursor:pointer;color:var(--dim);">×</button>
                           </div>`;
                         })() : ''}
-                        <button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>
+                        ${(c.key === 'housing' && state.housingGridMode) || (c.key === 'recurring' && state.recurringGridMode) ? '' : `<button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>`}
                       </div>
                       ${c.key === 'groceries' && txs.length > 0 ? (()=>{
                         const bigTotal = txs.reduce((sum,tx) => sum + (isBigStore(tx.store) ? Number(tx.amount) : 0), 0);
