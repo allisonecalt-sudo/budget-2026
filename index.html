@@ -1895,7 +1895,7 @@ function renderTravelTab() {
     const inputWeight = isCurrent ? '600' : '400';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
       + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
-      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val||0)+'</span>'
+      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val ? fmtA(val) : '₪0')+'</span>'
       + '</div>';
   }).join('');
 
@@ -2145,7 +2145,7 @@ function renderCharityTab() {
     const inputWeight = isCurrent ? '600' : '400';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
       + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
-      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val||0)+'</span>'
+      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val ? fmtA(val) : '₪0')+'</span>'
       + '</div>';
   }).join('');
 
@@ -2253,7 +2253,7 @@ function renderAdminTab() {
     const isOpen = localStorage.getItem('sn-adm-'+item.id) === '1';
     const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
     const remaining = Number(item.projected_amount||0) - paidTotal;
-    const subBadge = paidTotal > 0 ? '<span style="font-size:.6rem;color:var(--accent);margin-left:.3rem;">'+fmtA(paidTotal)+' paid</span>' : '';
+    const subBadge = paidTotal > 0 ? '<span style="font-size:.6rem;color:var(--accent);margin-left:.3rem;">'+fmtA(paidTotal)+' paid</span>'+(remaining > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+fmtA(remaining)+' left</span>' : '') : '';
     const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
     const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
     const amtColor = paidTotal > 0 ? 'var(--muted)' : (item.is_estimate ? 'var(--amber)' : 'var(--text)');
@@ -2366,7 +2366,7 @@ function renderAdminTab() {
               const isCurrent = mnum === currentMonthNum;
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent?'var(--gsoft)':'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent?'var(--accent)':'transparent'};">
                 <span style="font-size:.72rem;color:${isCurrent?'var(--accent)':'var(--muted)'};font-weight:${isCurrent?'700':'600'};">${mn}</span>
-                <span style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};font-weight:${isCurrent?'600':'400'};display:inline-block;" title="Set from Budget page">${val || 0}</span>
+                <span style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};font-weight:${isCurrent?'600':'400'};display:inline-block;" title="Set from Budget page">${val ? fmtA(val) : '₪0'}</span>
               </div>`;
             }).join('')}
           </div>
