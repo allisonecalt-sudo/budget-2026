@@ -764,6 +764,13 @@ async function saveBudgetItem(id, field, value) {
   const val = numericFields.includes(field) ? (parseFloat(value) || 0) : value;
   await sb.from('budget_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  // Subcategory: propagate to all months with same label+category
+  if (field === 'subcategory') {
+    await sb.from('budget_items').update({ subcategory: val }).eq('category', catKey).eq('label', item.label);
+    // Update allRecurringItems and allHousingItems in state
+    const allItems = catKey === 'recurring' ? state.allRecurringItems : catKey === 'housing' ? state.allHousingItems : null;
+    if (allItems) Object.values(allItems).forEach(arr => arr.forEach(i => { if (i.label === item.label) i.subcategory = val; }));
+  }
   // Sync label changes to template
   if (field === 'label') {
     await sb.from('budget_item_templates').update({ label: val }).eq('category', catKey).eq('label', item.label).eq('sort_order', item.sort_order);
