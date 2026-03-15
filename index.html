@@ -327,6 +327,7 @@ let state = {
   allHousingItems: {},   // { month_id: [{id, label, amount, subcategory}] } for housing grid view
   housingGridMode: localStorage.getItem('housingGridMode') === 'true',
   allCatTxData: {},      // { catKey: [transactions] } for spending grids
+  allCatBudgets: {},     // { catKey: { month_id: amount } } for spending grids
   spendingGridCats: JSON.parse(localStorage.getItem('spendingGridCats') || '[]'),
   txSort: localStorage.getItem('txSort') || 'newest',
   admin: { items: [], allocations: {}, payments: [], subItems: [] },
@@ -658,11 +659,18 @@ async function toggleSpendingGrid(catKey) {
   const on = state.spendingGridCats.includes(catKey);
   if (on) {
     state.spendingGridCats = state.spendingGridCats.filter(k => k !== catKey);
+    delete state.allCatTxData[catKey];
+    delete state.allCatBudgets[catKey];
   } else {
     state.spendingGridCats.push(catKey);
     if (!state.allCatTxData[catKey]) {
-      const { data } = await sb.from('transactions').select('store,amount,month_id').eq('category', catKey);
-      state.allCatTxData[catKey] = data || [];
+      const [txRes, budgetRes] = await Promise.all([
+        sb.from('transactions').select('store,amount,month_id').eq('category', catKey),
+        sb.from('budgets').select('month_id,amount').eq('category', catKey)
+      ]);
+      state.allCatTxData[catKey] = txRes.data || [];
+      state.allCatBudgets[catKey] = {};
+      (budgetRes.data || []).forEach(b => { state.allCatBudgets[catKey][b.month_id] = b.amount; });
     }
   }
   localStorage.setItem('spendingGridCats', JSON.stringify(state.spendingGridCats));
@@ -683,7 +691,7 @@ function renderSpendingGrid(catKey) {
     const hdr = '<th style="text-align:left;padding:.25rem .5rem;font-size:.7rem;position:sticky;left:0;background:var(--surface2);z-index:2;"></th>'
       + existingMonths.map(m => '<th style="text-align:right;padding:.25rem .4rem;font-size:.7rem;min-width:52px;color:'+(m.month_num===today?'var(--accent)':'inherit')+'">'+MONTH_NAMES[m.month_num-1]+'</th>').join('');
     const budgetRow = '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>'
-      + existingMonths.map(m => { const v = state.budgets['transport']||0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--text)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV(v)+'</td>'; }).join('') + '</tr>';
+      + existingMonths.map(m => { const v = (state.allCatBudgets['transport']||{})[m.id] || state.budgets['transport']||0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--text)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV(v)+'</td>'; }).join('') + '</tr>';
     const spentRow = '<tr style="font-weight:600;"><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--accent);">Spent</td>'
       + existingMonths.map(m => { const v = spentByMonth[m.id]||0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--accent)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV(v)+'</td>'; }).join('') + '</tr>';
     return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.8rem;"><thead><tr style="border-bottom:2px solid var(--border);">'+hdr+'</tr></thead><tbody>'+budgetRow+spentRow+'</tbody></table></div>';
@@ -730,7 +738,7 @@ function renderSpendingGrid(catKey) {
 
   const fmtV2 = v => v > 0 ? '₪'+Number(v).toLocaleString('en-IL',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—';
   const budgetRow = '<tr style="border-bottom:1px solid var(--border);"><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>'
-    + existingMonths.map(m => { const v = state.budgets['groceries']||0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--text)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV2(v)+'</td>'; }).join('')
+    + existingMonths.map(m => { const v = (state.allCatBudgets['groceries']||{})[m.id] || 0; const isCur=m.month_num===today; return '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:'+(v>0?'var(--text)':'var(--border)')+';background:'+(isCur?'var(--asoft)':'transparent')+';font-family:\'DM Mono\',monospace;">'+fmtV2(v)+'</td>'; }).join('')
     + '</tr>';
 
   return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:.8rem;">'
