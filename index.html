@@ -3208,7 +3208,7 @@ async function saveBizField(field, value) {
     if (month) month.income_private = net;
   }
   if (field === 'accountant_fee' || field === 'spending') {
-    const net = (state.biz.confirmed_amount || 0) * 0.85 - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
+    const net = (state.biz.confirmed_amount || 0) - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
     await sb.from('months').update({ income_private: net }).eq('id', state.currentMonthId);
     const month = state.months.find(m => m.id === state.currentMonthId);
     if (month) month.income_private = net;
