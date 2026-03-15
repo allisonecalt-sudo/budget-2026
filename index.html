@@ -1215,10 +1215,10 @@ async function saveBudget(catKey, amount) {
     await sb.from('budgets').insert({ month_id: monthId, category: catKey, amount: num });
   }
   state.budgets[catKey] = num;
-  // Keep admin_allocations in sync when budget tab is edited
-  if (catKey === 'admin') {
-    const month = state.months.find(m => m.id === monthId);
-    if (month) {
+  // Keep tab allocations in sync when budget tab is edited
+  const month = state.months.find(m => m.id === monthId);
+  if (month) {
+    if (catKey === 'admin') {
       const existingAlloc = state.admin.allocations[month.month_num];
       if (existingAlloc) {
         await sb.from('admin_allocations').update({ amount: num }).eq('id', existingAlloc.id);
@@ -1226,6 +1226,20 @@ async function saveBudget(catKey, amount) {
       } else {
         const { data } = await sb.from('admin_allocations').insert({ year: 2026, month_num: month.month_num, amount: num }).select().single();
         if (data) state.admin.allocations[month.month_num] = data;
+      }
+    } else if (catKey === 'travel') {
+      const existingAlloc = state.travel.allocations[month.month_num];
+      if (existingAlloc) {
+        existingAlloc.amount = num;
+      } else {
+        state.travel.allocations[month.month_num] = { month_id: monthId, amount: num };
+      }
+    } else if (catKey === 'charity') {
+      const existingAlloc = state.charity.allocations[month.month_num];
+      if (existingAlloc) {
+        existingAlloc.amount = num;
+      } else {
+        state.charity.allocations[month.month_num] = { month_id: monthId, amount: num };
       }
     }
   }
@@ -1886,10 +1900,7 @@ function renderTravelTab() {
     const inputWeight = isCurrent ? '600' : '400';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
       + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
-      + '<input type="number" value="'+val+'" placeholder="0" min="0" step="1"'
-      + ' style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:'+inputColor+';outline:none;-moz-appearance:textfield;font-weight:'+inputWeight+';"'
-      + ' onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'"'
-      + ' onchange="saveTravelAllocation('+mnum+', this.value)">'
+      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val||0)+'</span>'
       + '</div>';
   }).join('');
 
@@ -2139,10 +2150,7 @@ function renderCharityTab() {
     const inputWeight = isCurrent ? '600' : '400';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:'+rowBg+';border-radius:6px;border:1px solid '+rowBorder+';">'
       + '<span style="font-size:.72rem;color:'+labelColor+';font-weight:'+labelWeight+';">'+mn+'</span>'
-      + '<input type="number" value="'+val+'" placeholder="0" min="0" step="1"'
-      + ' style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;text-align:right;color:'+inputColor+';outline:none;-moz-appearance:textfield;font-weight:'+inputWeight+';"'
-      + ' onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'"'
-      + ' onchange="saveCharityAllocation('+mnum+', this.value)">'
+      + '<span style="width:60px;font-size:.78rem;font-family:\'DM Mono\',monospace;text-align:right;color:'+inputColor+';font-weight:'+inputWeight+';display:inline-block;" title="Set from Budget page">'+(val||0)+'</span>'
       + '</div>';
   }).join('');
 
