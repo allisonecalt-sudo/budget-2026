@@ -249,6 +249,38 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .hdr { flex-direction: column; gap: .75rem; align-items: flex-start; }
   .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
 }
+
+/* -- Year Snapshot Tab ------------------------------------------------ */
+.year-tab-wrap { padding: 1rem 0; }
+.year-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.year-sum-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .9rem; min-width: 110px; flex: 1; }
+.year-sum-label { font-size: .62rem; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .15rem; }
+.year-sum-val { font-size: 1.05rem; font-weight: 700; }
+.year-sum-val.green { color: var(--green); }
+.year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+.year-table { border-collapse: collapse; width: 100%; font-size: .72rem; }
+.year-table th, .year-table td { padding: .28rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
+.year-table tr { border-bottom: 1px solid rgba(255,255,255,.07); }
+.year-th-label { position: sticky; left: 0; background: var(--card); z-index: 4; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--border); }
+.year-th-month { text-align: right; font-size: .68rem; min-width: 68px; background: var(--card); }
+.year-th-month.current-month { background: var(--gsoft); color: var(--accent); font-weight: 700; }
+.year-th-month.future-month { color: var(--dim); }
+.year-th-extra { text-align: right; background: var(--gsoft); font-size: .65rem; min-width: 72px; border-left: 2px solid var(--border); }
+.year-col-label { position: sticky; left: 0; background: var(--bg); z-index: 2; text-align: left; border-right: 2px solid var(--border); font-size: .72rem; }
+.year-row-section td { background: var(--gsoft); font-weight: 700; font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: .35rem .5rem; }
+.year-row-bold .year-col-label, .year-row-bold td { font-weight: 700; }
+.year-row-sub .year-col-label { padding-left: 1.3rem; color: var(--dim); font-size: .67rem; }
+.year-row-sub td { color: var(--dim); font-size: .67rem; }
+.year-row-net td { font-weight: 700; background: var(--card); }
+.year-row-net .year-col-label { background: var(--card); }
+.year-cell { text-align: right; }
+.year-cell.future { color: var(--dim); font-style: italic; }
+.year-cell.current-col { background: rgba(99,102,241,.06); }
+.year-cell.net-pos { color: var(--green); font-weight: 700; }
+.year-cell.net-neg { color: var(--red); font-weight: 700; }
+.year-cell-extra { text-align: right; background: var(--gsoft); font-weight: 600; border-left: 2px solid var(--border); }
+.year-cell-avg { text-align: right; background: var(--gsoft); }
+.year-cell-pct { text-align: right; background: var(--gsoft); color: var(--dim); font-size: .67rem; }
 </style>
 </head>
 <body>
@@ -334,6 +366,7 @@ let state = {
   travel: { items: [], allocations: {}, payments: [], subItems: [] },
   charity: { items: [], allocations: {}, payments: [], subItems: [] },
   openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
+  yearData: null,
   inlineAddCat: null,
   allStores: [],
 };
@@ -1163,6 +1196,7 @@ function renderApp() {
           <button class="ptab ${state.activeTab === 'admin' ? 'active' : ''}" onclick="switchTab('admin')">Admin 📋</button>
           <button class="ptab ${state.activeTab === 'travel' ? 'active' : ''}" onclick="switchTab('travel')">Travel ✈️</button>
           <button class="ptab ${state.activeTab === 'charity' ? 'active' : ''}" onclick="switchTab('charity')">Charity 💚</button>
+          <button class="ptab ${state.activeTab === 'year' ? 'active' : ''}" onclick="switchTab('year')">Year 📊</button>
         </div>
         <div style="display:flex;gap:.2rem;">
           <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">← Undo</button>
@@ -1277,7 +1311,7 @@ function renderApp() {
     })()}
 
     <div class="main">
-      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
+      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'year' ? renderYearSnapshot() : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
         <div class="sidenav-label">Jump to</div>
@@ -1919,6 +1953,11 @@ async function switchTab(tab) {
     state.loading = true;
     renderApp();
     await loadCharityData();
+    state.loading = false;
+  } else if (tab === 'year') {
+    state.loading = true;
+    renderApp();
+    await loadYearData();
     state.loading = false;
   }
   renderApp();
@@ -3297,6 +3336,123 @@ function snToggle(gid) {
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
   rows.forEach(function(r) { r.classList.toggle('collapsed'); });
   if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
+}
+
+// -- Year Snapshot ------------------------------------------------------
+async function loadYearData() {
+  if (state.yearData) return;
+  const monthIds = state.months.map(m => m.id);
+  const [txRes, biRes] = await Promise.all([
+    sb.from('transactions').select('*').in('month_id', monthIds),
+    sb.from('budget_items').select('*').in('month_id', monthIds),
+  ]);
+  if (!state.charity.payments.length) await loadCharityData();
+  if (!state.admin.items.length) await loadAdminData();
+  if (!state.travel.items.length) await loadTravelData();
+  state.yearData = { txns: txRes.data || [], budgetItems: biRes.data || [] };
+}
+
+function renderYearSnapshot() {
+  if (!state.yearData) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
+  const { txns, budgetItems } = state.yearData;
+  const months = [...state.months].sort((a,b) => a.month_num - b.month_num);
+  const todayMonth = new Date().getMonth() + 1;
+  const LEISURE = ['takeout','eatingout','entertainment','retail','holiday','gifts'];
+
+  const txSum  = (mid, cats) => txns.filter(t => t.month_id===mid && cats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const biSum  = (mid, cats) => budgetItems.filter(b => b.month_id===mid && cats.includes(b.category)).reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const spendV = (m, cats, future) => future ? biSum(m.id, cats) : txSum(m.id, cats);
+
+  const charityV = mn => Number(state.charity.allocations?.[mn]||0);
+  const adminV   = mn => Number(state.admin.allocations?.[mn]||0);
+  const travelV  = mn => Number(state.travel.allocations?.[mn]||0);
+  const incFor   = m  => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0);
+
+  const fmtY   = n => !n ? '\u2014' : '\u20aa'+Math.round(n).toLocaleString('en-US');
+  const fmtPct = n => n ? Math.round(n*100)+'%' : '';
+
+  const ROWS = [
+    { type:'section', label:'\u{1F4C8} Income' },
+    { type:'row', bold:true, label:'Total Income',            valFn: m      => incFor(m) },
+    { type:'sub',            label:'\u2937 Petachya',         valFn: m      => Number(m.income_petachya)||0 },
+    { type:'sub',            label:'\u2937 Clalit',           valFn: m      => Number(m.income_clalit)||0 },
+    { type:'sub',            label:'\u2937 Private',          valFn: m      => Number(m.income_private)||0 },
+    { type:'section', label:'\u{1F4B0} Savings' },
+    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: m      => Number(m.savings_bank)||0 },
+    { type:'section', label:'\u{1F4CA} Spending' },
+    { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f) },
+    { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => biSum(m.id,['housing'])+(f?biSum(m.id,['household']):txSum(m.id,['household'])) },
+    { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f) },
+    { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f) },
+    { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => biSum(m.id,['recurring']) },
+    { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f) },
+    { type:'row',            label:'\u{1F49A} Charity',       valFn: m      => charityV(m.month_num) },
+    { type:'row',            label:'\u2708\uFE0F Travel',     valFn: m      => travelV(m.month_num) },
+    { type:'row',            label:'\u{1F4CB} Admin',         valFn: m      => adminV(m.month_num) },
+    { type:'section', label:'\u2696\uFE0F Balance' },
+    { type:'net', bold:true, label:'Net Balance',
+      valFn: (m, future) => {
+        const inc = incFor(m), sav = Number(m.savings_bank)||0;
+        const sp = spendV(m,['groceries'],future)
+          + biSum(m.id,['housing'])+(future?biSum(m.id,['household']):txSum(m.id,['household']))
+          + spendV(m,['transport'],future)
+          + spendV(m,['health','therapy'],future)
+          + biSum(m.id,['recurring'])
+          + spendV(m,LEISURE,future)
+          + charityV(m.month_num)+travelV(m.month_num)+adminV(m.month_num);
+        return inc - sav - sp;
+      }
+    },
+  ];
+
+  const computed = ROWS.map(row => {
+    if (row.type==='section') return { row, values:null, total:0, avg:0 };
+    const values = months.map(m => (row.valFn(m, m.month_num > todayMonth))||0);
+    const total  = values.reduce((s,v)=>s+v,0);
+    return { row, values, total, avg: total/12 };
+  });
+
+  const totalAnnInc = months.reduce((s,m)=>s+incFor(m),0);
+  const pastMs      = months.filter(m => m.month_num<=todayMonth);
+  const ytdIncome   = pastMs.reduce((s,m)=>s+incFor(m),0);
+  const ytdSavings  = pastMs.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
+  const projSavings = months.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
+
+  const summaryHtml = '<div class="year-summary">'
+    + '<div class="year-sum-card"><div class="year-sum-label">YTD Income</div><div class="year-sum-val">'+fmtY(ytdIncome)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">Year Projected</div><div class="year-sum-val">'+fmtY(totalAnnInc)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">Avg / Month</div><div class="year-sum-val">'+fmtY(totalAnnInc/12)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">Saved So Far</div><div class="year-sum-val green">'+fmtY(ytdSavings)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">Year Savings</div><div class="year-sum-val">'+fmtY(projSavings)+'</div></div>'
+    + '</div>';
+
+  const thead = '<thead><tr><th class="year-th-label">Category</th>'
+    + months.map(m => {
+        const cls = m.month_num===todayMonth ? 'year-th-month current-month' : m.month_num>todayMonth ? 'year-th-month future-month' : 'year-th-month';
+        return '<th class="'+cls+'">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</th>';
+      }).join('')
+    + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
+    + '</tr></thead>';
+
+  const tbody = computed.map(function(item) {
+    const row = item.row, values = item.values, total = item.total, avg = item.avg;
+    if (row.type==='section') return '<tr class="year-row-section"><td colspan="'+(months.length+4)+'">'+row.label+'</td></tr>';
+    const rowCls = row.type==='sub' ? 'year-row-sub' : row.type==='net' ? 'year-row-net' : row.bold ? 'year-row-bold' : 'year-row';
+    const cells = months.map(function(m,i) {
+      const v = values[i];
+      let cls = 'year-cell';
+      if (m.month_num > todayMonth) cls += ' future';
+      if (m.month_num === todayMonth) cls += ' current-col';
+      if (row.type === 'net') cls += v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '';
+      return '<td class="'+cls+'">'+(v ? fmtY(v) : '\u2014')+'</td>';
+    }).join('');
+    const totCls = 'year-cell-extra' + (row.type==='net' ? (total>0 ? ' net-pos' : total<0 ? ' net-neg' : '') : '');
+    const showPct = !['sub','section'].includes(row.type) && row.label!=='Total Income' && row.label!=='\u{1F3E6} Saved (Bank)';
+    const pct = (showPct && totalAnnInc) ? fmtPct(total/totalAnnInc) : '';
+    return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="'+totCls+'">'+(total ? fmtY(total) : '\u2014')+'</td><td class="year-cell-avg">'+(avg ? fmtY(avg) : '\u2014')+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
+  }).join('');
+
+  return '<div class="year-tab-wrap">'+summaryHtml+'<div class="year-table-wrap"><table class="year-table">'+thead+'<tbody>'+tbody+'</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>';
 }
 
 function openSnapshot() {
