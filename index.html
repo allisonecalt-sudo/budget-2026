@@ -275,7 +275,7 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .year-row-net td { font-weight: 700; background: var(--card); }
 .year-row-net .year-col-label { background: var(--card); }
 .year-cell { text-align: right; }
-.year-cell.future { color: var(--dim); font-style: italic; }
+.year-cell.future { color: var(--muted); }
 .year-cell.current-col { background: rgba(99,102,241,.06); }
 .year-cell.net-pos { color: var(--green); font-weight: 700; }
 .year-cell.net-neg { color: var(--red); font-weight: 700; }
@@ -3380,7 +3380,7 @@ function renderYearSnapshot() {
     const m = months.find(mo => mo.month_num === mn);
     return m ? (budgetMap[m.id]?.['charity'] || 0) : 0;
   };
-  const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]||0);
+  const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]?.amount || 0);
   const travelV  = (mn, future) => {
     if (!showProjected && future) return 0;
     const m = months.find(mo => mo.month_num === mn);
@@ -3410,177 +3410,4 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f) },
     { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f) },
     { type:'section', label:'\u2696\uFE0F Balance' },
-    { type:'net', bold:true, label:'Net Balance',
-      valFn: (m, future) => {
-        const inc = incFor(m), sav = Number(m.savings_bank)||0;
-        const sp = spendV(m,['groceries'],future)
-          + biSum(m.id,['housing'])+(future?biSum(m.id,['household']):txSum(m.id,['household']))
-          + spendV(m,['transport'],future)
-          + spendV(m,['health','therapy'],future)
-          + biSum(m.id,['recurring'])
-          + spendV(m,LEISURE,future)
-          + charityV(m.month_num,future)+travelV(m.month_num,future)+adminV(m.month_num,future);
-        return inc - sav - sp;
-      }
-    },
   ];
-
-  const computed = ROWS.map(row => {
-    if (row.type==='section') return { row, values:null, total:0, avg:0 };
-    const values = months.map(m => (row.valFn(m, m.month_num > todayMonth))||0);
-    const total  = values.reduce((s,v)=>s+v,0);
-    return { row, values, total, avg: total/12 };
-  });
-
-  const totalAnnInc = months.reduce((s,m)=>s+incFor(m),0);
-  const pastMs      = months.filter(m => m.month_num<=todayMonth);
-  const ytdIncome   = pastMs.reduce((s,m)=>s+incFor(m),0);
-  const ytdSavings  = pastMs.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
-  const projSavings = months.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
-
-  const summaryHtml = '<div class="year-summary">'
-    + '<div class="year-sum-card"><div class="year-sum-label">YTD Income</div><div class="year-sum-val">'+fmtY(ytdIncome)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Year Projected</div><div class="year-sum-val">'+fmtY(totalAnnInc)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Avg / Month</div><div class="year-sum-val">'+fmtY(totalAnnInc/12)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Saved So Far</div><div class="year-sum-val green">'+fmtY(ytdSavings)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Year Savings</div><div class="year-sum-val">'+fmtY(projSavings)+'</div></div>'
-    + '</div>';
-
-  const thead = '<thead><tr><th class="year-th-label">Category</th>'
-    + months.map(m => {
-        const cls = m.month_num===todayMonth ? 'year-th-month current-month' : m.month_num>todayMonth ? 'year-th-month future-month' : 'year-th-month';
-        return '<th class="'+cls+'">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</th>';
-      }).join('')
-    + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
-    + '</tr></thead>';
-
-  const tbody = computed.map(function(item) {
-    const row = item.row, values = item.values, total = item.total, avg = item.avg;
-    if (row.type==='section') return '<tr class="year-row-section"><td colspan="'+(months.length+4)+'">'+row.label+'</td></tr>';
-    const rowCls = row.type==='sub' ? 'year-row-sub' : row.type==='net' ? 'year-row-net' : row.bold ? 'year-row-bold' : 'year-row';
-    const cells = months.map(function(m,i) {
-      const v = values[i];
-      let cls = 'year-cell';
-      if (m.month_num > todayMonth) cls += ' future';
-      if (m.month_num === todayMonth) cls += ' current-col';
-      if (row.type === 'net') cls += v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '';
-      return '<td class="'+cls+'">'+(v ? fmtY(v) : '\u2014')+'</td>';
-    }).join('');
-    const totCls = 'year-cell-extra' + (row.type==='net' ? (total>0 ? ' net-pos' : total<0 ? ' net-neg' : '') : '');
-    const showPct = !['sub','section'].includes(row.type) && row.label!=='Total Income' && row.label!=='\u{1F3E6} Saved (Bank)';
-    const pct = (showPct && totalAnnInc) ? fmtPct(total/totalAnnInc) : '';
-    return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="'+totCls+'">'+(total ? fmtY(total) : '\u2014')+'</td><td class="year-cell-avg">'+(avg ? fmtY(avg) : '\u2014')+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
-  }).join('');
-
-  const toggleHtml = '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;">'
-    + '<span style="font-size:.72rem;color:var(--dim);">View:</span>'
-    + '<button onclick="localStorage.setItem(\'yearViewMode\',\'projected\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(showProjected?'var(--accent)':'var(--border)')+';background:'+(showProjected?'var(--accent)':'none')+';color:'+(showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Full Year (Projected)</button>'
-    + '<button onclick="localStorage.setItem(\'yearViewMode\',\'actual\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(!showProjected?'var(--accent)':'var(--border)')+';background:'+(!showProjected?'var(--accent)':'none')+';color:'+(!showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Actual Only</button>'
-    + '</div>';
-  return '<div class="year-tab-wrap">'+toggleHtml+summaryHtml+'<div class="year-table-wrap"><table class="year-table">'+thead+'<tbody>'+tbody+'</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>';
-}
-
-function openSnapshot() {
-  const current = state.months.find(m => m.id === state.currentMonthId);
-  if (!current) return;
-  const income = totalIncome(current);
-  const spent = spentByCategory();
-  const totalSpent = Object.values(spent).reduce((a,b) => a+b, 0);
-  const totalBudgeted = Object.values(state.budgets).reduce((a,b) => a+b, 0);
-  const leftToBudget = income - totalBudgeted;
-  const remainingInBudget = totalBudgeted - totalSpent;
-
-  const n = v => v == null || v === '' ? '' : Number(v).toLocaleString('en-IL', {minimumFractionDigits:0, maximumFractionDigits:2});
-
-  const groupRows = CATEGORY_GROUPS.map(group => {
-    const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
-    const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
-    const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
-    const gr = gb - gs;
-    const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
-    const catRows = cats.map(c => {
-      const b = catBudget(c.key)||0;
-      const s = c.hasTab ? b : (spent[c.key]||0);
-      const r = b - s;
-      return `<tr class="sn-cat ${gid} collapsed">
-        <td style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
-        <td>${b ? n(b) : ''}</td>
-        <td>${b ? n(s) : ''}</td>
-        <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
-      </tr>`;
-    }).join('');
-    if (cats.length === 1) {
-      const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
-      return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
-    }
-    return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
-        <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
-        <td>${gb ? n(gb) : ''}</td>
-        <td>${n(gs)}</td>
-        <td class="${gr<0?'sn-over':gr>0?'sn-ok':''}">${gb ? n(gr) : ''}</td>
-      </tr>${catRows}`;
-  }).join('');
-
-  document.getElementById('snapshot-modal').style.display = 'flex';
-  document.getElementById('snapshot-body').innerHTML = `
-    <table class="sn-table">
-      <thead><tr><th>Category</th><th>Budget ₪</th><th>Spent ₪</th><th>Remaining ₪</th></tr></thead>
-      <tbody>
-        <tr class="sn-section"><td colspan="4">📊 Summary — ${current.month_name}</td></tr>
-        <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
-        <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
-        <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income-totalSpent>=0?'sn-ok':'sn-over'}">${n(income-totalSpent)}</td></tr>
-        <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
-        <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))}</td><td>${n((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</td><td class="${((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-(( Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))>=0?'sn-ok':'sn-over'}">${n(((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0)))}</td></tr>
-        <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank']||0)}</td><td>${n(Number(current.savings_bank)||0)}</td><td>${n((state.budgets['savings_bank']||0)-(Number(current.savings_bank)||0))}</td></tr>
-        <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested']||0)}</td><td>${n(Number(current.savings_invested)||0)}</td><td>${n((state.budgets['savings_invested']||0)-(Number(current.savings_invested)||0))}</td></tr>
-        ${groupRows}
-      </tbody>
-    </table>`;
-}
-
-async function refreshBiz() {
-  state.loading = true;
-  renderApp();
-  await loadBizData();
-  state.loading = false;
-  renderApp();
-}
-
-// ── Init ──────────────────────────────────────────────────────────────
-// MIGRATION REQUIRED (run once in Supabase SQL editor):
-//   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
-async function init() {
-  // Load all store names used across all months for autocomplete
-  sb.from('transactions').select('category,store').not('store','is',null).then(({data}) => {
-    if (data) state.allStores = data;
-  });
-  await loadMonths();
-  if (state.months.length > 0) {
-    // Restore last visited month, else default to current calendar month
-    const savedId = localStorage.getItem('activeMonthId');
-    const now = new Date();
-    const currentMonth = (savedId && state.months.find(m => m.id === savedId))
-      || state.months.find(m => m.month_num === now.getMonth() + 1)
-      || state.months[state.months.length - 1];
-    await switchMonth(currentMonth.id);
-    const tab = state.activeTab;
-    if (tab === 'biz') await loadBizData();
-    else if (tab === 'admin') await loadAdminData();
-    else if (tab === 'travel') await loadTravelData();
-    else if (tab === 'charity') await loadCharityData();
-    else if (tab === 'year') await loadYearData();
-  } else {
-    state.loading = false;
-    renderApp();
-  }
-}
-
-document.addEventListener('keydown', e => {
-  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
-  if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z'&&e.shiftKey))) { e.preventDefault(); doRedo(); }
-});
-init();
-</script>
-</body>
-</html>
