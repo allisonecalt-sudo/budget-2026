@@ -430,6 +430,51 @@ let state = {
   allStores: [],
 };
 
+// ── Cache (stale-while-revalidate for fast startup) ──────────────────
+const CACHE_KEY = 'budget_v1_cache';
+const CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+
+function saveCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      monthId: state.currentMonthId,
+      months: state.months,
+      transactions: state.transactions,
+      budgets: state.budgets,
+      budgetItems: state.budgetItems,
+      incomeItems: state.incomeItems,
+      admin: state.admin,
+      travel: state.travel,
+      charity: state.charity,
+      yearData: state.yearData,
+    }));
+  } catch(e) {}
+}
+
+function restoreCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const c = JSON.parse(raw);
+    if (Date.now() - c.ts > CACHE_TTL) return false;
+    const savedId = localStorage.getItem('activeMonthId');
+    if (savedId && c.monthId !== savedId) return false;
+    state.months = c.months || [];
+    state.currentMonthId = c.monthId;
+    state.transactions = c.transactions || [];
+    state.budgets = c.budgets || {};
+    state.budgetItems = c.budgetItems || {};
+    state.incomeItems = c.incomeItems || [];
+    state.admin = c.admin || { items: [], allocations: {}, payments: [], subItems: [] };
+    state.travel = c.travel || { items: [], allocations: {}, payments: [], subItems: [] };
+    state.charity = c.charity || { items: [], allocations: {}, payments: [], subItems: [] };
+    if (c.yearData) state.yearData = c.yearData;
+    state.loading = false;
+    return true;
+  } catch(e) { return false; }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (spent, budget) => budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
@@ -1026,6 +1071,7 @@ async function switchMonth(monthId) {
     await Promise.all(loads);
   } finally {
     state.loading = false;
+    saveCache();
     renderApp();
   }
 }
@@ -3613,31 +3659,52 @@ async function refreshBiz() {
 // ── Init ──────────────────────────────────────────────────────────────
 // MIGRATION REQUIRED (run once in Supabase SQL editor):
 //   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
+async function loadFresh() {
+  await loadMonths();
+  if (!state.months.length) { state.loading = false; return; }
+  const savedId = localStorage.getItem('activeMonthId');
+  const now = new Date();
+  const currentMonth = (savedId && state.months.find(m => m.id === savedId))
+    || state.months.find(m => m.month_num === now.getMonth() + 1)
+    || state.months[state.months.length - 1];
+  const monthId = currentMonth.id;
+  state.currentMonthId = monthId;
+  localStorage.setItem('activeMonthId', monthId);
+  await Promise.all([
+    loadTransactions(monthId),
+    loadBudgets(monthId),
+    loadIncomeItems(monthId),
+    loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId)),
+    loadAdminData(),
+    loadTravelData(),
+    loadCharityData(),
+  ]);
+  const tab = state.activeTab;
+  if (tab === 'biz') await loadBizData();
+  else if (tab === 'year') await loadYearData();
+  state.loading = false;
+  saveCache();
+}
+
 async function init() {
-  // Load all store names used across all months for autocomplete
+  // Load autocomplete stores in background always
   sb.from('transactions').select('category,store').not('store','is',null).then(({data}) => {
     if (data) state.allStores = data;
   });
-  await loadMonths();
-  if (state.months.length > 0) {
-    // Restore last visited month, else default to current calendar month
-    const savedId = localStorage.getItem('activeMonthId');
-    const now = new Date();
-    const currentMonth = (savedId && state.months.find(m => m.id === savedId))
-      || state.months.find(m => m.month_num === now.getMonth() + 1)
-      || state.months[state.months.length - 1];
-    await switchMonth(currentMonth.id);
-    const tab = state.activeTab;
-    if (tab === 'biz') await loadBizData();
-    else if (tab === 'admin') await loadAdminData();
-    else if (tab === 'travel') await loadTravelData();
-    else if (tab === 'charity') await loadCharityData();
-    else if (tab === 'year') await loadYearData();
+  // Try cache first — show UI instantly, refresh in background
+  if (restoreCache()) {
     renderApp();
-  } else {
-    state.loading = false;
-    renderApp();
+    loadFresh().then(() => {
+      // Only re-render if no input is focused (avoid interrupting typing)
+      if (!document.activeElement || document.activeElement.tagName === 'BODY' || document.activeElement === document.documentElement) {
+        renderApp();
+      }
+    }).catch(() => {});
+    return;
   }
+  // First visit or stale cache — normal load
+  await loadFresh();
+  renderApp();
 }
 
 document.addEventListener('keydown', e => {
