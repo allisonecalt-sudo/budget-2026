@@ -2448,10 +2448,12 @@ function renderTravelTab() {
       + '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>'
       + sb2('month','Mo ↑') + sb2('month-desc','Mo ↓') + sb2('high','Highest') + sb2('low','Lowest')
       + '</div>'
+      + '<div style="overflow-x:auto;"><div style="min-width:360px;">'
       + '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">'
       + '<span>Mo</span><span>Where</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>'
       + '</div>'
       + payRows
+      + '</div></div>'
       + '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">'
       + '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>'
       + '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">'+fmtA(totalSpent)+'</span>'
@@ -2698,10 +2700,12 @@ function renderCharityTab() {
       + '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>'
       + sb2('month','Mo ↑') + sb2('month-desc','Mo ↓') + sb2('high','Highest') + sb2('low','Lowest')
       + '</div>'
+      + '<div style="overflow-x:auto;"><div style="min-width:400px;">'
       + '<div style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">'
       + '<span>Mo</span><span>Charity</span><span>Date</span><span style="text-align:right">Amount</span><span style="text-align:center">🧾</span><span style="text-align:center">✓</span><span style="text-align:center">~est</span><span></span>'
       + '</div>'
       + payRows
+      + '</div></div>'
       + '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">'
       + '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total given</span>'
       + '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">'+fmtA(totalSpent)+'</span>'
