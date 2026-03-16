@@ -285,6 +285,12 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .add-section { padding: .85rem 1rem; }
   .ptab { padding: .22rem .45rem; font-size: .75rem; }
   /* Budget item rows — bigger on mobile */
+  /* Leisure sub-ribbon: full-width label + 3-col grid for cats */
+  .sub-ribbon { flex-wrap: wrap; overflow-x: visible !important; padding: .3rem .5rem; }
+  .sub-ribbon-label { width: 100%; border-right: none; border-bottom: 1px solid var(--border); margin-right: 0; padding-right: 0; padding-bottom: .25rem; margin-bottom: .1rem; font-size: .7rem !important; white-space: normal; }
+  .sub-ribbon-cat { width: 33.333%; flex-shrink: 0; padding: .25rem .3rem; }
+  .sub-ribbon-nums { font-size: .72rem; }
+  /* Budget item rows */
   .budget-item-row { padding: .4rem .5rem; gap: .5rem; }
   input.bi-label { font-size: .88rem !important; padding: .3rem .25rem !important; min-height: 36px !important; }
   input.bi-amount { font-size: .88rem !important; padding: .3rem .25rem !important; min-height: 36px !important; width: 85px !important; }
