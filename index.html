@@ -268,8 +268,10 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .stat-card { padding: .85rem; }
   .income-grid { grid-template-columns: 1fr; }
   .income-input { width: 90px; }
-  .ribbon { padding: .35rem .75rem; }
-  .ribbon-stat { padding: .2rem .3rem; }
+  /* Ribbon: not sticky on mobile, horizontal scroll */
+  .ribbon-panel { position: static !important; overflow-x: auto; }
+  .ribbon { padding: .35rem .75rem; min-width: max-content; }
+  .ribbon-stat { min-width: 80px; padding: .2rem .4rem; }
   .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
   .tx-header, .tx-item { grid-template-columns: 70px 1fr 65px 22px; }
   .form-row { flex-direction: column; gap: .4rem; }
@@ -1244,6 +1246,7 @@ function renderApp() {
         <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">↩</button>
         <button id="redo-btn" class="mtab" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">↪</button>
         <button class="mtab" onclick="openSnapshot()" title="Snapshot">📊</button>
+        <button class="mtab" onclick="collapseAll()" title="Collapse all">⊟</button>
       </div>
       <div class="hdr-months">
         <div class="month-tabs">
@@ -3362,6 +3365,14 @@ function applyRibbonHeight() {
     const panel = document.querySelector('.ribbon-panel');
     if (panel) { panel.style.maxHeight = h + 'px'; panel.style.overflow = 'hidden auto'; }
   }
+}
+
+function collapseAll() {
+  state.openCats.clear();
+  localStorage.setItem('openCats', '[]');
+  localStorage.setItem('ribbonHidden', 'true');
+  localStorage.removeItem('ribbonExpanded');
+  renderApp();
 }
 
 function toggleRibbon() {
