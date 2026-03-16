@@ -3278,7 +3278,7 @@ function renderBizTab(current) {
 function renderAccountantTracker(current) {
   const allBiz = state.allBiz || [];
   const todayMonth = new Date().getMonth() + 1;
-  const upToMonth = Math.min(current.month_num, todayMonth);
+  const upToMonth = current.month_num;
   // Sum fees for all months up to the tab month
   const paidUpTo = allBiz.filter(b => {
     const m = state.months.find(mo => mo.id === b.month_id);
