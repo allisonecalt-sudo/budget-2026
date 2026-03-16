@@ -302,6 +302,9 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   select { font-size: .82rem; padding: .4rem .5rem; }
   /* Travel/Admin/Charity 2-col layout: stack on mobile */
   .tab-two-col { grid-template-columns: 1fr !important; }
+  /* Add-payment forms: 2×2 grid on mobile with full-width + button */
+  .pay-add-form { grid-template-columns: 1fr 1fr !important; gap: .4rem !important; }
+  .pay-add-form > button { grid-column: span 2 !important; min-height: 40px !important; font-size: .88rem !important; }
   /* Group header: hide "· X left" — progress bar shows it visually */
   .group-rem { display: none !important; }
 }
@@ -2594,7 +2597,7 @@ function renderTravelTab() {
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
 
           <!-- Add payment form -->
-          <div style="display:grid;grid-template-columns:70px 1fr 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <select id="tp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
             <input type="text" id="tp-dest" placeholder="Where" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
@@ -2813,7 +2816,7 @@ function renderCharityTab() {
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
 
           <!-- Add payment form -->
-          <div style="display:grid;grid-template-columns:70px 1fr 90px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 90px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <select id="cp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
             <input type="text" id="cp-label" placeholder="Charity name" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
