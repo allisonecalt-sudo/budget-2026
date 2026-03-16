@@ -268,10 +268,15 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .stat-card { padding: .85rem; }
   .income-grid { grid-template-columns: 1fr; }
   .income-input { width: 90px; }
-  /* Ribbon: not sticky on mobile, horizontal scroll */
-  .ribbon-panel { position: static !important; overflow-x: auto; }
-  .ribbon { padding: .35rem .75rem; min-width: max-content; }
-  .ribbon-stat { min-width: 80px; padding: .2rem .4rem; }
+  /* Ribbon: 4-col grid on mobile — all 7 stats visible in 2 rows */
+  .ribbon-panel { position: static !important; overflow-x: visible !important; }
+  .ribbon { display: grid !important; grid-template-columns: repeat(4,1fr) !important; padding: .3rem .5rem !important; min-width: unset !important; gap: 0 !important; }
+  .ribbon-stat { padding: .22rem .25rem !important; border-right: 1px solid var(--border) !important; border-left: none !important; margin: 0 !important; }
+  .ribbon-label { font-size: .51rem !important; letter-spacing: .04em !important; }
+  .ribbon-val { font-size: .78rem !important; }
+  /* Buttons cell — hide "full view", keep ✕ */
+  .ribbon > div:last-child { margin: 0 !important; padding: .2rem .25rem !important; display: flex !important; align-items: center !important; justify-content: center !important; border-left: 1px solid var(--border) !important; }
+  .ribbon > div:last-child .ribbon-toggle:first-child { display: none !important; }
   .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
   .tx-header, .tx-item { grid-template-columns: 70px 1fr 65px 22px; }
   .form-row { flex-direction: column; gap: .4rem; }
