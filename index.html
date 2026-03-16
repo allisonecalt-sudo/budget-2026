@@ -277,6 +277,13 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .card { padding: .85rem 1rem; }
   .add-section { padding: .85rem 1rem; }
   .ptab { padding: .22rem .45rem; font-size: .75rem; }
+  /* Budget item rows — bigger on mobile */
+  .budget-item-row { padding: .4rem .5rem; gap: .5rem; }
+  input.bi-label { font-size: .88rem !important; padding: .3rem .25rem !important; min-height: 36px !important; }
+  input.bi-amount { font-size: .88rem !important; padding: .3rem .25rem !important; min-height: 36px !important; width: 85px !important; }
+  .bi-del, .bi-default { font-size: 1.1rem !important; padding: .2rem .35rem !important; }
+  .bi-add { font-size: .82rem; padding: .4rem .5rem; }
+  select { font-size: .82rem; padding: .4rem .5rem; }
 }
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
@@ -1323,7 +1330,6 @@ function renderApp() {
               <table class="sn-table">
                 <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Remaining</th></tr></thead>
                 <tbody>
-                  <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
                   ${(()=>{
                     const bkB=state.budgets['savings_bank']||0, bkS=Number(current.savings_bank)||0;
                     const invB=state.budgets['savings_invested']||0, invS=Number(current.savings_invested)||0;
@@ -3556,7 +3562,6 @@ function openSnapshot() {
         <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
         <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
         <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income-totalSpent>=0?'sn-ok':'sn-over'}">${n(income-totalSpent)}</td></tr>
-        <tr class="sn-section"><td colspan="4">📂 Spending by Category</td></tr>
         <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))}</td><td>${n((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</td><td class="${((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-(( Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))>=0?'sn-ok':'sn-over'}">${n(((state.budgets['savings_bank']||0)+(state.budgets['savings_invested']||0))-((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0)))}</td></tr>
         <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank']||0)}</td><td>${n(Number(current.savings_bank)||0)}</td><td>${n((state.budgets['savings_bank']||0)-(Number(current.savings_bank)||0))}</td></tr>
         <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested']||0)}</td><td>${n(Number(current.savings_invested)||0)}</td><td>${n((state.budgets['savings_invested']||0)-(Number(current.savings_invested)||0))}</td></tr>
