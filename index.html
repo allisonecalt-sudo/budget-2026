@@ -300,6 +300,10 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .bi-del, .bi-default { font-size: 1.1rem !important; padding: .2rem .35rem !important; }
   .bi-add { font-size: .82rem; padding: .4rem .5rem; }
   select { font-size: .82rem; padding: .4rem .5rem; }
+  /* Travel/Admin/Charity 2-col layout: stack on mobile */
+  .tab-two-col { grid-template-columns: 1fr !important; }
+  /* Group header: hide "· X left" — progress bar shows it visually */
+  .group-rem { display: none !important; }
 }
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
@@ -2552,7 +2556,7 @@ function renderTravelTab() {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+    <div class="tab-two-col" style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
 
       <!-- LEFT: Yearly Items -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
@@ -2947,7 +2951,7 @@ function renderAdminTab() {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+    <div class="tab-two-col" style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
 
       <!-- LEFT: Yearly Items -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
