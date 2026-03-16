@@ -284,6 +284,9 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .card { padding: .85rem 1rem; }
   .add-section { padding: .85rem 1rem; }
   .ptab { padding: .22rem .45rem; font-size: .75rem; }
+  /* Inline add form: 2 rows of 3 on mobile */
+  .inline-add-form { grid-template-columns: 1fr 1fr 1fr !important; gap: .4rem !important; padding: .5rem .25rem !important; }
+  .inline-add-form input, .inline-add-form button { font-size: .88rem !important; padding: .5rem .5rem !important; min-height: 42px !important; border-radius: 6px !important; }
   /* Budget item rows — bigger on mobile */
   /* Leisure sub-ribbon: full-width label + 3-col grid for cats */
   .sub-ribbon { flex-wrap: wrap; overflow-x: visible !important; padding: .3rem .5rem; }
@@ -1663,7 +1666,7 @@ function renderApp() {
                           const _ps = [...new Set([...(PRESET_STORES[c.key]||[]), ...state.allStores.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store), ...state.transactions.filter(tx=>tx.category===c.key&&tx.store).map(tx=>tx.store)])];
                           const _dlId = 'inline-stores-'+c.key;
                           return `<datalist id="${_dlId}">${_ps.map(s=>`<option value="${s.replace(/"/g,'&quot;')}">`).join('')}</datalist>
-                          <div style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
+                          <div class="inline-add-form" style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
                             <input id="inline-store-${c.key}" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <input id="inline-item-${c.key}" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
                             <input id="inline-amount-${c.key}" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
