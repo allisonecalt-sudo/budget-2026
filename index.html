@@ -2937,26 +2937,26 @@ function renderAdminTab() {
     const logIcon = item.is_logged ? '✓' : '';
     let subsHtml = '';
     if (isOpen) {
+      const paidCount = subs.filter(s=>s.is_paid).length;
       const subRows = subs.map(s => {
         const sPaid = s.is_paid;
-        const sRowOp = sPaid ? 'opacity:.5;' : '';
+        const sRowOp = sPaid ? 'opacity:.55;' : '';
         const sStrike = sPaid ? 'text-decoration:line-through;' : '';
-        const sBg = sPaid ? 'var(--gsoft)' : 'none';
-        const sBorder = sPaid ? 'var(--accent)' : 'var(--border)';
-        const sColor = sPaid ? 'var(--accent)' : 'var(--dim)';
-        const sIcon = sPaid ? '✓' : '○';
-        return '<div style="display:grid;grid-template-columns:1fr 80px 28px 28px;gap:.25rem;align-items:center;padding:.2rem 0;'+sRowOp+'">'
-          + '<input type="text" value="'+esc(s.label)+'" placeholder="note (optional)" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'label\',this.value)">'
-          + '<input type="number" value="'+(s.amount||'')+'" placeholder="₪" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'amount\',this.value)">'
-          + '<button onclick="updateAdminSub(\''+s.id+'\',\'is_paid\','+(!s.is_paid)+')" title="'+(sPaid?'Mark as unpaid':'Mark as paid')+'" style="background:'+sBg+';border:1px solid '+sBorder+';border-radius:4px;color:'+sColor+';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+sIcon+'</button>'
-          + '<button onclick="deleteAdminSub(\''+s.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;">×</button>'
+        return '<div style="display:grid;grid-template-columns:22px 1fr 80px 22px;gap:.35rem;align-items:center;padding:.25rem 0;'+sRowOp+'">'
+          + '<div onclick="updateAdminSub(\''+s.id+'\',\'is_paid\','+(!s.is_paid)+')" title="'+(sPaid?'Mark unpaid':'Mark paid')+'" style="width:16px;height:16px;border-radius:3px;border:2px solid '+(sPaid?'var(--accent)':'var(--border)')+';background:'+(sPaid?'var(--accent)':'none')+';cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:.6rem;font-weight:700;transition:all .15s ease;">'+(sPaid?'✓':'')+'</div>'
+          + '<input type="text" value="'+esc(s.label)+'" placeholder="What was this payment for?" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'label\',this.value)">'
+          + '<input type="number" value="'+(s.amount||'')+'" placeholder="₪ amount" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+sStrike+'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\''+s.id+'\',\'amount\',this.value)">'
+          + '<button onclick="deleteAdminSub(\''+s.id+'\')" title="Delete" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;padding:0;line-height:1;opacity:.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">×</button>'
           + '</div>';
       }).join('');
-      const paidSummary = subs.length > 0 ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid '+fmtA(paidTotal)+' of '+fmtA(Number(item.projected_amount||0))+'</div>' : '';
-      subsHtml = '<div style="padding:.3rem .5rem .5rem 1.5rem;background:var(--surface2);border-radius:0 0 6px 6px;">'
+      const projAmt = Number(item.projected_amount||0);
+      const pctPaid = projAmt > 0 ? Math.min(100, Math.round(paidTotal / projAmt * 100)) : 0;
+      const progressBar = projAmt > 0 ? '<div style="margin-top:.4rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;"><span style="font-size:.65rem;color:var(--muted);">'+fmtA(paidTotal)+' of '+fmtA(projAmt)+' paid</span><span style="font-size:.65rem;color:var(--accent);font-weight:600;">'+pctPaid+'%</span></div><div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;"><div style="height:100%;background:var(--accent);border-radius:2px;width:'+pctPaid+'%;transition:width .3s ease;"></div></div></div>' : '';
+      subsHtml = '<div style="padding:.4rem .6rem .6rem 1.8rem;background:var(--surface2);border-radius:0 0 6px 6px;border-top:1px solid var(--border);">'
+        + (subs.length > 0 ? '<div style="font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:.3rem;">Payments</div>' : '')
         + subRows
-        + '<button onclick="addAdminSub(\''+item.id+'\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
-        + paidSummary
+        + '<button onclick="addAdminSub(\''+item.id+'\')" style="margin-top:.4rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
+        + progressBar
         + '</div>';
     }
     return '<div style="border-bottom:1px solid var(--border);">'
