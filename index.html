@@ -2907,7 +2907,8 @@ function renderAdminTab() {
     return '<button onclick="localStorage.setItem(\'adminItemSort\',\''+k+'\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid '+(active?'var(--accent)':'var(--border)')+';border-radius:4px;background:'+(active?'var(--gsoft)':'none')+';color:'+(active?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+lbl+'</button>';
   }).join('');
 
-  // Pre-compute items HTML — separate active from done
+  // Pre-compute items HTML — separate active from done, group by category
+  const ADMIN_CATEGORIES = ['Apartment','Car','Furniture','Health','Professional','Admin','Other'];
   const sortFn = (a,b) => {
     if (aiSort==='alpha') return (a.label||'').localeCompare(b.label||'');
     if (aiSort==='alpha-desc') return (b.label||'').localeCompare(a.label||'');
@@ -2918,6 +2919,8 @@ function renderAdminTab() {
   const activeItems = [...items].filter(i => !i.is_logged).sort(sortFn);
   const doneItems = [...items].filter(i => i.is_logged).sort(sortFn);
   const showDone = localStorage.getItem('adminShowDone') === '1';
+  const viewMode = localStorage.getItem('adminViewMode') || 'category';
+  const catEmoji = { Apartment:'🏠', Car:'🚗', Furniture:'🪑', Health:'🏥', Professional:'📚', Admin:'📋', Other:'📌' };
   const renderItemRow = (item) => {
     const subs = (state.admin.subItems || []).filter(s => s.item_id === item.id);
     const isOpen = localStorage.getItem('sn-adm-'+item.id) === '1';
@@ -2953,12 +2956,16 @@ function renderAdminTab() {
       const pctPaid = projAmt > 0 ? Math.min(100, Math.round(paidTotal / projAmt * 100)) : 0;
       const progressBar = projAmt > 0 ? '<div style="margin-top:.4rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;"><span style="font-size:.65rem;color:var(--muted);">'+fmtA(paidTotal)+' of '+fmtA(projAmt)+' paid</span><span style="font-size:.65rem;color:var(--accent);font-weight:600;">'+pctPaid+'%</span></div><div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;"><div style="height:100%;background:var(--accent);border-radius:2px;width:'+pctPaid+'%;transition:width .3s ease;"></div></div></div>' : '';
       subsHtml = '<div style="padding:.4rem .6rem .6rem 1.8rem;background:var(--surface2);border-radius:0 0 6px 6px;border-top:1px solid var(--border);">'
-        + (subs.length > 0 ? '<div style="font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:.3rem;">Payments</div>' : '')
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem;">'
+        + (subs.length > 0 ? '<span style="font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Payments</span>' : '<span></span>')
+        + '<select onchange="saveAdminItem(\''+item.id+'\',\'category\',this.value)" style="font-size:.62rem;padding:.1rem .25rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;" title="Category">'+catOptions+'</select>'
+        + '</div>'
         + subRows
         + '<button onclick="addAdminSub(\''+item.id+'\')" style="margin-top:.4rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
         + progressBar
         + '</div>';
     }
+    const catOptions = ADMIN_CATEGORIES.map(c => '<option value="'+c+'"'+(c===(item.category||'Other')?' selected':'')+'>'+( catEmoji[c]||'')+ ' '+c+'</option>').join('');
     return '<div style="border-bottom:1px solid var(--border);">'
       + '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;'+rowOpacity+'">'
       + '<button onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
@@ -2971,7 +2978,31 @@ function renderAdminTab() {
       + subsHtml
       + '</div>';
   };
-  const activeItemsHtml = activeItems.map(renderItemRow).join('');
+
+  // Build grouped or flat view
+  let activeItemsHtml;
+  if (viewMode === 'category') {
+    const grouped = {};
+    activeItems.forEach(item => {
+      const cat = item.category || 'Other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(item);
+    });
+    activeItemsHtml = ADMIN_CATEGORIES.filter(c => grouped[c] && grouped[c].length > 0).map(cat => {
+      const catItems = grouped[cat];
+      const catTotal = catItems.reduce((s,i) => s + Number(i.projected_amount), 0);
+      return '<div style="margin-top:.6rem;">'
+        + '<div style="display:flex;align-items:center;gap:.35rem;padding:.25rem .2rem;margin-bottom:.15rem;">'
+        + '<span style="font-size:.75rem;">'+(catEmoji[cat]||'📌')+'</span>'
+        + '<span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">'+cat+'</span>'
+        + '<span style="font-size:.62rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:auto;">'+fmtA(catTotal)+'</span>'
+        + '</div>'
+        + catItems.map(renderItemRow).join('')
+        + '</div>';
+    }).join('');
+  } else {
+    activeItemsHtml = activeItems.map(renderItemRow).join('');
+  }
   const doneItemsHtml = doneItems.map(renderItemRow).join('');
   const doneTotal = doneItems.reduce((s, i) => s + Number(i.projected_amount), 0);
 
@@ -3010,13 +3041,16 @@ function renderAdminTab() {
 
       <!-- LEFT: Yearly Items -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
-          <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
+          <div style="display:flex;gap:.25rem;align-items:center;">
+            <button onclick="localStorage.setItem('adminViewMode','${viewMode==='category'?'list':'category'}');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid ${viewMode==='category'?'var(--accent)':'var(--border)'};border-radius:4px;background:${viewMode==='category'?'var(--gsoft)':'none'};color:${viewMode==='category'?'var(--accent)':'var(--dim)'};cursor:pointer;font-family:'DM Sans',sans-serif;" title="Toggle grouped/flat view">${viewMode==='category'?'Grouped':'List'}</button>
+            ${sortBtnsHtml}
+          </div>
         </div>
-        <div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+        ${viewMode !== 'category' ? `<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
           <span></span><span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">Est</span><span></span><span></span>
-        </div>
+        </div>` : ''}
         ${activeItemsHtml}
         <button onclick="addAdminItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
         ${doneItems.length > 0 ? `
@@ -3137,7 +3171,7 @@ async function saveAdminItem(id, field, value) {
   const item = state.admin.items.find(i => i.id === id);
   if (!item) return;
   const oldVal = item[field];
-  const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
+  const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : String(value);
   await sb.from('admin_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
   pushUndo({
