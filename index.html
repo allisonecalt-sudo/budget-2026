@@ -2907,21 +2907,24 @@ function renderAdminTab() {
     return '<button onclick="localStorage.setItem(\'adminItemSort\',\''+k+'\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid '+(active?'var(--accent)':'var(--border)')+';border-radius:4px;background:'+(active?'var(--gsoft)':'none')+';color:'+(active?'var(--accent)':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">'+lbl+'</button>';
   }).join('');
 
-  // Pre-compute items HTML
-  const sortedItems = [...items].sort((a,b) => {
+  // Pre-compute items HTML — separate active from done
+  const sortFn = (a,b) => {
     if (aiSort==='alpha') return (a.label||'').localeCompare(b.label||'');
     if (aiSort==='alpha-desc') return (b.label||'').localeCompare(a.label||'');
     if (aiSort==='amount-high') return Number(b.projected_amount)-Number(a.projected_amount);
     if (aiSort==='amount-low') return Number(a.projected_amount)-Number(b.projected_amount);
     return 0;
-  });
-  const itemsHtml = sortedItems.map(item => {
+  };
+  const activeItems = [...items].filter(i => !i.is_logged).sort(sortFn);
+  const doneItems = [...items].filter(i => i.is_logged).sort(sortFn);
+  const showDone = localStorage.getItem('adminShowDone') === '1';
+  const renderItemRow = (item) => {
     const subs = (state.admin.subItems || []).filter(s => s.item_id === item.id);
     const isOpen = localStorage.getItem('sn-adm-'+item.id) === '1';
     const paidTotal = subs.filter(s=>s.is_paid).reduce((n,s)=>n+Number(s.amount),0);
     const remaining = Number(item.projected_amount||0) - paidTotal;
     const subBadge = paidTotal > 0 ? '<span style="font-size:.6rem;color:var(--accent);margin-left:.3rem;">'+fmtA(paidTotal)+' paid</span>'+(remaining > 0 ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">'+fmtA(remaining)+' left</span>' : '') : '';
-    const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
+    const rowOpacity = item.is_logged ? 'opacity:.55;' : '';
     const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
     const amtColor = paidTotal > 0 ? 'var(--muted)' : (item.is_estimate ? 'var(--amber)' : 'var(--text)');
     const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
@@ -2931,7 +2934,7 @@ function renderAdminTab() {
     const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
     const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
     const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
-    const logIcon = item.is_logged ? '✓' : '○';
+    const logIcon = item.is_logged ? '✓' : '';
     let subsHtml = '';
     if (isOpen) {
       const subRows = subs.map(s => {
@@ -2961,13 +2964,16 @@ function renderAdminTab() {
       + '<button onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
       + '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+'</div>'
       + '<input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'projected_amount\',this.value)">'
-      + '<button onclick="saveAdminItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'Marked as estimate — click to confirm exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:4px;color:'+estColor+';cursor:pointer;font-size:.65rem;padding:.1rem .2rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;width:100%;">~est</button>'
+      + '<button onclick="saveAdminItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'This is an estimate — click to mark as exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:12px;color:'+estColor+';cursor:pointer;font-size:.6rem;padding:.15rem .35rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;white-space:nowrap;">est</button>'
       + '<button onclick="deleteAdminItem(\''+item.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>'
-      + '<button onclick="saveAdminItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not logged':'Mark as logged/done')+'" style="background:'+logBg+';border:1px solid '+logBorder+';border-radius:4px;color:'+logColor+';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">'+logIcon+'</button>'
+      + '<div onclick="saveAdminItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not done':'Mark as done')+'" style="width:18px;height:18px;border-radius:4px;border:2px solid '+(item.is_logged?'var(--accent)':'var(--border)')+';background:'+(item.is_logged?'var(--accent)':'none')+';cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:.7rem;font-weight:700;transition:all .15s ease;">'+logIcon+'</div>'
       + '</div>'
       + subsHtml
       + '</div>';
-  }).join('');
+  };
+  const activeItemsHtml = activeItems.map(renderItemRow).join('');
+  const doneItemsHtml = doneItems.map(renderItemRow).join('');
+  const doneTotal = doneItems.reduce((s, i) => s + Number(i.projected_amount), 0);
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
@@ -3004,16 +3010,23 @@ function renderAdminTab() {
 
       <!-- LEFT: Yearly Items -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
           <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
         </div>
-        <div style="font-size:.6rem;color:var(--dim);margin-bottom:.6rem;">~est = estimate &nbsp;|&nbsp; × = delete &nbsp;|&nbsp; ○ = mark done</div>
-        <div style="display:grid;grid-template-columns:1fr 90px 42px 28px 28px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
-          <span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">~est</span><span></span><span style="text-align:center;">✓</span>
+        <div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+          <span></span><span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">Est</span><span></span><span></span>
         </div>
-        ${itemsHtml}
+        ${activeItemsHtml}
         <button onclick="addAdminItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
+        ${doneItems.length > 0 ? `
+        <div style="margin-top:.8rem;padding-top:.6rem;border-top:1px solid var(--border);">
+          <button onclick="localStorage.setItem('adminShowDone',localStorage.getItem('adminShowDone')==='1'?'0':'1');renderApp()" style="background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.3rem;padding:0;">
+            <span style="font-size:.65rem;color:var(--dim);">${showDone?'▾':'▸'}</span>
+            Completed (${doneItems.length}) — ${fmtA(doneTotal)}
+          </button>
+          ${showDone ? '<div style="margin-top:.35rem;">'+doneItemsHtml+'</div>' : ''}
+        </div>` : ''}
         <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
           <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
@@ -3108,10 +3121,16 @@ function renderAdminTab() {
 
 // ── Admin CRUD ────────────────────────────────────────────────────────
 async function addAdminItem() {
-  const { data, error } = await sb.from('admin_items').insert({ year: 2026, label: 'New item', projected_amount: 0 }).select().single();
+  const { data, error } = await sb.from('admin_items').insert({ year: 2026, label: '', projected_amount: 0 }).select().single();
   if (error) { toast('Error adding item'); return; }
   state.admin.items.push(data);
   renderApp();
+  // Auto-focus the new item's name input
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('input[placeholder="Item name"]');
+    const last = inputs[inputs.length - 1];
+    if (last && !last.value) { last.focus(); last.placeholder = 'Type item name...'; }
+  }, 50);
 }
 
 async function saveAdminItem(id, field, value) {
