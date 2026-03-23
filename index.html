@@ -3808,14 +3808,15 @@ function renderYearSnapshot() {
       + (budgetMap[m.id]?.['savings_invested'] || 0);
   };
 
-  // Total spent for a month (matches ribbon logic)
+  // Total spent for a month: actual spending for past/current, projected for future
   const totalSpentFor = (m, future) => {
+    const isPastOrCurrent = m.month_num <= todayMonth;
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
-      if (c.hasLines) return sum + biSum(m.id, [c.key]); // housing/recurring: use budget items, not transactions
-      if (future && !showProjected) return sum;
-      if (future) return sum + (budgetV(m.id, [c.key]) || biSum(m.id, [c.key]));
-      return sum + txSum(m.id, [c.key]);
+      if (c.hasLines) return sum + biSum(m.id, [c.key]); // housing/recurring: committed amounts
+      if (isPastOrCurrent) return sum + txSum(m.id, [c.key]); // real transactions
+      if (!showProjected) return sum;
+      return sum + (budgetV(m.id, [c.key]) || biSum(m.id, [c.key])); // future: projected
     }, 0)
       + (Number(m.savings_bank) || 0)
       + (Number(m.savings_invested) || 0);
