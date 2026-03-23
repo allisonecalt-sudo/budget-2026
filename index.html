@@ -317,16 +317,17 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .year-sum-val { font-size: 1.05rem; font-weight: 700; }
 .year-sum-val.green { color: var(--green); }
 .year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
-.year-table { border-collapse: collapse; width: 100%; font-size: .72rem; }
-.year-table th, .year-table td { padding: .28rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
-.year-table tr { border-bottom: 1px solid rgba(255,255,255,.07); }
+.year-table { border-collapse: collapse; width: 100%; font-size: .78rem; }
+.year-table th, .year-table td { padding: .35rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
+.year-table tr { border-bottom: 1px solid var(--border); }
+.year-table tbody tr:nth-child(even):not(.year-row-section) { background: rgba(0,0,0,.015); }
 .year-th-label { position: sticky; left: 0; background: var(--card); z-index: 4; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--border); }
 .year-th-month { text-align: right; font-size: .68rem; min-width: 68px; background: var(--card); }
 .year-th-month.current-month { background: var(--gsoft); color: var(--accent); font-weight: 700; }
 .year-th-month.future-month { color: var(--dim); }
 .year-th-extra { text-align: right; background: var(--gsoft); font-size: .65rem; min-width: 72px; border-left: 2px solid var(--border); }
 .year-col-label { position: sticky; left: 0; background: var(--bg); z-index: 2; text-align: left; border-right: 2px solid var(--border); font-size: .72rem; }
-.year-row-section td { background: var(--gsoft); font-weight: 700; font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: .35rem .5rem; }
+.year-row-section td { background: var(--gsoft); font-weight: 700; font-size: .65rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: .45rem .5rem; border-top: 2px solid var(--border); }
 .year-row-bold .year-col-label, .year-row-bold td { font-weight: 700; }
 .year-row-sub .year-col-label { padding-left: 1.3rem; color: var(--dim); font-size: .67rem; }
 .year-row-sub td { color: var(--dim); font-size: .67rem; }
@@ -3833,13 +3834,27 @@ function renderYearSnapshot() {
   };
 
   const ROWS = [
+    // 1. Income
     { type:'section', label:'\u{1F4C8} Income', collapsible: 'income' },
-    { type:'row', bold:true, label:'Total Income', valFn: m => incFor(m), sectionGroup: 'income' },
+    { type:'row', bold:true, label:'Total Income', valFn: m => incFor(m), sectionGroup: 'income', stickyInSection: true },
     ...incomeSubRows.map(r => ({...r, sectionGroup: 'income'})),
-    { type:'section', label:'\u{1F4B0} Savings', collapsible: 'savings' },
-    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
-    { type:'row',            label:'\u{1F4C8} Invested',      valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_invested)||0), sectionGroup: 'savings' },
-    { type:'section', label:'\u{1F4CA} Spending', collapsible: 'spending' },
+    // 2. Budget Overview
+    { type:'section', label:'\u{1F4CA} Budget Overview', collapsible: 'overview' },
+    { type:'row', bold:true, label:'Total Budgeted',   valFn: (m,f) => totalBudgetedFor(m), sectionGroup: 'overview' },
+    { type:'row', bold:true, label:'Total Spent',      valFn: (m,f) => totalSpentFor(m, f), sectionGroup: 'overview' },
+    { type:'net',            label:'\u{1F4B0} Unbudgeted',    valFn: (m,f) => incFor(m) - totalBudgetedFor(m), sectionGroup: 'overview' },
+    { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f), sectionGroup: 'overview' },
+    // 3. Savings & Investment
+    { type:'section', label:'\u{1F4B0} Savings & Investment', collapsible: 'savings' },
+    { type:'row', bold:true, label:'Total Savings',   valFn: (m,f) => (!showProjected && f) ? 0 : ((Number(m.savings_bank)||0)+(Number(m.savings_invested)||0)), sectionGroup: 'savings', stickyInSection: true },
+    { type:'sub',            label:'\u2937 Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
+    { type:'sub',            label:'\u2937 Invested',      valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_invested)||0), sectionGroup: 'savings' },
+    // 5. Charity Overview
+    { type:'section', label:'\u{1F49A} Charity Overview', collapsible: 'charity' },
+    { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f), sectionGroup: 'charity' },
+    { type:'sub',            label:'Charity % of Income', special:'charityPct', sectionGroup: 'charity' },
+    // 6. Spending (detail, at bottom)
+    { type:'section', label:'\u{1F4CA} Spending Breakdown', collapsible: 'spending' },
     { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => housingV(m, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f), sectionGroup: 'spending' },
@@ -3855,21 +3870,6 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f), sectionGroup: 'spending' },
-    { type:'section', label:'\u{1F4CA} Budget Overview', collapsible: 'overview' },
-    { type:'row', bold:true, label:'Total Budgeted',   valFn: (m,f) => totalBudgetedFor(m), sectionGroup: 'overview' },
-    { type:'row', bold:true, label:'Total Spent',      valFn: (m,f) => totalSpentFor(m, f), sectionGroup: 'overview' },
-    { type:'net',            label:'\u{1F4B0} Unbudgeted',    valFn: (m,f) => incFor(m) - totalBudgetedFor(m), sectionGroup: 'overview' },
-    { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f), sectionGroup: 'overview' },
-    { type:'section', label:'\u2708\uFE0F Travel & Admin Gaps', collapsible: 'gaps' },
-    { type:'row',            label:'Travel Budget',    valFn: (m,f) => travelBudgetV(m.month_num), sectionGroup: 'gaps' },
-    { type:'row',            label:'Travel Spent',     valFn: (m,f) => travelSpentV(m.month_num), sectionGroup: 'gaps' },
-    { type:'net',            label:'Travel Remaining', valFn: (m,f) => travelBudgetV(m.month_num) - travelSpentV(m.month_num), sectionGroup: 'gaps' },
-    { type:'row',            label:'Admin Budget',     valFn: (m,f) => adminBudgetV(m.month_num), sectionGroup: 'gaps' },
-    { type:'row',            label:'Admin Spent',      valFn: (m,f) => adminSpentV(m.month_num), sectionGroup: 'gaps' },
-    { type:'net',            label:'Admin Remaining',  valFn: (m,f) => adminBudgetV(m.month_num) - adminSpentV(m.month_num), sectionGroup: 'gaps' },
-    { type:'section', label:'\u{1F49A} Charity Overview', collapsible: 'charity' },
-    { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f), sectionGroup: 'charity' },
-    { type:'sub',            label:'Charity % of Income', special:'charityPct', sectionGroup: 'charity' },
   ];
 
   const computed = ROWS.map(row => {
@@ -3896,12 +3896,28 @@ function renderYearSnapshot() {
   const ytdSavings  = pastMs.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
   const projSavings = months.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
 
+  // Travel & Admin yearly gaps
+  const totalTravelBudget = months.reduce((s,m) => s + travelBudgetV(m.month_num), 0);
+  const totalTravelSpent = months.reduce((s,m) => s + travelSpentV(m.month_num), 0);
+  const travelGap = totalTravelBudget - totalTravelSpent;
+  const totalAdminBudget = months.reduce((s,m) => s + adminBudgetV(m.month_num), 0);
+  const totalAdminSpent = months.reduce((s,m) => s + adminSpentV(m.month_num), 0);
+  const adminGap = totalAdminBudget - totalAdminSpent;
+
   const summaryHtml = '<div class="year-summary">'
     + '<div class="year-sum-card"><div class="year-sum-label">YTD Income</div><div class="year-sum-val">'+fmtY(ytdIncome)+'</div></div>'
     + '<div class="year-sum-card"><div class="year-sum-label">Year Projected</div><div class="year-sum-val">'+fmtY(totalAnnInc)+'</div></div>'
     + '<div class="year-sum-card"><div class="year-sum-label">Avg / Month</div><div class="year-sum-val">'+fmtY(totalAnnInc/12)+'</div></div>'
     + '<div class="year-sum-card"><div class="year-sum-label">Saved So Far</div><div class="year-sum-val green">'+fmtY(ytdSavings)+'</div></div>'
     + '<div class="year-sum-card"><div class="year-sum-label">Year Savings</div><div class="year-sum-val">'+fmtY(projSavings)+'</div></div>'
+    + '</div>'
+    + '<div class="year-summary" style="margin-top:.5rem;">'
+    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Budget</div><div class="year-sum-val">'+fmtY(totalTravelBudget)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Spent</div><div class="year-sum-val">'+fmtY(totalTravelSpent)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Left</div><div class="year-sum-val" style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(travelGap)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Budget</div><div class="year-sum-val">'+fmtY(totalAdminBudget)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Spent</div><div class="year-sum-val">'+fmtY(totalAdminSpent)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Left</div><div class="year-sum-val" style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(adminGap)+'</div></div>'
     + '</div>';
 
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
@@ -3926,7 +3942,7 @@ function renderYearSnapshot() {
     // Grouped sub-rows (leisure etc): hidden by default
     if (row.group) rowCls += ' yr-grp-'+row.group+' collapsed';
     // Section-grouped rows: collapsible with section header
-    if (row.sectionGroup) rowCls += ' yr-grp-sec-'+row.sectionGroup;
+    if (row.sectionGroup && !row.stickyInSection) rowCls += ' yr-grp-sec-'+row.sectionGroup;
 
     if (item.isPct) {
       const cells = months.map(function(m,i) {
