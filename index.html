@@ -4221,7 +4221,22 @@ function renderProjectionsTab() {
   }
 
   // Project current month's spending to end of month
-  const curMonthProjected = todayDay > 0 ? Math.round(curSpent * (daysInCurrentMonth / todayDay)) : curSpent;
+  // Smart projection: committed expenses (housing, recurring, savings, tab cats) stay fixed
+  // Only variable spending (groceries, transport, leisure, etc.) gets prorated
+  let curCommitted = 0, curVariable = 0;
+  if (curMonth) {
+    CATEGORIES.forEach(c => {
+      if (c.linkedLine) return;
+      if (c.hasTab || c.hasLines) {
+        curCommitted += catActualFor(curMonth.id, c.key);
+      } else {
+        curVariable += txSum(curMonth.id, [c.key]);
+      }
+    });
+    curCommitted += (Number(curMonth.savings_bank)||0) + (Number(curMonth.savings_invested)||0);
+  }
+  const curVariableProjected = todayDay > 0 ? Math.round(curVariable * (daysInCurrentMonth / todayDay)) : curVariable;
+  const curMonthProjected = curCommitted + curVariableProjected;
 
   // Future months: use budgeted amounts
   let futureIncome = futureMonths.reduce((s, m) => s + incFor(m), 0);
@@ -4239,10 +4254,24 @@ function renderProjectionsTab() {
   const avgMonthlySpend = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + totalSpentFor(m), 0) / completedMonths) : 0;
   const avgMonthlyIncome = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + incFor(m), 0) / completedMonths) : 0;
 
+  // ── Category actual spending (matching Year tab logic) ──
+  // For hasTab cats (charity/travel/admin): "spent" = budget allocation (they're committed funds)
+  // For hasLines cats (housing/recurring): "spent" = max(committed budget_items, actual transactions)
+  // For regular cats: "spent" = actual transactions
+  const catActualFor = (mid, catKey) => {
+    const catDef = CATEGORIES.find(c => c.key === catKey);
+    if (catDef && catDef.hasTab) return yearCatBudget(mid, catKey);
+    if (catDef && catDef.hasLines) return Math.max(biSum(mid, [catKey]), txSum(mid, [catKey]));
+    return txSum(mid, [catKey]);
+  };
+
   // ── Category projections ──
   const catProj = CATEGORIES.filter(c => !c.linkedLine).map(c => {
     const yearBudget = months.reduce((s, m) => s + yearCatBudget(m.id, c.key), 0);
-    const ytdActual = pastMonths.reduce((s, m) => s + txSum(m.id, [c.key]), 0) + (curMonth ? txSum(curMonth.id, [c.key]) : 0);
+    // YTD actual: use proper spending logic for each category type
+    const completedActual = pastMonths.reduce((s, m) => s + catActualFor(m.id, c.key), 0);
+    const curActual = curMonth ? catActualFor(curMonth.id, c.key) : 0;
+    const ytdActual = completedActual + curActual;
     // Project: actual so far + budget for remaining months
     const projected = ytdActual + futureMonths.reduce((s, m) => s + yearCatBudget(m.id, c.key), 0);
     const pct = yearBudget > 0 ? Math.round((ytdActual / yearBudget) * 100) : 0;
@@ -4302,7 +4331,8 @@ function renderProjectionsTab() {
   // ── Current month pace ──
   if (curMonth) {
     var daysLeft = daysInCurrentMonth - todayDay;
-    var curRemaining = curIncome - curSpent - curSavings;
+    // curSpent already includes savings (from totalSpentFor), so remaining = income - spent
+    var curRemaining = curIncome - curSpent;
     var dailyBudget = daysLeft > 0 ? Math.round(curRemaining / daysLeft) : 0;
     var paceColor = curMonthProjected > curBudgeted * 1.1 ? 'var(--red)' : curMonthProjected > curBudgeted * 0.9 ? 'var(--amber)' : 'var(--green)';
 
@@ -4317,7 +4347,8 @@ function renderProjectionsTab() {
     // Key numbers
     h += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
     h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Projected</div>';
-    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + paceColor + '">' + fmt(curMonthProjected) + '</div></div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + paceColor + '">' + fmt(curMonthProjected) + '</div>';
+    h += '<div style="font-size:.55rem;color:var(--dim);">' + fmt(curCommitted) + ' fixed + ' + fmt(curVariableProjected) + ' variable</div></div>';
     h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Daily Budget</div>';
     h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (dailyBudget > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(dailyBudget) + '</div></div>';
     h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Remaining</div>';
