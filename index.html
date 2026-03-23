@@ -3932,8 +3932,8 @@ function renderYearSnapshot() {
     + '<td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc)+'</td><td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc/12)+'</td><td class="year-sum-cell-extra"></td></tr>';
 
   const sumRow2 = '<tr class="year-summary-row"><td class="year-th-label year-sum-td">'
-    + '✈️ '+fmtY(totalTravelBudget)+' · <span style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(travelGap)+' '+(travelGap>=0?'rem':'over')+'</span>'
-    + ' &nbsp;| 📋 '+fmtY(totalAdminBudget)+' · <span style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(adminGap)+' '+(adminGap>=0?'rem':'over')+'</span>'
+    + '✈️ '+fmtY(totalTravelProjected)+' budget · <span style="color:'+(travelGap>0?'var(--red)':'var(--green)')+'">'+fmtY(travelGap)+' '+(travelGap>0?'gap':'funded')+'</span>'
+    + ' &nbsp;| 📋 '+fmtY(totalAdminProjected)+' budget · <span style="color:'+(adminGap>0?'var(--red)':'var(--green)')+'">'+fmtY(adminGap)+' '+(adminGap>0?'gap':'funded')+'</span>'
     + ' &nbsp;| 💰 Saved '+fmtY(ytdSavings)+' / '+fmtY(projSavings)
     + '</td><td colspan="'+(months.length+3)+'" class="year-sum-td" style="border-bottom:2px solid var(--border);"></td></tr>';
 
