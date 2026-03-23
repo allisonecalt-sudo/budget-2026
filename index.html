@@ -60,6 +60,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .sub-sep { color: var(--muted); }
 .sub-budget { color: var(--muted); }
 .sub-rem { font-weight: 700; font-size: .7rem; }
+.leisure-table { width: 100%; border-collapse: collapse; font-size: .72rem; margin-top: .2rem; }
+.leisure-table thead th { font-size: .55rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: right; padding: .15rem .5rem; border-bottom: 1px solid var(--border); }
+.leisure-table thead th:first-child { text-align: left; }
+.leisure-table td { padding: .2rem .5rem; border-bottom: 1px solid var(--border); }
+.lt-cat { font-weight: 500; white-space: nowrap; }
+.lt-num { font-family: 'DM Mono', monospace; font-size: .72rem; text-align: right; }
+.lt-total { font-weight: 700; }
+.lt-total td { border-top: 2px solid var(--border); border-bottom: none; }
 .month-tabs { display: flex; gap: .2rem; flex-wrap: wrap; }
 .mtab { padding: .22rem .45rem; border: none; background: none; cursor: pointer; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: .77rem; font-weight: 500; color: var(--muted); transition: all .15s; }
 .mtab:hover { background: var(--surface2); color: var(--text); }
@@ -1387,27 +1395,27 @@ function renderApp() {
       const leisureGroup = CATEGORY_GROUPS.find(g => g.label === 'Leisure & Lifestyle');
       const leisureCats = leisureGroup.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
       const isMobile = window.innerWidth <= 600;
-      const leisureDefault = isMobile ? 'false' : 'true';
-      const leisureExpanded = (localStorage.getItem('leisureExpanded') ?? leisureDefault) !== 'false';
+      const leisureKey = isMobile ? 'leisureExpandedMobile' : 'leisureExpanded';
+      const leisureStored = localStorage.getItem(leisureKey);
+      const leisureExpanded = leisureStored !== null ? leisureStored !== 'false' : !isMobile;
       const leisureSpent = leisureCats.reduce((sum,c) => sum+(spent[c.key]||0), 0);
       const leisureBudget = leisureCats.reduce((sum,c) => sum+(state.budgets[c.key]||0), 0);
       const leisureSubRibbon = `<div class="sub-ribbon">
-        <span class="sub-ribbon-label" onclick="localStorage.setItem('leisureExpanded', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
+        <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
           ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
           <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${n(leisureSpent)}${leisureBudget?` / ${n(leisureBudget)}`:''}
           </span>
         </span>
-        ${leisureExpanded ? leisureCats.map(c => {
-          const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
-          return `<div class="sub-ribbon-cat">
-            <div class="ribbon-label">${c.emoji} ${c.label}</div>
-            <div class="sub-ribbon-nums">
-              <span class="sub-spent">${n(s)}</span>
-              ${b ? `<span class="sub-sep">/</span><span class="sub-budget">${n(b)}</span>` : ''}
-              ${b ? `<span class="sub-rem ${r<0?'sn-over':'sn-ok'}">${n(r)}</span>` : ''}
-            </div>
-          </div>`;
-        }).join('') : ''}
+        ${leisureExpanded ? `
+        <table class="leisure-table">
+          <thead><tr><th></th><th>Budget</th><th>Spent</th><th>Left</th></tr></thead>
+          <tbody>${leisureCats.map(c => {
+            const s = spent[c.key]||0; const b = state.budgets[c.key]||0; const r = b-s;
+            return `<tr><td class="lt-cat">${c.emoji} ${c.label}</td><td class="lt-num">${b?n(b):'-'}</td><td class="lt-num">${n(s)}</td><td class="lt-num ${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):'-'}</td></tr>`;
+          }).join('')}
+          <tr class="lt-total"><td class="lt-cat">Total</td><td class="lt-num">${n(leisureBudget)}</td><td class="lt-num">${n(leisureSpent)}</td><td class="lt-num ${(leisureBudget-leisureSpent)<0?'sn-over':'sn-ok'}">${n(leisureBudget-leisureSpent)}</td></tr>
+          </tbody>
+        </table>` : ''}
       </div>`;
 
       return `<div class="ribbon-panel">
