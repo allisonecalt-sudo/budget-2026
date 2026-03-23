@@ -3845,7 +3845,7 @@ function renderYearSnapshot() {
   // Housing: sum all housing budget_items (rent, arnona, etc.) + actual household transactions
   const housingV = (m, f) => {
     const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const hhSpend = f ? biSum(m.id,['household']) : txSum(m.id,['household']);
+    const hhSpend = f ? (budgetV(m.id,['household']) || biSum(m.id,['household'])) : txSum(m.id,['household']);
     return hBi + hhSpend;
   };
   // Recurring: sum all recurring budget_items
@@ -3909,14 +3909,14 @@ function renderYearSnapshot() {
       // Special: compute charity as % of income per month
       const values = months.map(m => {
         const inc = incFor(m);
-        const ch = charityV(m.month_num, m.month_num >= todayMonth);
+        const ch = charityV(m.month_num, m.month_num > todayMonth);
         return inc ? ch / inc : 0;
       });
-      const totalCh = months.reduce((s,m) => s + charityV(m.month_num, m.month_num >= todayMonth), 0);
+      const totalCh = months.reduce((s,m) => s + charityV(m.month_num, m.month_num > todayMonth), 0);
       const totalI = months.reduce((s,m) => s + incFor(m), 0);
       return { row, values, total: totalI ? totalCh/totalI : 0, avg: 0, isPct: true };
     }
-    const values = months.map(m => (row.valFn(m, m.month_num >= todayMonth))||0);
+    const values = months.map(m => (row.valFn(m, m.month_num > todayMonth))||0);
     const total  = values.reduce((s,v)=>s+v,0);
     return { row, values, total, avg: total/12 };
   });
