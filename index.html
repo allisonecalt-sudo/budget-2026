@@ -268,14 +268,18 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .stat-card { padding: .85rem; }
   .income-grid { grid-template-columns: 1fr; }
   .income-input { width: 90px; }
-  /* Ribbon: 4-col grid on mobile — all 7 stats visible in 2 rows */
+  /* Ribbon: clean 2×2 grid on mobile — show 4 key stats */
   .ribbon-panel { position: static !important; overflow-x: visible !important; }
-  .ribbon { display: grid !important; grid-template-columns: repeat(4,1fr) !important; padding: .3rem .5rem !important; min-width: unset !important; gap: 0 !important; }
-  .ribbon-stat { padding: .22rem .25rem !important; border-right: 1px solid var(--border) !important; border-left: none !important; margin: 0 !important; }
-  .ribbon-label { font-size: .51rem !important; letter-spacing: .04em !important; }
-  .ribbon-val { font-size: .78rem !important; }
+  .ribbon { display: grid !important; grid-template-columns: repeat(2,1fr) !important; padding: .4rem .6rem !important; min-width: unset !important; gap: 0 !important; }
+  .ribbon-stat { padding: .3rem .4rem !important; border-right: 1px solid var(--border) !important; border-bottom: 1px solid var(--border) !important; border-left: none !important; margin: 0 !important; }
+  .ribbon-stat:nth-child(even) { border-right: none !important; }
+  .ribbon-hide-mobile { display: none !important; }
+  .ribbon-label { font-size: .55rem !important; letter-spacing: .04em !important; }
+  .ribbon-val { font-size: .85rem !important; }
+  /* Saved stat — remove accent border on mobile, fits in grid */
+  .ribbon-stat[style*="border-left:2px"] { border-left: none !important; padding-left: .4rem !important; margin-left: 0 !important; }
   /* Buttons cell — hide "full view", keep ✕ */
-  .ribbon > div:last-child { margin: 0 !important; padding: .2rem .25rem !important; display: flex !important; align-items: center !important; justify-content: center !important; border-left: 1px solid var(--border) !important; }
+  .ribbon > div:last-child { margin: 0 !important; padding: .2rem .25rem !important; display: flex !important; align-items: center !important; justify-content: center !important; border-left: none !important; grid-column: span 2 !important; border-bottom: none !important; }
   .ribbon > div:last-child .ribbon-toggle:first-child { display: none !important; }
   .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
   .tx-header, .tx-item { grid-template-columns: 70px 1fr 65px 22px; }
@@ -311,15 +315,10 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
 .year-tab-wrap { padding: 1rem 0; }
-.year-compact-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .4rem .7rem; margin-bottom: .75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.05); position: sticky; top: 57px; z-index: 80; }
-.year-compact-stat { font-size: .72rem; color: var(--text); white-space: nowrap; }
-.year-compact-stat strong { font-weight: 700; }
-.year-compact-stat strong.green { color: var(--green); }
-.year-compact-label { font-size: .6rem; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
-.year-compact-sep { color: var(--dim); font-size: .6rem; margin: 0 .15rem; }
-.year-table-wrap { position: relative; }
-.year-table thead { position: sticky; top: 90px; z-index: 5; }
-.year-table thead th { background: var(--surface); }
+.year-summary-row td, .year-summary-row th { background: var(--surface2); font-size: .65rem; color: var(--text); padding: .25rem .5rem; border-bottom: 1px solid var(--border); }
+.year-sum-td { font-size: .65rem; font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.year-sum-cell { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); }
+.year-sum-cell-extra { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); background: var(--gsoft); border-left: 2px solid var(--border); }
 .year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
 .year-table { border-collapse: collapse; width: 100%; font-size: .78rem; }
 .year-table th, .year-table td { padding: .35rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
@@ -1401,11 +1400,11 @@ function renderApp() {
       return `<div class="ribbon-panel">
         <div class="ribbon">
           <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId)?' <span style="color:#b45309;font-size:.55rem;">~EST</span>':''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId)?'color:#d97706;':''}">${isAnyEstimated(state.currentMonthId)?'~':''}${fmt(income)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
+          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
+          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${(income-totalSpent)>=0?'var(--green)':'var(--red)'}">${fmt(income-totalSpent)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
           <div class="ribbon-stat" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</div></div>
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
@@ -1511,7 +1510,7 @@ function renderApp() {
           <div class="income-row"><span class="income-source">Petachya</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['petachya']?'est':'act'}" onclick="toggleIncomeEst('petachya')" title="Toggle estimated/actual">${_est['petachya']?'EST':'ACT'}</button><input class="income-input${_est['petachya']?' is-est':''}" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Clalit</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['clalit']?'est':'act'}" onclick="toggleIncomeEst('clalit')" title="Toggle estimated/actual">${_est['clalit']?'EST':'ACT'}</button><input class="income-input${_est['clalit']?' is-est':''}" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Private (Vivi)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['private']?'est':'act'}" onclick="toggleIncomeEst('private')" title="Toggle estimated/actual">${_est['private']?'EST':'ACT'}</button><input class="income-input${_est['private']?' is-est':''}" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div></div>
-          <div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other']?'est':'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other']?'EST':'ACT'}</button><input class="income-input${_est['other']?' is-est':''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>
+          ${(Number(current.income_other) || 0) > 0 || state.incomeItems.length === 0 ? `<div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other']?'est':'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other']?'EST':'ACT'}</button><input class="income-input${_est['other']?' is-est':''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>` : '<input type="hidden" id="inc-other" value="0">'}
           `; })()}
           ${state.incomeItems.map(item => { const _est2 = getIncomeEst(state.currentMonthId); return `
           <div class="income-row">
@@ -3908,21 +3907,21 @@ function renderYearSnapshot() {
   const totalAdminSpent = months.reduce((s,m) => s + adminSpentV(m.month_num), 0);
   const adminGap = totalAdminBudget - totalAdminSpent;
 
-  // Summary stats rendered as compact frozen rows inside thead (no big cards)
-  const summaryStats = [
-    { label: 'YTD Income', val: fmtY(ytdIncome) },
-    { label: 'Year Projected', val: fmtY(totalAnnInc) },
-    { label: 'Avg/mo', val: fmtY(totalAnnInc/12) },
-    { label: 'Saved So Far', val: fmtY(ytdSavings), cls: 'green' },
-    { label: 'Year Savings', val: fmtY(projSavings) },
-  ];
-  const summaryHtml = '<div class="year-compact-bar">'
-    + summaryStats.map(s => '<span class="year-compact-stat"><span class="year-compact-label">'+s.label+'</span> <strong'+(s.cls?' class="'+s.cls+'"':'')+'>'+s.val+'</strong></span>').join('<span class="year-compact-sep">·</span>')
-    + '<span class="year-compact-sep">|</span>'
-    + '<span class="year-compact-stat">✈️ <strong>'+fmtY(totalTravelBudget)+'</strong> alloc · <span style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(travelGap)+'</strong> '+(travelGap>=0?'rem':'over')+'</span></span>'
-    + '<span class="year-compact-sep">·</span>'
-    + '<span class="year-compact-stat">📋 <strong>'+fmtY(totalAdminBudget)+'</strong> alloc · <span style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(adminGap)+'</strong> '+(adminGap>=0?'rem':'over')+'</span></span>'
-    + '</div>';
+  // Summary as 2 compact rows inside thead (scrolls with table, no separate bar)
+  const summaryHtml = '';
+
+  const sumRow1 = '<tr class="year-summary-row"><td class="year-th-label year-sum-td">YTD '+fmtY(ytdIncome)+' · Proj '+fmtY(totalAnnInc)+' · Avg '+fmtY(totalAnnInc/12)+'</td>'
+    + months.map(m => {
+        const cls = m.month_num===todayMonth ? 'year-sum-cell current-col' : m.month_num>=todayMonth ? 'year-sum-cell future' : 'year-sum-cell';
+        return '<td class="'+cls+'">'+fmtYZ(incFor(m))+'</td>';
+      }).join('')
+    + '<td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc)+'</td><td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc/12)+'</td><td class="year-sum-cell-extra"></td></tr>';
+
+  const sumRow2 = '<tr class="year-summary-row"><td class="year-th-label year-sum-td">'
+    + '✈️ '+fmtY(totalTravelBudget)+' · <span style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(travelGap)+' '+(travelGap>=0?'rem':'over')+'</span>'
+    + ' &nbsp;| 📋 '+fmtY(totalAdminBudget)+' · <span style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(adminGap)+' '+(adminGap>=0?'rem':'over')+'</span>'
+    + ' &nbsp;| 💰 Saved '+fmtY(ytdSavings)+' / '+fmtY(projSavings)
+    + '</td><td colspan="'+(months.length+3)+'" class="year-sum-td" style="border-bottom:2px solid var(--border);"></td></tr>';
 
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
     + months.map(m => {
@@ -3930,7 +3929,7 @@ function renderYearSnapshot() {
         return '<th class="'+cls+'"><a class="ov-month-link" onclick="switchTab(\'budget\');switchMonth(\''+m.id+'\')">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</a></th>';
       }).join('')
     + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
-    + '</tr></thead>';
+    + '</tr>'+sumRow1+sumRow2+'</thead>';
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = n => '\u20aa'+Math.round(n||0).toLocaleString('en-US');
