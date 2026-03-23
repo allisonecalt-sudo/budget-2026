@@ -1398,6 +1398,7 @@ function renderApp() {
           <button class="ptab ${state.activeTab === 'cash' ? 'active' : ''}" onclick="switchTab('cash')">Cash 💰</button>
           <button class="ptab ${state.activeTab === 'year' ? 'active' : ''}" onclick="switchTab('year')">Year 📊</button>
           <button class="ptab ${state.activeTab === 'projections' ? 'active' : ''}" onclick="switchTab('projections')">Projections 🔮</button>
+          <a href="dashboard.html" class="ptab" style="text-decoration:none;">Dashboard ✨</a>
         </div>
       </div>
       <div class="hdr-actions">
@@ -4302,60 +4303,225 @@ function renderProjectionsTab() {
   const yearPctComplete = Math.round(((todayMonth - 1 + todayDay / daysInCurrentMonth) / 12) * 100);
   const budgetPctUsed = projectedYearSpent > 0 ? Math.round((ytdSpent / projectedYearSpent) * 100) : 0;
 
+  // ── Year burndown data (cumulative planned vs actual) ──
+  let cumPlanned = 0, cumActual = 0;
+  const burndownData = months.map(m => {
+    const planned = totalBudgetedFor(m);
+    const isFuture = m.month_num > todayMonth;
+    const isCurrent = m.month_num === todayMonth;
+    const actual = isFuture ? 0 : totalSpentFor(m);
+    cumPlanned += planned;
+    cumActual += actual;
+    return { num: m.month_num, cumPlanned, cumActual, isFuture, isCurrent, planned, actual };
+  });
+  const maxCum = Math.max(cumPlanned, cumActual, 1);
+
+  // ── Waterfall data (current month: income stepping down through categories) ──
+  const wfMonth = curMonth || months[months.length - 1];
+  const wfIncome = incFor(wfMonth);
+  const wfCats = CATEGORIES.filter(c => !c.linkedLine).map(c => ({
+    label: c.label, emoji: c.emoji, amount: catActualFor(wfMonth.id, c.key)
+  })).filter(c => c.amount > 0).sort((a,b) => b.amount - a.amount);
+  const wfSavings = (Number(wfMonth.savings_bank)||0) + (Number(wfMonth.savings_invested)||0);
+  const wfTotal = wfCats.reduce((s,c) => s + c.amount, 0) + wfSavings;
+  const wfRemaining = wfIncome - wfTotal;
+
+  // ── Variance data ──
+  const varianceData = catProj.map(c => {
+    const expectedPct = todayMonth / 12;
+    const expectedSpend = c.yearBudget * expectedPct;
+    const variance = expectedSpend - c.ytdActual;
+    return { ...c, variance, expectedSpend };
+  }).sort((a,b) => a.variance - b.variance);
+
   // ── Build HTML ──
   var h = '<div class="proj-wrap">';
 
-  // Hero cards
+  // ═══ HERO CARDS ═══
   h += '<div class="proj-cards">';
   h += '<div class="proj-card"><div class="proj-card-label">Year-End Income</div>';
   h += '<div class="proj-card-val" style="color:var(--green)">' + fmt(projectedYearIncome) + '</div>';
   h += '<div class="proj-card-sub">' + fmt(ytdIncome) + ' earned so far</div></div>';
-
   h += '<div class="proj-card"><div class="proj-card-label">Year-End Spending</div>';
   h += '<div class="proj-card-val" style="color:var(--text)">' + fmt(projectedYearSpent) + '</div>';
   h += '<div class="proj-card-sub">' + fmt(ytdSpent) + ' spent so far</div></div>';
-
   h += '<div class="proj-card"><div class="proj-card-label">Year-End Savings</div>';
   h += '<div class="proj-card-val" style="color:var(--accent)">' + fmt(projectedYearSavings) + '</div>';
   h += '<div class="proj-card-sub">' + (projectedYearIncome > 0 ? Math.round(projectedYearSavings / projectedYearIncome * 100) + '% of income' : '') + '</div></div>';
-
   var remColor = projectedYearRemaining >= 0 ? 'var(--green)' : 'var(--red)';
   h += '<div class="proj-card"><div class="proj-card-label">Year-End Unallocated</div>';
   h += '<div class="proj-card-val" style="color:' + remColor + '">' + fmt(projectedYearRemaining) + '</div>';
   h += '<div class="proj-card-sub">' + yearPctComplete + '% through the year</div></div>';
   h += '</div>';
 
-  // ── Current month pace ──
-  if (curMonth) {
-    var daysLeft = daysInCurrentMonth - todayDay;
-    // curSpent already includes savings (from totalSpentFor), so remaining = income - spent
-    var curRemaining = curIncome - curSpent;
-    var dailyBudget = daysLeft > 0 ? Math.round(curRemaining / daysLeft) : 0;
-    var paceColor = curMonthProjected > curBudgeted * 1.1 ? 'var(--red)' : curMonthProjected > curBudgeted * 0.9 ? 'var(--amber)' : 'var(--green)';
-
-    h += '<div class="proj-section"><div class="proj-section-title">\u{1F4C5} ' + MNAMES[todayMonth-1] + ' Pace</div>';
-    h += '<div class="proj-chart" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">';
-    // Progress bar
-    h += '<div style="flex:1;min-width:250px;">';
-    h += '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;"><span>Day ' + todayDay + ' of ' + daysInCurrentMonth + '</span><span style="color:var(--muted)">' + daysLeft + ' days left</span></div>';
-    h += '<div class="proj-bar-track" style="height:12px;"><div class="proj-bar-fill" style="width:' + Math.round(todayDay/daysInCurrentMonth*100) + '%;background:var(--accent);"></div></div>';
-    h += '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:.3rem;"><span>Spent: ' + fmt(curSpent) + '</span><span>Budget: ' + fmt(curBudgeted) + '</span></div>';
-    h += '</div>';
-    // Key numbers
-    h += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
-    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Projected</div>';
-    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + paceColor + '">' + fmt(curMonthProjected) + '</div>';
-    h += '<div style="font-size:.55rem;color:var(--dim);">' + fmt(curCommitted) + ' fixed + ' + fmt(curVariableProjected) + ' variable</div></div>';
-    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Daily Budget</div>';
-    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (dailyBudget > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(dailyBudget) + '</div></div>';
-    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Remaining</div>';
-    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (curRemaining > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(curRemaining) + '</div></div>';
-    h += '</div>';
-    h += '</div></div>';
+  // ═══ 1. YEAR BURNDOWN — "Am I sticking to the plan?" ═══
+  h += '<div class="proj-section"><div class="proj-section-title">Am I sticking to the plan?</div>';
+  h += '<div class="proj-chart">';
+  var bdH = 200;
+  var bdW = 100; // percentage based
+  h += '<div style="position:relative;height:' + bdH + 'px;margin:0 .5rem;">';
+  // Draw planned line (dashed)
+  var planPts = burndownData.map(function(d, i) {
+    var x = ((i + 0.5) / 12 * 100);
+    var y = bdH - (d.cumPlanned / maxCum * (bdH - 20));
+    return x + ',' + y;
+  }).join(' ');
+  // Draw actual line (solid, only up to current month)
+  var actPts = burndownData.filter(function(d) { return !d.isFuture; }).map(function(d, i) {
+    var x = ((d.num - 0.5) / 12 * 100);
+    var y = bdH - (d.cumActual / maxCum * (bdH - 20));
+    return x + ',' + y;
+  }).join(' ');
+  h += '<svg width="100%" height="' + bdH + '" viewBox="0 0 100 ' + bdH + '" preserveAspectRatio="none" style="overflow:visible;">';
+  // Grid lines
+  for (var g = 0; g <= 4; g++) {
+    var gy = bdH - (g / 4 * (bdH - 20));
+    h += '<line x1="0" y1="' + gy + '" x2="100" y2="' + gy + '" stroke="var(--border)" stroke-width="0.15" />';
   }
+  // "Now" vertical marker
+  var nowX = (todayMonth - 1 + todayDay / daysInCurrentMonth) / 12 * 100;
+  h += '<line x1="' + nowX + '" y1="0" x2="' + nowX + '" y2="' + bdH + '" stroke="var(--accent)" stroke-width="0.2" stroke-dasharray="0.5,0.5" opacity="0.5" />';
+  // Planned line
+  h += '<polyline points="' + planPts + '" fill="none" stroke="var(--dim)" stroke-width="0.35" stroke-dasharray="0.8,0.4" />';
+  // Actual line
+  if (actPts) h += '<polyline points="' + actPts + '" fill="none" stroke="var(--accent)" stroke-width="0.5" />';
+  // Dots on actual
+  burndownData.filter(function(d) { return !d.isFuture; }).forEach(function(d) {
+    var x = (d.num - 0.5) / 12 * 100;
+    var y = bdH - (d.cumActual / maxCum * (bdH - 20));
+    h += '<circle cx="' + x + '" cy="' + y + '" r="0.8" fill="var(--accent)" />';
+  });
+  h += '</svg>';
+  // Month labels below
+  h += '<div style="display:flex;justify-content:space-around;margin-top:.4rem;">';
+  MNAMES.forEach(function(mn, i) {
+    var style = i + 1 === todayMonth ? 'color:var(--accent);font-weight:700' : i + 1 > todayMonth ? 'color:var(--dim)' : '';
+    h += '<span style="font-size:.55rem;' + style + '">' + mn + '</span>';
+  });
+  h += '</div>';
+  // Legend + gap indicator
+  var gapAmt = burndownData[todayMonth - 1] ? burndownData[todayMonth - 1].cumActual - burndownData[todayMonth - 1].cumPlanned : 0;
+  var gapColor = gapAmt > 0 ? 'var(--red)' : 'var(--green)';
+  var gapLabel = gapAmt > 0 ? 'over plan' : 'under plan';
+  h += '<div style="display:flex;align-items:center;gap:1.5rem;margin-top:.75rem;flex-wrap:wrap;">';
+  h += '<div style="display:flex;align-items:center;gap:.35rem;font-size:.68rem;color:var(--muted);"><span style="display:inline-block;width:20px;border-top:2px dashed var(--dim);"></span> Plan</div>';
+  h += '<div style="display:flex;align-items:center;gap:.35rem;font-size:.68rem;color:var(--muted);"><span style="display:inline-block;width:20px;border-top:2px solid var(--accent);"></span> Actual</div>';
+  h += '<div style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;color:' + gapColor + ';">' + fmt(Math.abs(gapAmt)) + ' ' + gapLabel + '</div>';
+  h += '</div>';
+  h += '</div></div>';
 
-  // ── Monthly income vs spending chart ──
-  h += '<div class="proj-section"><div class="proj-section-title">\u{1F4CA} Monthly Income vs Spending</div>';
+  // ═══ 2. MONEY WATERFALL — "Where does every shekel go?" ═══
+  h += '<div class="proj-section"><div class="proj-section-title">Where does every shekel go? (' + MNAMES[wfMonth.month_num - 1] + ')</div>';
+  h += '<div class="proj-chart">';
+  var wfMax = wfIncome;
+  var wfBarH = 180;
+  var wfItems = [{label: 'Income', amount: wfIncome, type: 'income'}];
+  wfCats.forEach(function(c) { wfItems.push({label: c.emoji + ' ' + c.label, amount: c.amount, type: 'expense'}); });
+  if (wfSavings > 0) wfItems.push({label: '\u{1F3E6} Savings', amount: wfSavings, type: 'savings'});
+  if (wfRemaining !== 0) wfItems.push({label: wfRemaining >= 0 ? '\u2705 Left' : '\u{1F534} Over', amount: Math.abs(wfRemaining), type: wfRemaining >= 0 ? 'remaining' : 'over'});
+  var wfRunning = wfIncome;
+  h += '<div style="display:flex;align-items:flex-end;gap:2px;height:' + wfBarH + 'px;overflow-x:auto;padding-bottom:40px;">';
+  wfItems.forEach(function(item, i) {
+    var barTop, barHeight, color;
+    if (item.type === 'income') {
+      barTop = 0;
+      barHeight = Math.round((item.amount / wfMax) * (wfBarH - 50));
+      color = 'var(--green)';
+    } else if (item.type === 'remaining') {
+      barHeight = Math.round((item.amount / wfMax) * (wfBarH - 50));
+      barTop = wfBarH - 50 - barHeight;
+      color = 'var(--green)';
+    } else if (item.type === 'over') {
+      barHeight = Math.round((item.amount / wfMax) * (wfBarH - 50));
+      barTop = wfBarH - 50 - barHeight;
+      color = 'var(--red)';
+    } else {
+      wfRunning -= item.amount;
+      var topPx = wfBarH - 50 - Math.round((wfRunning + item.amount) / wfMax * (wfBarH - 50));
+      barHeight = Math.round((item.amount / wfMax) * (wfBarH - 50));
+      barTop = topPx;
+      color = item.type === 'savings' ? 'var(--accent)' : 'rgba(192,57,43,.65)';
+    }
+    h += '<div style="flex:1;min-width:40px;max-width:90px;display:flex;flex-direction:column;align-items:center;height:100%;position:relative;">';
+    h += '<div style="position:absolute;top:' + barTop + 'px;width:80%;height:' + Math.max(barHeight, 2) + 'px;background:' + color + ';border-radius:3px;cursor:default;" title="' + item.label + ': ' + fmt(item.amount) + '">';
+    h += '<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-family:\'DM Mono\',monospace;font-size:.6rem;font-weight:600;white-space:nowrap;color:var(--text);">' + fmt(item.amount) + '</div>';
+    h += '</div>';
+    h += '<div style="position:absolute;bottom:0;font-size:.52rem;color:var(--muted);text-align:center;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">' + item.label + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div style="font-size:.62rem;color:var(--dim);margin-top:.3rem;">Income steps down through each expense. ' + (wfRemaining >= 0 ? fmt(wfRemaining) + ' left unspent.' : fmt(Math.abs(wfRemaining)) + ' over income.') + '</div>';
+  h += '</div></div>';
+
+  // ═══ 3. VARIANCE BARS — "Where am I off-plan?" ═══
+  h += '<div class="proj-grid-2">';
+  h += '<div class="proj-section"><div class="proj-section-title">Where am I off-plan?</div>';
+  h += '<div class="proj-chart" style="padding:.75rem 1rem;">';
+  h += '<div style="font-size:.62rem;color:var(--dim);margin-bottom:.5rem;">Bars show difference from expected pace. Right (green) = under budget. Left (red) = over budget.</div>';
+  var maxVar = Math.max(...varianceData.map(function(v) { return Math.abs(v.variance); }), 1);
+  varianceData.forEach(function(v) {
+    if (v.yearBudget === 0) return;
+    var pctOfMax = Math.abs(v.variance) / maxVar * 45;
+    var isOver = v.variance < 0;
+    h += '<div style="display:flex;align-items:center;gap:.4rem;padding:.3rem 0;border-bottom:1px solid rgba(0,0,0,.03);font-size:.72rem;">';
+    h += '<div style="width:20px;text-align:center;font-size:.85rem;">' + v.emoji + '</div>';
+    h += '<div style="width:75px;font-size:.68rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + v.label + '</div>';
+    h += '<div style="flex:1;display:flex;align-items:center;height:18px;position:relative;">';
+    // Center line
+    h += '<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);"></div>';
+    if (isOver) {
+      // Red bar going left from center
+      h += '<div style="position:absolute;right:50%;height:12px;width:' + pctOfMax + '%;background:var(--red);border-radius:3px 0 0 3px;opacity:.7;"></div>';
+    } else {
+      // Green bar going right from center
+      h += '<div style="position:absolute;left:50%;height:12px;width:' + pctOfMax + '%;background:var(--green);border-radius:0 3px 3px 0;opacity:.7;"></div>';
+    }
+    h += '</div>';
+    h += '<div style="width:65px;text-align:right;font-family:\'DM Mono\',monospace;font-size:.68rem;font-weight:600;color:' + (isOver ? 'var(--red)' : 'var(--green)') + ';">' + (isOver ? '+' : '-') + fmt(Math.abs(Math.round(v.variance))) + '</div>';
+    h += '</div>';
+  });
+  h += '</div></div>';
+
+  // ═══ 4. SAVINGS THERMOMETER — "Am I saving enough?" ═══
+  h += '<div class="proj-section"><div class="proj-section-title">Am I saving enough?</div>';
+  h += '<div class="proj-chart" style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;">';
+  // Thermometer
+  var savTarget = projectedYearSavings;
+  var savCurrent = ytdSavings;
+  var savPct = savTarget > 0 ? Math.min(Math.round(savCurrent / savTarget * 100), 100) : 0;
+  var thermH = 200;
+  h += '<div style="display:flex;flex-direction:column;align-items:center;gap:.3rem;">';
+  h += '<div style="font-family:\'DM Mono\',monospace;font-size:.7rem;font-weight:600;color:var(--accent);">' + fmt(savTarget) + '</div>';
+  h += '<div style="width:50px;height:' + thermH + 'px;background:var(--surface3);border-radius:25px;position:relative;overflow:hidden;border:2px solid var(--border);">';
+  h += '<div style="position:absolute;bottom:0;left:0;right:0;height:' + savPct + '%;background:linear-gradient(to top, var(--green), var(--accent));border-radius:0 0 23px 23px;transition:height .5s ease;"></div>';
+  // Marker lines at 25%, 50%, 75%
+  for (var q = 1; q <= 3; q++) {
+    h += '<div style="position:absolute;bottom:' + (q*25) + '%;left:0;right:0;height:1px;background:var(--border);opacity:.5;"></div>';
+  }
+  h += '</div>';
+  h += '<div style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:700;color:var(--green);">' + savPct + '%</div>';
+  h += '<div style="font-size:.6rem;color:var(--dim);">of target</div>';
+  h += '</div>';
+  // Stats beside thermometer
+  h += '<div style="flex:1;min-width:180px;">';
+  var savRows = [
+    {label: 'Saved so far', val: fmt(savCurrent), color: 'var(--green)'},
+    {label: 'Year target', val: fmt(savTarget), color: 'var(--text)'},
+    {label: 'Still needed', val: fmt(savTarget - savCurrent), color: 'var(--muted)'},
+    {label: 'Monthly to hit target', val: futureMonths.length > 0 ? fmt(Math.round((savTarget - savCurrent) / (futureMonths.length + (curMonth ? (daysInCurrentMonth - todayDay) / daysInCurrentMonth : 0)))) : fmt(0), color: 'var(--accent)'},
+  ];
+  if (projectedYearIncome > 0) savRows.push({label: 'Savings rate', val: Math.round(projectedYearSavings / projectedYearIncome * 100) + '%', color: 'var(--accent)'});
+  savRows.forEach(function(r) {
+    h += '<div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid rgba(0,0,0,.04);font-size:.78rem;">';
+    h += '<span style="color:var(--muted);">' + r.label + '</span>';
+    h += '<span style="font-family:\'DM Mono\',monospace;font-weight:600;color:' + r.color + ';">' + r.val + '</span></div>';
+  });
+  h += '</div>';
+  h += '</div></div>';
+  h += '</div>'; // close proj-grid-2
+
+  // ═══ 5. MONTHLY INCOME VS SPENDING — kept but improved ═══
+  h += '<div class="proj-section"><div class="proj-section-title">Monthly income vs spending</div>';
   h += '<div class="proj-chart">';
   h += '<div class="proj-bars-container">';
   monthData.forEach(function(d) {
@@ -4363,7 +4529,6 @@ function renderProjectionsTab() {
     var spH = Math.round((d.spent / maxBar) * 140);
     var opacity = d.isFuture ? '.4' : '1';
     h += '<div class="proj-month-col" style="opacity:' + opacity + '">';
-    // Two bars side by side
     h += '<div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:100%;">';
     h += '<div class="proj-month-bar" style="flex:1;height:' + incH + 'px;background:var(--green);opacity:.6;"><div class="proj-tip">' + MNAMES[d.num-1] + ' income: ' + fmt(d.income) + '</div></div>';
     h += '<div class="proj-month-bar" style="flex:1;height:' + spH + 'px;background:' + (d.isFuture ? 'var(--dim)' : d.spent > d.income ? 'var(--red)' : 'var(--accent)') + ';"><div class="proj-tip">' + MNAMES[d.num-1] + (d.isFuture ? ' budget' : ' spent') + ': ' + fmt(d.spent) + '</div></div>';
@@ -4377,79 +4542,28 @@ function renderProjectionsTab() {
   h += '<div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--dim);"></div>Budgeted (future)</div></div>';
   h += '</div></div>';
 
-  // ── Category projections + Savings side by side ──
-  h += '<div class="proj-grid-2">';
-
-  // Category projections
-  h += '<div class="proj-section"><div class="proj-section-title">\u{1F3AF} Category Year Pace</div>';
-  h += '<div class="proj-chart" style="padding:.75rem 1rem;">';
-  var yearPct = Math.round((todayMonth / 12) * 100);
-  h += '<div style="font-size:.65rem;color:var(--dim);margin-bottom:.75rem;">You\'re ' + yearPct + '% through the year. Categories ahead of that pace are flagged.</div>';
-  catProj.forEach(function(c) {
-    var fillPct = Math.min(c.pct, 120);
-    var fillColor = c.pace === 'over' ? 'var(--red)' : c.pace === 'under' ? 'var(--green)' : 'var(--accent)';
-    var paceLabel = c.pace === 'over' ? 'Ahead' : c.pace === 'under' ? 'Under' : 'On track';
-    var paceStyle = c.pace === 'over' ? 'color:var(--red);font-weight:600' : c.pace === 'under' ? 'color:var(--green)' : 'color:var(--muted)';
-    h += '<div class="proj-bar-row">';
-    h += '<div class="proj-bar-emoji">' + c.emoji + '</div>';
-    h += '<div class="proj-bar-info">';
-    h += '<div class="proj-bar-name"><span>' + c.label + '</span><span style="font-size:.65rem;' + paceStyle + '">' + paceLabel + ' (' + c.pct + '%)</span></div>';
-    h += '<div class="proj-bar-track" style="position:relative;">';
-    h += '<div class="proj-bar-fill" style="width:' + Math.min(fillPct, 100) + '%;background:' + fillColor + ';"></div>';
-    // Year progress marker
-    h += '<div class="proj-bar-budget" style="left:' + yearPct + '%;"></div>';
+  // ═══ 6. CURRENT MONTH PACE ═══
+  if (curMonth) {
+    var daysLeft = daysInCurrentMonth - todayDay;
+    var curRemaining = curIncome - curSpent;
+    var dailyBudget = daysLeft > 0 ? Math.round(curRemaining / daysLeft) : 0;
+    var paceColor = curMonthProjected > curBudgeted * 1.1 ? 'var(--red)' : curMonthProjected > curBudgeted * 0.9 ? 'var(--amber)' : 'var(--green)';
+    h += '<div class="proj-section"><div class="proj-section-title">' + MNAMES[todayMonth-1] + ' pace</div>';
+    h += '<div class="proj-chart" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">';
+    h += '<div style="flex:1;min-width:250px;">';
+    h += '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;"><span>Day ' + todayDay + ' of ' + daysInCurrentMonth + '</span><span style="color:var(--muted)">' + daysLeft + ' days left</span></div>';
+    h += '<div class="proj-bar-track" style="height:12px;"><div class="proj-bar-fill" style="width:' + Math.round(todayDay/daysInCurrentMonth*100) + '%;background:var(--accent);"></div></div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:.3rem;"><span>Spent: ' + fmt(curSpent) + '</span><span>Budget: ' + fmt(curBudgeted) + '</span></div>';
     h += '</div>';
-    h += '<div class="proj-bar-nums"><span>' + fmt(c.ytdActual) + ' spent</span><span>' + fmt(c.yearBudget) + ' year budget</span></div>';
+    h += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Projected</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + paceColor + '">' + fmt(curMonthProjected) + '</div>';
+    h += '<div style="font-size:.55rem;color:var(--dim);">' + fmt(curCommitted) + ' fixed + ' + fmt(curVariableProjected) + ' variable</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Daily Budget</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (dailyBudget > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(dailyBudget) + '</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Remaining</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (curRemaining > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(curRemaining) + '</div></div>';
     h += '</div>';
-    h += '<div class="proj-bar-right">';
-    if (c.yearBudget > 0) {
-      var diff = c.yearBudget - c.ytdActual;
-      h += '<div class="' + (diff < 0 ? 'over' : 'under') + '">' + fmt(Math.abs(diff)) + '</div>';
-      h += '<div style="font-size:.58rem;color:var(--dim)">' + (diff < 0 ? 'over' : 'left') + '</div>';
-    }
-    h += '</div></div>';
-  });
-  h += '</div></div>';
-
-  // Savings trajectory
-  h += '<div class="proj-section"><div class="proj-section-title">\u{1F4B0} Savings Trajectory</div>';
-  h += '<div class="proj-chart">';
-  // Bar chart of cumulative savings
-  h += '<div class="proj-bars-container" style="height:130px;">';
-  savingsTrajectory.forEach(function(s) {
-    var barH = Math.round((s.cumulative / maxCumSavings) * 120);
-    var opacity = s.isFuture ? '.4' : '1';
-    h += '<div class="proj-month-col" style="opacity:' + opacity + '">';
-    h += '<div class="proj-month-bar" style="height:' + barH + 'px;background:var(--accent);"><div class="proj-tip">' + MNAMES[s.num-1] + ': ' + fmt(s.cumulative) + ' total (' + fmt(s.monthly) + '/mo)</div></div>';
-    h += '<div class="proj-month-label">' + MNAMES[s.num-1] + '</div>';
-    h += '</div>';
-  });
-  h += '</div>';
-  // Savings summary
-  h += '<div style="display:flex;gap:1.5rem;margin-top:1rem;flex-wrap:wrap;">';
-  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Year target</span><span class="proj-sav-val">' + fmt(projectedYearSavings) + '</span></div>';
-  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Saved so far</span><span class="proj-sav-val" style="color:var(--green)">' + fmt(ytdSavings) + '</span></div>';
-  var savPct = projectedYearSavings > 0 ? Math.round(ytdSavings / projectedYearSavings * 100) : 0;
-  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Progress</span><span class="proj-sav-val">' + savPct + '%</span></div>';
-  if (avgMonthlyIncome > 0) {
-    var savRate = Math.round(projectedYearSavings / projectedYearIncome * 100);
-    h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Savings rate</span><span class="proj-sav-val">' + savRate + '%</span></div>';
-  }
-  h += '</div>';
-  h += '</div></div>';
-
-  h += '</div>'; // close proj-grid-2
-
-  // ── Monthly averages summary ──
-  if (completedMonths > 0) {
-    h += '<div class="proj-section"><div class="proj-section-title">\u{1F4CB} Monthly Averages (based on ' + completedMonths + ' completed month' + (completedMonths > 1 ? 's' : '') + ')</div>';
-    h += '<div class="proj-cards">';
-    h += '<div class="proj-card"><div class="proj-card-label">Avg Income</div><div class="proj-card-val" style="color:var(--green);font-size:1.2rem;">' + fmt(avgMonthlyIncome) + '</div></div>';
-    h += '<div class="proj-card"><div class="proj-card-label">Avg Spending</div><div class="proj-card-val" style="font-size:1.2rem;">' + fmt(avgMonthlySpend) + '</div></div>';
-    var avgNet = avgMonthlyIncome - avgMonthlySpend;
-    h += '<div class="proj-card"><div class="proj-card-label">Avg Net</div><div class="proj-card-val" style="color:' + (avgNet >= 0 ? 'var(--green)' : 'var(--red)') + ';font-size:1.2rem;">' + fmt(avgNet) + '</div></div>';
-    var avgSav = completedMonths > 0 ? Math.round(ytdSavings / completedMonths) : 0;
-    h += '<div class="proj-card"><div class="proj-card-label">Avg Savings</div><div class="proj-card-val" style="color:var(--accent);font-size:1.2rem;">' + fmt(avgSav) + '</div></div>';
     h += '</div></div>';
   }
 
