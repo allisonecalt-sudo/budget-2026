@@ -321,11 +321,11 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
 .year-tab-wrap { padding: 1rem 0; }
-/* Summary rows in thead */
-.year-summary-row td, .year-summary-row th { background: var(--surface); font-size: .65rem; color: var(--text); padding: .25rem .5rem; border-bottom: 1px solid var(--border); }
-.year-sum-td { font-size: .65rem; font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
-.year-sum-cell { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); }
-.year-sum-cell-extra { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); border-left: 1px solid var(--border); }
+/* Year ribbon above table */
+.year-ribbon { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; padding: .4rem .75rem; margin-bottom: .6rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: .7rem; }
+.yr-stat { white-space: nowrap; }
+.yr-stat strong { font-weight: 700; }
+.yr-sep { color: var(--dim); margin: 0 .1rem; }
 /* Table structure */
 .year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
 .year-table { border-collapse: collapse; width: 100%; font-size: .78rem; }
@@ -3921,21 +3921,20 @@ function renderYearSnapshot() {
   // Format: always show ₪0 instead of dashes
   const fmtYZ = n => '\u20aa'+Math.round(n||0).toLocaleString('en-US');
 
-  // Summary as 2 compact rows inside thead (scrolls with table, no separate bar)
-  const summaryHtml = '';
-
-  const sumRow1 = '<tr class="year-summary-row"><td class="year-th-label year-sum-td">YTD '+fmtY(ytdIncome)+' · Proj '+fmtY(totalAnnInc)+' · Avg '+fmtY(totalAnnInc/12)+'</td>'
-    + months.map(m => {
-        const cls = m.month_num===todayMonth ? 'year-sum-cell current-col' : m.month_num>=todayMonth ? 'year-sum-cell future' : 'year-sum-cell';
-        return '<td class="'+cls+'">'+fmtYZ(incFor(m))+'</td>';
-      }).join('')
-    + '<td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc)+'</td><td class="year-sum-cell-extra">'+fmtYZ(totalAnnInc/12)+'</td><td class="year-sum-cell-extra"></td></tr>';
-
-  const sumRow2 = '<tr class="year-summary-row"><td class="year-th-label year-sum-td">'
-    + '✈️ '+fmtY(totalTravelProjected)+' budget · <span style="color:'+(travelGap>0?'var(--red)':'var(--green)')+'">'+fmtY(travelGap)+' '+(travelGap>0?'gap':'funded')+'</span>'
-    + ' &nbsp;| 📋 '+fmtY(totalAdminProjected)+' budget · <span style="color:'+(adminGap>0?'var(--red)':'var(--green)')+'">'+fmtY(adminGap)+' '+(adminGap>0?'gap':'funded')+'</span>'
-    + ' &nbsp;| 💰 Saved '+fmtY(ytdSavings)+' / '+fmtY(projSavings)
-    + '</td><td colspan="'+(months.length+3)+'" class="year-sum-td" style="border-bottom:2px solid var(--border);"></td></tr>';
+  // Summary ribbon ABOVE the table
+  const summaryHtml = '<div class="year-ribbon">'
+    + '<span class="yr-stat">YTD <strong>'+fmtY(ytdIncome)+'</strong></span>'
+    + '<span class="yr-sep">·</span>'
+    + '<span class="yr-stat">Proj <strong>'+fmtY(totalAnnInc)+'</strong></span>'
+    + '<span class="yr-sep">·</span>'
+    + '<span class="yr-stat">Avg <strong>'+fmtY(totalAnnInc/12)+'</strong>/mo</span>'
+    + '<span class="yr-sep">|</span>'
+    + '<span class="yr-stat">💰 Saved <strong style="color:var(--green)">'+fmtY(ytdSavings)+'</strong> / '+fmtY(projSavings)+'</span>'
+    + '<span class="yr-sep">|</span>'
+    + '<span class="yr-stat">✈️ '+fmtY(totalTravelProjected)+' · <span style="color:'+(travelGap>0?'var(--red)':'var(--green)')+'">'+fmtY(Math.abs(travelGap))+' '+(travelGap>0?'gap':'funded')+'</span></span>'
+    + '<span class="yr-sep">·</span>'
+    + '<span class="yr-stat">📋 '+fmtY(totalAdminProjected)+' · <span style="color:'+(adminGap>0?'var(--red)':'var(--green)')+'">'+fmtY(Math.abs(adminGap))+' '+(adminGap>0?'gap':'funded')+'</span></span>'
+    + '</div>';
 
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
     + months.map(m => {
@@ -3943,12 +3942,15 @@ function renderYearSnapshot() {
         return '<th class="'+cls+'"><a class="ov-month-link" onclick="switchTab(\'budget\');switchMonth(\''+m.id+'\')">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</a></th>';
       }).join('')
     + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
-    + '</tr>'+sumRow1+sumRow2+'</thead>';
+    + '</tr></thead>';
 
   const tbody = computed.map(function(item) {
     const row = item.row, values = item.values, total = item.total, avg = item.avg;
+    // Sections that start collapsed (only show totals, expand for detail)
+    const startCollapsed = ['income','savings','charity'];
     if (row.type==='section') {
-      const chevron = row.collapsible ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;cursor:pointer;">▼</span>' : '';
+      const collapsed = row.collapsible && startCollapsed.includes(row.collapsible);
+      const chevron = row.collapsible ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;cursor:pointer;">'+(collapsed?'▶':'▼')+'</span>' : '';
       const clickAttr = row.collapsible ? ' onclick="yrToggle(\'sec-'+row.collapsible+'\')" style="cursor:pointer;" id="yr-hdr-sec-'+row.collapsible+'"' : '';
       return '<tr class="year-row-section"'+clickAttr+'><td colspan="'+(months.length+4)+'">'+chevron+row.label+'</td></tr>';
     }
@@ -3956,7 +3958,10 @@ function renderYearSnapshot() {
     // Grouped sub-rows (leisure etc): hidden by default
     if (row.group) rowCls += ' yr-grp-'+row.group+' collapsed';
     // Section-grouped rows: collapsible with section header
-    if (row.sectionGroup && !row.stickyInSection) rowCls += ' yr-grp-sec-'+row.sectionGroup;
+    if (row.sectionGroup && !row.stickyInSection) {
+      rowCls += ' yr-grp-sec-'+row.sectionGroup;
+      if (startCollapsed.includes(row.sectionGroup)) rowCls += ' collapsed';
+    }
 
     if (item.isPct) {
       const cells = months.map(function(m,i) {
