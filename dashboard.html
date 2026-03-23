@@ -8,273 +8,145 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #232736;
-  --surface3: #2c3044;
-  --border: #333750;
-  --text: #e8e6f0;
-  --muted: #8b8fa8;
-  --dim: #5d6180;
-  --accent: #6c63ff;
-  --accent2: #a78bfa;
-  --accent-glow: rgba(108,99,255,.15);
-  --green: #34d399;
-  --green-soft: rgba(52,211,153,.12);
-  --amber: #fbbf24;
-  --amber-soft: rgba(251,191,36,.12);
-  --red: #f87171;
-  --red-soft: rgba(248,113,113,.12);
-  --pink: #f472b6;
-  --cyan: #22d3ee;
-  --purple: #a78bfa;
-  --orange: #fb923c;
-  --shadow: 0 4px 24px rgba(0,0,0,.3);
-  --r: 16px;
+  --bg: #fafaf8;
+  --surface: #fff;
+  --surface2: #f5f4f0;
+  --border: #e5e3dc;
+  --text: #1a1915;
+  --muted: #6b6960;
+  --dim: #a09e96;
+  --accent: #2d6a4f;
+  --abright: #40916c;
+  --asoft: rgba(45,106,79,.08);
+  --green: #2d6a4f;
+  --amber: #b5621a;
+  --ambersoft: rgba(181,98,26,.08);
+  --red: #c0392b;
+  --redsoft: rgba(192,57,43,.08);
+  --shadow: 0 1px 3px rgba(26,25,21,.06);
+  --shadowmd: 0 4px 12px rgba(26,25,21,.08);
+  --r: 12px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  font-size: 14px;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-
-/* Animated background */
-body::before {
-  content: '';
-  position: fixed;
-  top: -50%; left: -50%;
-  width: 200%; height: 200%;
-  background: radial-gradient(ellipse at 20% 50%, rgba(108,99,255,.06) 0%, transparent 50%),
-              radial-gradient(ellipse at 80% 20%, rgba(167,139,250,.04) 0%, transparent 50%),
-              radial-gradient(ellipse at 50% 80%, rgba(52,211,153,.03) 0%, transparent 50%);
-  animation: bgShift 20s ease-in-out infinite;
-  z-index: 0;
-  pointer-events: none;
-}
-@keyframes bgShift {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  33% { transform: translate(-2%, 1%) rotate(1deg); }
-  66% { transform: translate(1%, -1%) rotate(-1deg); }
-}
-
-.dashboard { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; -webkit-font-smoothing: antialiased; }
 
 /* Header */
-.dash-header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 2rem; padding: 1rem 0; flex-wrap: wrap; gap: 1rem;
-}
-.dash-title {
-  font-size: 1.8rem; font-weight: 700;
-  background: linear-gradient(135deg, #6c63ff, #a78bfa, #22d3ee);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.dash-subtitle { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
-.month-pill {
-  display: inline-flex; align-items: center; gap: .5rem;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 100px; padding: .5rem 1.25rem;
-  font-size: .85rem; font-weight: 500; color: var(--text);
-}
-.month-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-.back-link { color: var(--accent2); font-size: .8rem; text-decoration: none; opacity: .7; transition: opacity .2s; }
-.back-link:hover { opacity: 1; }
+.header { padding: 1.25rem 2rem .75rem; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.header h1 { font-size: 1.1rem; font-weight: 700; }
+.header-sub { font-size: .75rem; color: var(--dim); }
+.header-link { font-size: .72rem; color: var(--accent); text-decoration: none; margin-left: auto; }
+.header-link:hover { text-decoration: underline; }
 
-/* Big stat cards row */
-.hero-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-.hero-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 1.5rem;
-  position: relative;
-  overflow: hidden;
-  transition: transform .2s, box-shadow .2s;
-}
-.hero-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-.hero-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-}
-.hero-card.green::before { background: linear-gradient(90deg, #34d399, #6ee7b7); }
-.hero-card.amber::before { background: linear-gradient(90deg, #fbbf24, #fb923c); }
-.hero-card.red::before { background: linear-gradient(90deg, #f87171, #f472b6); }
-.hero-card.purple::before { background: linear-gradient(90deg, #a78bfa, #6c63ff); }
-.hero-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: .75rem; }
-.hero-val { font-family: 'DM Mono', monospace; font-size: 1.8rem; font-weight: 600; line-height: 1; }
-.hero-val.green { color: var(--green); }
-.hero-val.amber { color: var(--amber); }
-.hero-val.red { color: var(--red); }
-.hero-sub { font-size: .72rem; color: var(--muted); margin-top: .5rem; }
+/* Grid layout */
+.grid { display: grid; gap: 1rem; padding: 0 2rem 2rem; }
+.grid-hero { grid-template-columns: repeat(4, 1fr); }
+.grid-main { grid-template-columns: 1fr 1fr; }
+.grid-wide { grid-template-columns: 1fr; }
+.grid-triple { grid-template-columns: 1fr 1fr 1fr; }
 
-/* Gauge / meter */
-.gauge-container { margin-top: 1rem; }
-.gauge-bar { height: 8px; background: var(--surface3); border-radius: 100px; overflow: hidden; position: relative; }
-.gauge-fill { height: 100%; border-radius: 100px; transition: width .8s cubic-bezier(.4,0,.2,1); }
-.gauge-label { display: flex; justify-content: space-between; font-size: .65rem; color: var(--dim); margin-top: .35rem; }
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 1.25rem; box-shadow: var(--shadow); }
+.card-sm { padding: 1rem; }
+.card-title { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); margin-bottom: .75rem; }
+.card-val { font-family: 'DM Mono', monospace; font-size: 1.5rem; font-weight: 600; line-height: 1.2; }
+.card-val.sm { font-size: 1.1rem; }
+.card-sub { font-size: .7rem; color: var(--muted); margin-top: .3rem; }
 
-/* Two-column layout */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
-.grid-2.wide-left { grid-template-columns: 1.4fr .6fr; }
+/* Hero metric cards */
+.hero-card { position: relative; overflow: hidden; }
+.hero-card .card-val { margin-bottom: .15rem; }
+.hero-accent { border-left: 3px solid var(--accent); }
+.hero-amber { border-left: 3px solid var(--amber); }
+.hero-green { border-left: 3px solid var(--green); }
+.hero-neutral { border-left: 3px solid var(--border); }
 
-/* Card */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 1.25rem;
-  transition: transform .2s, box-shadow .2s;
-}
-.card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.2); }
-.card-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem; }
-.card-title .icon { font-size: 1rem; }
+/* Progress bars */
+.progress-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: .5rem; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+.progress-fill.green { background: var(--green); }
+.progress-fill.amber { background: var(--amber); }
+.progress-fill.red { background: var(--red); }
+
+/* Spending velocity arc */
+.velocity-wrap { display: flex; align-items: center; gap: 1.5rem; }
+.velocity-gauge { position: relative; width: 140px; height: 80px; flex-shrink: 0; }
+.velocity-text { flex: 1; }
+.velocity-status { font-size: .82rem; font-weight: 600; margin-bottom: .25rem; }
+.velocity-detail { font-size: .7rem; color: var(--muted); line-height: 1.5; }
+
+/* Category grid */
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .5rem; }
+.cat-item { background: var(--surface2); border-radius: 8px; padding: .6rem .75rem; }
+.cat-item.over { background: var(--redsoft); }
+.cat-item.warn { background: var(--ambersoft); }
+.cat-item.ok { background: var(--asoft); }
+.cat-emoji { font-size: .85rem; margin-bottom: .15rem; }
+.cat-name { font-size: .62rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: .3rem; }
+.cat-nums { font-family: 'DM Mono', monospace; font-size: .72rem; font-weight: 500; }
+.cat-rem { font-size: .62rem; margin-top: .2rem; font-weight: 600; }
+.cat-rem.pos { color: var(--green); }
+.cat-rem.neg { color: var(--red); }
+.cat-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: .35rem; overflow: hidden; }
+.cat-bar-fill { height: 100%; border-radius: 2px; }
 
 /* Donut chart */
 .donut-wrap { display: flex; align-items: center; gap: 1.5rem; }
-.donut-svg { flex-shrink: 0; }
-.donut-legend { display: flex; flex-direction: column; gap: .4rem; flex: 1; }
-.legend-item { display: flex; align-items: center; gap: .5rem; font-size: .78rem; }
-.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.legend-val { margin-left: auto; font-family: 'DM Mono', monospace; font-size: .75rem; font-weight: 500; color: var(--muted); }
+.donut-svg { width: 150px; height: 150px; flex-shrink: 0; }
+.donut-legend { flex: 1; }
+.legend-item { display: flex; align-items: center; gap: .5rem; padding: .2rem 0; font-size: .72rem; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legend-val { margin-left: auto; font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--muted); }
 
-/* Category bars */
-.cat-row { display: flex; align-items: center; gap: .75rem; padding: .6rem 0; border-bottom: 1px solid rgba(255,255,255,.04); }
-.cat-row:last-child { border-bottom: none; }
-.cat-emoji { font-size: 1.1rem; width: 28px; text-align: center; flex-shrink: 0; }
-.cat-info { flex: 1; min-width: 0; }
-.cat-name { font-size: .78rem; font-weight: 500; margin-bottom: .35rem; }
-.cat-bar { height: 6px; background: var(--surface3); border-radius: 100px; overflow: hidden; }
-.cat-bar-fill { height: 100%; border-radius: 100px; transition: width .6s cubic-bezier(.4,0,.2,1); }
-.cat-amounts { font-family: 'DM Mono', monospace; font-size: .75rem; font-weight: 500; white-space: nowrap; flex-shrink: 0; text-align: right; width: 90px; }
-.cat-amounts .spent { color: var(--text); }
-.cat-amounts .budget { color: var(--dim); font-size: .65rem; }
+/* Sparkline rows */
+.spark-row { display: flex; align-items: center; gap: .75rem; padding: .4rem 0; border-bottom: 1px solid rgba(0,0,0,.04); }
+.spark-row:last-child { border-bottom: none; }
+.spark-label { font-size: .72rem; font-weight: 500; width: 55px; flex-shrink: 0; }
+.spark-bars { display: flex; align-items: flex-end; gap: 2px; height: 28px; flex: 1; }
+.spark-bar { flex: 1; background: var(--asoft); border-radius: 2px 2px 0 0; min-width: 4px; transition: height .3s ease; position: relative; }
+.spark-bar.current { background: var(--accent); }
+.spark-bar.future { background: var(--surface2); }
+.spark-val { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); width: 52px; text-align: right; flex-shrink: 0; }
 
-/* Spending timeline mini chart */
-.timeline-container { position: relative; height: 140px; display: flex; align-items: flex-end; gap: 2px; padding-top: 20px; }
-.timeline-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
-.timeline-bar {
-  width: 100%; min-width: 4px; border-radius: 4px 4px 0 0;
-  transition: height .6s cubic-bezier(.4,0,.2,1), background .3s;
-  cursor: pointer; position: relative;
-}
-.timeline-bar:hover { filter: brightness(1.3); }
-.timeline-bar .tooltip {
-  display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  background: var(--surface3); border: 1px solid var(--border); border-radius: 8px;
-  padding: .4rem .6rem; font-size: .68rem; white-space: nowrap; z-index: 10;
-  box-shadow: 0 4px 12px rgba(0,0,0,.4);
-}
-.timeline-bar:hover .tooltip { display: block; }
-.timeline-day { font-size: .5rem; color: var(--dim); margin-top: .25rem; text-align: center; }
+/* Month comparison */
+.compare-row { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; }
+.compare-label { font-size: .68rem; color: var(--muted); width: 36px; }
+.compare-bar-wrap { flex: 1; height: 14px; background: var(--surface2); border-radius: 7px; overflow: hidden; position: relative; }
+.compare-bar { height: 100%; border-radius: 7px; transition: width .5s ease; }
+.compare-val { font-family: 'DM Mono', monospace; font-size: .65rem; width: 55px; text-align: right; }
 
-/* Spending comparison bars */
-.compare-track { flex: 1; height: 28px; background: var(--surface3); border-radius: 8px; overflow: hidden; position: relative; }
-.compare-fill { height: 100%; border-radius: 8px; display: flex; align-items: center; padding: 0 .75rem; font-family: 'DM Mono', monospace; font-size: .72rem; font-weight: 600; transition: width .8s cubic-bezier(.4,0,.2,1); }
-
-/* Streak / fun stats */
-.fun-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
-.fun-card {
-  background: var(--surface2); border-radius: 12px; padding: 1rem;
-  text-align: center; transition: transform .2s;
-}
-.fun-card:hover { transform: scale(1.03); }
-.fun-icon { font-size: 1.8rem; margin-bottom: .5rem; }
-.fun-val { font-family: 'DM Mono', monospace; font-size: 1.3rem; font-weight: 700; }
-.fun-label { font-size: .65rem; color: var(--muted); margin-top: .25rem; }
-
-/* Top stores */
-.store-row { display: flex; align-items: center; gap: .5rem; padding: .45rem 0; border-bottom: 1px solid rgba(255,255,255,.04); }
-.store-row:last-child { border-bottom: none; }
-.store-rank { font-family: 'DM Mono', monospace; font-size: .7rem; color: var(--dim); width: 20px; flex-shrink: 0; }
-.store-name { flex: 1; font-size: .78rem; font-weight: 500; }
-.store-amt { font-family: 'DM Mono', monospace; font-size: .78rem; font-weight: 600; }
-.store-count { font-size: .62rem; color: var(--dim); }
-
-/* Savings ring */
-.savings-visual { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
-.savings-info { flex: 1; min-width: 200px; }
-.savings-row { display: flex; justify-content: space-between; padding: .4rem 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: .8rem; }
-.savings-row:last-child { border-bottom: none; }
-.savings-row .label { color: var(--muted); }
-.savings-row .val { font-family: 'DM Mono', monospace; font-weight: 600; }
-
-/* Month navigation */
-.month-nav { display: flex; gap: .3rem; flex-wrap: wrap; margin-bottom: 1.5rem; justify-content: center; }
-.month-btn {
-  padding: .4rem .85rem; border: 1px solid var(--border); background: var(--surface);
-  border-radius: 100px; font-family: 'DM Sans', sans-serif; font-size: .75rem;
-  font-weight: 500; color: var(--muted); cursor: pointer; transition: all .2s;
-}
-.month-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--accent); }
-.month-btn.active {
-  background: var(--accent-glow); color: var(--accent2);
-  border-color: var(--accent); font-weight: 600;
-}
+/* Savings trajectory */
+.savings-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; padding-top: .5rem; }
+.sav-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--asoft); min-width: 0; transition: height .3s ease; }
+.sav-bar.filled { background: var(--accent); }
+.sav-bar-label { text-align: center; font-size: .5rem; color: var(--dim); margin-top: .2rem; }
+.sav-labels { display: flex; gap: 4px; }
+.sav-labels span { flex: 1; text-align: center; font-size: .5rem; color: var(--dim); }
 
 /* Loading */
-.loading {
-  display: flex; align-items: center; justify-content: center; min-height: 60vh;
-  flex-direction: column; gap: 1rem;
-}
-.spinner {
-  width: 48px; height: 48px; border-radius: 50%;
-  border: 3px solid var(--surface3); border-top-color: var(--accent);
-  animation: spin .8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { color: var(--muted); font-size: .85rem; }
+.loading { text-align: center; padding: 4rem; color: var(--dim); font-size: .85rem; }
 
 /* Responsive */
-@media (max-width: 900px) {
-  .hero-stats { grid-template-columns: repeat(2, 1fr); }
-  .grid-2, .grid-2.wide-left { grid-template-columns: 1fr; }
-  .fun-grid { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 768px) {
+  .grid-hero { grid-template-columns: 1fr 1fr; }
+  .grid-main { grid-template-columns: 1fr; }
+  .grid-triple { grid-template-columns: 1fr; }
+  .header { padding: 1rem 1rem .5rem; }
+  .grid { padding: 0 1rem 1rem; }
+  .donut-wrap { flex-direction: column; }
+  .velocity-wrap { flex-direction: column; align-items: stretch; }
+  .velocity-gauge { margin: 0 auto; }
 }
-@media (max-width: 500px) {
-  .hero-stats { grid-template-columns: 1fr; }
-  .dashboard { padding: 1rem; }
-  .hero-val { font-size: 1.4rem; }
-  .dash-title { font-size: 1.3rem; }
-  .fun-grid { grid-template-columns: 1fr 1fr; }
-}
-
-/* Scroll animation */
-.reveal {
-  opacity: 0; transform: translateY(20px);
-  transition: opacity .5s ease, transform .5s ease;
-}
-.reveal.visible { opacity: 1; transform: translateY(0); }
-
-/* Refresh button */
-.refresh-btn {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: .4rem .75rem; color: var(--muted);
-  font-size: .75rem; cursor: pointer; transition: all .2s;
-  display: inline-flex; align-items: center; gap: .35rem;
-}
-.refresh-btn:hover { color: var(--text); border-color: var(--accent); }
-.refresh-btn.spinning svg { animation: spin .8s linear infinite; }
-
 </style>
 </head>
 <body>
 
-<div class="dashboard" id="app">
-  <div class="loading">
-    <div class="spinner"></div>
-    <div class="loading-text">Loading your budget...</div>
-  </div>
+<div class="header">
+  <h1>Budget Dashboard</h1>
+  <span class="header-sub" id="header-month"></span>
+  <a class="header-link" href="https://allisonecalt-sudo.github.io/budget-2026/">Open Full Budget &rarr;</a>
 </div>
+
+<div id="root"><div class="loading">Loading dashboard...</div></div>
 
 <script>
 const SB_URL = 'https://hpiyvnfhoqnnnotrmwaz.supabase.co';
@@ -282,374 +154,346 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 
 const CATEGORIES = [
-  { key: 'groceries',    label: 'Groceries',           emoji: '\u{1F6D2}', color: '#34d399' },
-  { key: 'takeout',      label: 'Take Out',             emoji: '\u{1F961}', color: '#fbbf24' },
-  { key: 'eatingout',    label: 'Eating Out',           emoji: '\u{1F37D}\uFE0F', color: '#fb923c' },
-  { key: 'entertainment',label: 'Entertainment',        emoji: '\u{1F3AC}', color: '#a78bfa' },
-  { key: 'retail',       label: 'Retail & Shopping',    emoji: '\u{1F6CD}\uFE0F', color: '#f472b6' },
-  { key: 'transport',    label: 'Transportation',       emoji: '\u{1F697}', color: '#22d3ee' },
-  { key: 'health',       label: 'Health',               emoji: '\u{1F3E5}', color: '#6ee7b7' },
-  { key: 'therapy',      label: 'Therapy',              emoji: '\u{1F9E0}', color: '#c084fc' },
-  { key: 'housing',      label: 'Housing',              emoji: '\u{1F3E0}', color: '#60a5fa' },
-  { key: 'household',    label: 'Household Items',      emoji: '\u{1F9F9}', color: '#93c5fd' },
-  { key: 'recurring',    label: 'Recurring Payments',   emoji: '\u{1F504}', color: '#94a3b8' },
-  { key: 'charity',      label: 'Charity',              emoji: '\u{1F49A}', color: '#4ade80' },
-  { key: 'travel',       label: 'Travel',               emoji: '\u2708\uFE0F', color: '#38bdf8' },
-  { key: 'admin',        label: 'Admin & Professional', emoji: '\u{1F4CB}', color: '#fca5a5' },
-  { key: 'gifts',        label: 'Gifts',                emoji: '\u{1F381}', color: '#f9a8d4' },
-  { key: 'holiday',      label: 'Holiday',              emoji: '\u{1F389}', color: '#fdba74' },
+  { key: 'groceries', label: 'Groceries', emoji: '🛒' },
+  { key: 'takeout', label: 'Take Out', emoji: '🥡' },
+  { key: 'eatingout', label: 'Eating Out', emoji: '🍽️' },
+  { key: 'entertainment', label: 'Entertainment', emoji: '🎬' },
+  { key: 'retail', label: 'Retail', emoji: '🛍️' },
+  { key: 'transport', label: 'Transport', emoji: '🚗' },
+  { key: 'health', label: 'Health', emoji: '🏥' },
+  { key: 'therapy', label: 'Therapy', emoji: '🧠' },
+  { key: 'housing', label: 'Housing', emoji: '🏠', hasLines: true },
+  { key: 'household', label: 'Household', emoji: '🧹' },
+  { key: 'recurring', label: 'Recurring', emoji: '🔄', hasLines: true },
+  { key: 'charity', label: 'Charity', emoji: '💚', hasTab: true },
+  { key: 'travel', label: 'Travel', emoji: '✈️', hasTab: true },
+  { key: 'admin', label: 'Admin', emoji: '📋', hasTab: true },
+  { key: 'gifts', label: 'Gifts', emoji: '🎁' },
+  { key: 'holiday', label: 'Holiday', emoji: '🎉' },
 ];
 
-const DONUT_GROUPS = [
-  { label: 'Essential', color: '#60a5fa', keys: ['groceries','housing','household','transport','health','therapy'] },
-  { label: 'Leisure',   color: '#f472b6', keys: ['takeout','eatingout','entertainment','retail','holiday','gifts'] },
-  { label: 'Recurring', color: '#94a3b8', keys: ['recurring'] },
-  { label: 'Charity',   color: '#4ade80', keys: ['charity'] },
-  { label: 'Travel',    color: '#38bdf8', keys: ['travel'] },
-  { label: 'Admin',     color: '#fca5a5', keys: ['admin'] },
-  { label: 'Savings',   color: '#a78bfa', keys: ['__savings__'] },
-];
+const DONUT_COLORS = ['#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#d8f3dc','#b5621a','#d4a373','#a09e96','#c9c7c0','#dddbd4'];
 
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmt = n => !n ? '₪0' : '₪' + Math.round(n).toLocaleString('en-US');
+const pct = n => Math.round(n * 100) + '%';
 
-let data = {};
-let currentMonth = null;
+async function loadDashboard() {
+  const now = new Date();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const daysInMonth = new Date(2026, todayMonth, 0).getDate();
 
-async function loadData() {
-  const [mRes, txRes, biRes, budRes] = await Promise.all([
-    sb.from('months').select('*').order('month_num'),
-    sb.from('transactions').select('*'),
-    sb.from('budget_items').select('*'),
-    sb.from('budgets').select('*'),
+  // Load all data
+  const { data: months } = await sb.from('months').select('*').eq('year', 2026).order('month_num');
+  const monthIds = months.map(m => m.id);
+
+  const [txRes, biRes, budgetRes, incRes] = await Promise.all([
+    sb.from('transactions').select('*').in('month_id', monthIds),
+    sb.from('budget_items').select('*').in('month_id', monthIds),
+    sb.from('budgets').select('*').in('month_id', monthIds),
+    sb.from('income_items').select('*').in('month_id', monthIds),
   ]);
-  data.months = mRes.data || [];
-  data.transactions = txRes.data || [];
-  data.budgetItems = biRes.data || [];
-  data.budgets = budRes.data || [];
 
-  // Default to current month
-  const now = new Date().getMonth() + 1;
-  currentMonth = data.months.find(m => m.month_num === now) || data.months[data.months.length - 1];
-  render();
-}
+  const txns = txRes.data || [];
+  const budgetItems = biRes.data || [];
+  const allBudgets = budgetRes.data || [];
+  const incomeItems = incRes.data || [];
 
-function fmt(n) { return '\u20aa' + Math.round(n).toLocaleString('en-US'); }
-function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
-
-function txnSum(monthId, cats) {
-  return data.transactions.filter(t => t.month_id === monthId && cats.includes(t.category))
-    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
-}
-
-function budgetFor(monthId, cat) {
-  const items = data.budgetItems.filter(b => b.month_id === monthId && b.category === cat);
-  if (items.length) return items.reduce((s, b) => s + (Number(b.amount) || 0), 0);
-  const bud = data.budgets.find(b => b.month_id === monthId && b.category === cat);
-  return bud ? Number(bud.amount) || 0 : 0;
-}
-
-function getMonthIncome(m) {
-  return (Number(m.income_petachya) || 0) + (Number(m.income_clalit) || 0) +
-         (Number(m.income_private) || 0) + (Number(m.income_other) || 0);
-}
-
-function getMonthSpent(m) {
-  return data.transactions.filter(t => t.month_id === m.id)
-    .reduce((s, t) => s + (Number(t.amount) || 0), 0);
-}
-
-function getMonthBudgeted(m) {
-  return CATEGORIES.reduce((sum, c) => sum + budgetFor(m.id, c.key), 0);
-}
-
-function getSavings(m) {
-  return (Number(m.savings_bank) || 0) + (Number(m.savings_invested) || 0);
-}
-
-function getDailySpending(m) {
-  const txns = data.transactions.filter(t => t.month_id === m.id);
-  const days = {};
-  txns.forEach(t => {
-    const d = t.date || (t.created_at ? t.created_at.slice(0, 10) : null);
-    if (d) { days[d] = (days[d] || 0) + (Number(t.amount) || 0); }
-  });
-  return days;
-}
-
-function getTopStores(m) {
-  const txns = data.transactions.filter(t => t.month_id === m.id && t.store);
-  const stores = {};
-  txns.forEach(t => {
-    const name = t.store.trim();
-    if (!stores[name]) stores[name] = { total: 0, count: 0 };
-    stores[name].total += Number(t.amount) || 0;
-    stores[name].count++;
-  });
-  return Object.entries(stores)
-    .map(([name, d]) => ({ name, ...d }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 7);
-}
-
-function donutSVG(segments, size) {
-  size = size || 140;
-  const cx = size / 2, cy = size / 2, r = size / 2 - 12;
-  const circ = 2 * Math.PI * r;
-  const total = segments.reduce((s, seg) => s + seg.value, 0);
-  if (!total) return '<svg width="' + size + '" height="' + size + '"></svg>';
-
-  let offset = 0;
-  let paths = '';
-  segments.forEach(function(seg) {
-    const pctVal = seg.value / total;
-    const len = pctVal * circ;
-    const gap = 3;
-    paths += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-dasharray="' + Math.max(0, len - gap) + ' ' + (circ - len + gap) + '" stroke-dashoffset="' + (-offset) + '" stroke-linecap="round" style="transition: stroke-dasharray .8s ease, stroke-dashoffset .8s ease;" />';
-    offset += len;
-  });
-
-  return '<svg class="donut-svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="transform: rotate(-90deg);"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--surface3)" stroke-width="18" />' + paths + '</svg>';
-}
-
-function ringSVG(pctVal, color, size) {
-  size = size || 100;
-  const cx = size / 2, cy = size / 2, r = size / 2 - 10;
-  const circ = 2 * Math.PI * r;
-  const filled = (Math.min(pctVal, 100) / 100) * circ;
-  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" style="transform: rotate(-90deg);"><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--surface3)" stroke-width="10" /><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="10" stroke-dasharray="' + filled + ' ' + (circ - filled) + '" stroke-linecap="round" style="transition: stroke-dasharray 1s ease;" /></svg>';
-}
-
-function render() {
-  const m = currentMonth;
-  const income = getMonthIncome(m);
-  const spent = getMonthSpent(m);
-  const budgeted = getMonthBudgeted(m);
-  const savings = getSavings(m);
-  const remaining = income - spent - savings;
-  const budgetUsed = budgeted ? pct(spent, budgeted) : 0;
-  const dailySpending = getDailySpending(m);
-  const topStores = getTopStores(m);
-
-  const daysInMonth = new Date(2026, m.month_num, 0).getDate();
-  const today = new Date();
-  const isCurrentMonth = today.getMonth() + 1 === m.month_num;
-  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
-  const daysLeft = daysInMonth - dayOfMonth;
-
-  const dailyBudget = daysLeft > 0 ? Math.round((income - spent - savings) / daysLeft) : 0;
-
-  // Donut data
-  const donutData = DONUT_GROUPS.map(function(g) {
-    const val = g.keys[0] === '__savings__' ? savings :
-      g.keys.reduce(function(s, k) { return s + txnSum(m.id, [k]); }, 0);
-    return { label: g.label, value: val, color: g.color };
-  }).filter(function(d) { return d.value > 0; });
-
-  // Category data
-  const catData = CATEGORIES.map(function(c) {
-    return { key: c.key, label: c.label, emoji: c.emoji, color: c.color, spent: txnSum(m.id, [c.key]), budget: budgetFor(m.id, c.key) };
-  }).filter(function(c) { return c.spent > 0 || c.budget > 0; }).sort(function(a, b) { return b.spent - a.spent; });
-
-  // Timeline
-  const maxDaily = Math.max.apply(null, Object.values(dailySpending).concat([1]));
-  const allDays = [];
-  for (var d = 1; d <= daysInMonth; d++) {
-    var dateStr = '2026-' + String(m.month_num).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    allDays.push({ day: d, amount: dailySpending[dateStr] || 0, date: dateStr });
-  }
-
-  // Fun stats
-  var streak = 0;
-  for (var i = allDays.length - 1; i >= 0; i--) {
-    if (allDays[i].day > dayOfMonth) continue;
-    if (allDays[i].amount === 0) streak++;
-    else break;
-  }
-  var spendingDays = allDays.filter(function(dd) { return dd.amount > 0 && dd.day <= dayOfMonth; }).length;
-  var avgDailySpend = dayOfMonth > 0 ? Math.round(spent / dayOfMonth) : 0;
-
-  var biggestDay = { day: 0, amount: 0 };
-  allDays.forEach(function(dd) { if (dd.amount > biggestDay.amount) biggestDay = dd; });
-
-  // Month comparison
-  var monthCompare = data.months.map(function(mo) {
-    return { month: mo.month_num, income: getMonthIncome(mo), spent: getMonthSpent(mo), savings: getSavings(mo) };
-  }).filter(function(mc) { return mc.income > 0 || mc.spent > 0; });
-
-  var html = '';
+  const current = months.find(m => m.month_num === todayMonth);
+  if (!current) return;
 
   // Header
-  html += '<div class="dash-header">';
-  html += '<div><div class="dash-title">Budget Dashboard</div><div class="dash-subtitle">Your money at a glance</div></div>';
-  html += '<div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">';
-  html += '<a href="index.html" class="back-link">&larr; Back to Budget</a>';
-  html += '<button class="refresh-btn" onclick="refreshData(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>';
-  html += '<div class="month-pill"><div class="dot"></div>' + MONTH_NAMES[m.month_num - 1] + ' 2026</div>';
-  html += '</div></div>';
+  document.getElementById('header-month').textContent = current.month_name + ' 2026 · Day ' + todayDay + ' of ' + daysInMonth;
 
-  // Month nav
-  html += '<div class="month-nav">';
-  data.months.forEach(function(mo) {
-    html += '<button class="month-btn ' + (mo.id === m.id ? 'active' : '') + '" onclick="switchMonth(' + mo.month_num + ')">' + MONTH_NAMES[mo.month_num - 1] + '</button>';
+  // Budget map
+  const budgetMap = {};
+  allBudgets.forEach(b => { if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {}; budgetMap[b.month_id][b.category] = b.amount; });
+
+  // Helper functions
+  const incFor = m => (Number(m.income_petachya)||0) + (Number(m.income_clalit)||0) + (Number(m.income_private)||0) + (Number(m.income_other)||0) + incomeItems.filter(i => i.month_id === m.id).reduce((s,i) => s + (Number(i.amount)||0), 0);
+
+  const txSum = (mid, cats) => txns.filter(t => t.month_id === mid && cats.includes(t.category)).reduce((s,t) => s + (Number(t.amount)||0), 0);
+  const biSum = (mid, cats) => budgetItems.filter(b => b.month_id === mid && cats.includes(b.category)).reduce((s,b) => s + (Number(b.amount)||0), 0);
+
+  const catBudget = (mid, catKey) => {
+    const fromItems = budgetItems.filter(b => b.month_id === mid && b.category === catKey);
+    if (fromItems.length) return fromItems.reduce((s,b) => s + (Number(b.amount)||0), 0);
+    return budgetMap[mid]?.[catKey] || 0;
+  };
+
+  // Current month data
+  const income = incFor(current);
+  const catData = CATEGORIES.map(c => {
+    const spent = c.hasTab ? 0 : txSum(current.id, [c.key]);
+    const budget = catBudget(current.id, c.key);
+    const tabBudget = c.hasTab ? (budgetMap[current.id]?.[c.key] || 0) : 0;
+    return { ...c, spent, budget: c.hasTab ? tabBudget : budget, remaining: (c.hasTab ? tabBudget : budget) - spent };
   });
-  html += '</div>';
 
-  // Hero stats
-  html += '<div class="hero-stats reveal">';
-  // Income
-  html += '<div class="hero-card green"><div class="hero-label">Income</div>';
-  html += '<div class="hero-val green">' + fmt(income) + '</div>';
-  var incomeSources = [];
-  if (m.income_petachya) incomeSources.push('Petachya');
-  if (m.income_clalit) incomeSources.push('Clalit');
-  if (m.income_private) incomeSources.push('Private');
-  html += '<div class="hero-sub">' + (incomeSources.length ? incomeSources.join(' + ') : 'No income yet') + '</div></div>';
-  // Spent
-  var spentClass = budgetUsed > 90 ? 'red' : budgetUsed > 70 ? 'amber' : 'purple';
-  html += '<div class="hero-card ' + spentClass + '"><div class="hero-label">Spent</div>';
-  html += '<div class="hero-val ' + (budgetUsed > 90 ? 'red' : budgetUsed > 70 ? 'amber' : '') + '">' + fmt(spent) + '</div>';
-  html += '<div class="gauge-container"><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(budgetUsed, 100) + '%;background:' + (budgetUsed > 90 ? 'var(--red)' : budgetUsed > 70 ? 'var(--amber)' : 'var(--accent)') + '"></div></div>';
-  html += '<div class="gauge-label"><span>' + budgetUsed + '% of budget</span><span>' + fmt(budgeted) + '</span></div></div></div>';
-  // Remaining
-  html += '<div class="hero-card ' + (remaining > 0 ? 'green' : 'red') + '"><div class="hero-label">Remaining</div>';
-  html += '<div class="hero-val ' + (remaining > 0 ? 'green' : 'red') + '">' + fmt(remaining) + '</div>';
-  html += '<div class="hero-sub">' + (daysLeft > 0 ? fmt(dailyBudget) + '/day for ' + daysLeft + ' days' : 'Month complete') + '</div></div>';
-  // Saved
-  html += '<div class="hero-card purple"><div class="hero-label">Saved</div>';
-  html += '<div class="hero-val" style="color:var(--accent2)">' + fmt(savings) + '</div>';
-  html += '<div class="hero-sub">' + (income ? Math.round(savings / income * 100) + '% of income' : '') + '</div></div>';
-  html += '</div>';
+  const totalBudgeted = catData.reduce((s,c) => s + c.budget, 0) + (Number(current.savings_bank)||0) + (Number(current.savings_invested)||0);
+  const totalSpent = catData.reduce((s,c) => s + (c.hasTab ? c.budget : c.spent), 0) + (Number(current.savings_bank)||0) + (Number(current.savings_invested)||0);
+  const remaining = income - totalSpent;
+  const savings = (Number(current.savings_bank)||0) + (Number(current.savings_invested)||0);
+  const savingsRate = income ? savings / income : 0;
 
-  // Donut + Category breakdown
-  html += '<div class="grid-2 wide-left reveal">';
-  // Category bars
-  html += '<div class="card"><div class="card-title"><span class="icon">\u{1F4CA}</span> Category Breakdown</div>';
-  catData.forEach(function(c) {
-    var p = c.budget ? Math.min(Math.round(c.spent / c.budget * 100), 100) : (c.spent > 0 ? 100 : 0);
-    var barColor = p > 90 ? 'var(--red)' : p > 70 ? 'var(--amber)' : c.color;
-    html += '<div class="cat-row"><div class="cat-emoji">' + c.emoji + '</div>';
-    html += '<div class="cat-info"><div class="cat-name">' + c.label + '</div>';
-    html += '<div class="cat-bar"><div class="cat-bar-fill" style="width:' + p + '%;background:' + barColor + '"></div></div></div>';
-    html += '<div class="cat-amounts"><div class="spent">' + fmt(c.spent) + '</div>';
-    html += (c.budget ? '<div class="budget">of ' + fmt(c.budget) + '</div>' : '') + '</div></div>';
+  // Spending velocity
+  const spendableCategories = CATEGORIES.filter(c => !c.hasTab && !c.hasLines);
+  const spendableBudget = spendableCategories.reduce((s,c) => s + catBudget(current.id, c.key), 0);
+  const spendableSpent = spendableCategories.reduce((s,c) => s + txSum(current.id, [c.key]), 0);
+  const dayPct = todayDay / daysInMonth;
+  const spentPct = spendableBudget ? spendableSpent / spendableBudget : 0;
+  const pace = dayPct > 0 ? spentPct / dayPct : 0;
+  let paceStatus, paceColor, paceLabel;
+  if (pace <= 0.9) { paceStatus = 'Under pace'; paceColor = 'var(--green)'; paceLabel = 'You\'re spending slower than your budget allows.'; }
+  else if (pace <= 1.1) { paceStatus = 'On track'; paceColor = 'var(--green)'; paceLabel = 'Spending is right on target.'; }
+  else if (pace <= 1.3) { paceStatus = 'Slightly ahead'; paceColor = 'var(--amber)'; paceLabel = 'Spending a bit faster than budget pace.'; }
+  else { paceStatus = 'Over pace'; paceColor = 'var(--red)'; paceLabel = 'At this rate, you\'ll exceed your budget.'; }
+
+  const projected = spendableBudget ? Math.round(spendableSpent / dayPct) : 0;
+  const projDiff = projected - spendableBudget;
+
+  // YTD
+  const pastMonths = months.filter(m => m.month_num <= todayMonth);
+  const ytdIncome = pastMonths.reduce((s,m) => s + incFor(m), 0);
+  const ytdSavings = pastMonths.reduce((s,m) => s + (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0), 0);
+  const yearIncome = months.reduce((s,m) => s + incFor(m), 0);
+  const yearSavings = months.reduce((s,m) => s + (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0), 0);
+
+  // Alerts
+  const overBudget = catData.filter(c => c.budget > 0 && c.spent > c.budget);
+  const nearLimit = catData.filter(c => c.budget > 0 && c.spent > c.budget * 0.85 && c.spent <= c.budget);
+  const alertCount = overBudget.length + nearLimit.length;
+
+  // Monthly spending comparison (last 3 months)
+  const compareMonths = pastMonths.slice(-3);
+  const compareData = compareMonths.map(m => {
+    const sp = CATEGORIES.filter(c => !c.hasTab).reduce((s,c) => s + txSum(m.id, [c.key]), 0);
+    const inc = incFor(m);
+    return { month: m.month_name.slice(0,3), spent: sp, income: inc };
   });
-  html += '</div>';
-  // Donut
-  html += '<div class="card"><div class="card-title"><span class="icon">\u{1F369}</span> Where It Goes</div>';
-  html += '<div class="donut-wrap">' + donutSVG(donutData);
-  html += '<div class="donut-legend">';
-  donutData.forEach(function(dd) {
-    html += '<div class="legend-item"><div class="legend-dot" style="background:' + dd.color + '"></div>' + dd.label + '<span class="legend-val">' + fmt(dd.value) + '</span></div>';
-  });
-  html += '</div></div></div></div>';
+  const compareMax = Math.max(...compareData.map(d => Math.max(d.spent, d.income)), 1);
 
-  // Daily timeline + Fun stats
-  html += '<div class="grid-2 reveal">';
-  // Timeline
-  html += '<div class="card"><div class="card-title"><span class="icon">\u{1F4C8}</span> Daily Spending</div>';
-  html += '<div class="timeline-container">';
-  allDays.forEach(function(dd) {
-    var h = dd.amount ? Math.max((dd.amount / maxDaily) * 110, 4) : 0;
-    var isPast = dd.day <= dayOfMonth;
-    var isToday = isCurrentMonth && dd.day === dayOfMonth;
-    var bg = isToday ? 'var(--accent)' : dd.amount > maxDaily * .7 ? 'var(--red)' : dd.amount > maxDaily * .4 ? 'var(--amber)' : 'var(--green)';
-    html += '<div class="timeline-bar-wrap"><div class="timeline-bar" style="height:' + h + 'px;background:' + (isPast ? bg : 'var(--surface3)') + ';opacity:' + (isPast ? 1 : .3) + '">';
-    if (dd.amount) html += '<div class="tooltip">' + dd.day + '/' + m.month_num + ' \u2014 ' + fmt(dd.amount) + '</div>';
-    html += '</div>';
-    if (dd.day % 5 === 1 || dd.day === daysInMonth) html += '<div class="timeline-day">' + dd.day + '</div>';
-    html += '</div>';
-  });
-  html += '</div></div>';
+  // Donut: top categories by spending this month
+  const donutData = catData
+    .filter(c => c.spent > 0 && !c.hasTab)
+    .sort((a,b) => b.spent - a.spent)
+    .slice(0, 8);
+  const donutTotal = donutData.reduce((s,c) => s + c.spent, 0);
 
-  // Fun stats
-  html += '<div class="card"><div class="card-title"><span class="icon">\u2728</span> Fun Stats</div>';
-  html += '<div class="fun-grid">';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F525}</div><div class="fun-val">' + spendingDays + '</div><div class="fun-label">Spending Days</div></div>';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F4B0}</div><div class="fun-val">' + fmt(avgDailySpend) + '</div><div class="fun-label">Avg / Day</div></div>';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F4A5}</div><div class="fun-val">' + fmt(biggestDay.amount) + '</div><div class="fun-label">Biggest Day (' + biggestDay.day + '/' + m.month_num + ')</div></div>';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F3EA}</div><div class="fun-val">' + (topStores.length > 0 ? topStores[0].name.slice(0, 10) : '\u2014') + '</div><div class="fun-label">#1 Store</div></div>';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F6D2}</div><div class="fun-val">' + data.transactions.filter(function(t) { return t.month_id === m.id; }).length + '</div><div class="fun-label">Transactions</div></div>';
-  html += '<div class="fun-card"><div class="fun-icon">\u{1F634}</div><div class="fun-val">' + streak + '</div><div class="fun-label">No-Spend Streak</div></div>';
-  html += '</div></div></div>';
+  // Savings trajectory
+  const savData = months.map(m => ({
+    month: m.month_name.slice(0,3),
+    amount: (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0),
+    past: m.month_num <= todayMonth
+  }));
+  const savMax = Math.max(...savData.map(d => d.amount), 1);
 
-  // Income vs Spending + Top Stores
-  html += '<div class="grid-2 reveal">';
-  // Income vs Spending
-  html += '<div class="card"><div class="card-title"><span class="icon">\u2694\uFE0F</span> Income vs Spending</div>';
-  var maxCompare = 1;
-  monthCompare.forEach(function(mc) { maxCompare = Math.max(maxCompare, mc.income, mc.spent + mc.savings); });
-  monthCompare.forEach(function(mc) {
-    var incW = Math.round(mc.income / maxCompare * 100);
-    var spentW = Math.round(mc.spent / maxCompare * 100);
-    var savW = Math.round(mc.savings / maxCompare * 100);
-    var isCur = mc.month === m.month_num;
-    html += '<div style="margin-bottom:.5rem;' + (isCur ? 'opacity:1' : 'opacity:.5') + '">';
-    html += '<div style="font-size:.68rem;font-weight:600;margin-bottom:.3rem;color:' + (isCur ? 'var(--accent2)' : 'var(--muted)') + '">' + MONTH_NAMES[mc.month - 1] + '</div>';
-    html += '<div class="compare-track"><div class="compare-fill" style="width:' + incW + '%;background:linear-gradient(90deg,rgba(52,211,153,.3),rgba(52,211,153,.15));"><span style="color:var(--green);font-size:.65rem">' + fmt(mc.income) + '</span></div></div>';
-    html += '<div style="display:flex;gap:4px;margin-top:3px;">';
-    html += '<div style="height:12px;border-radius:4px;background:var(--red);opacity:.6;width:' + spentW + '%;transition:width .6s ease;"></div>';
-    html += '<div style="height:12px;border-radius:4px;background:var(--accent);opacity:.5;width:' + savW + '%;transition:width .6s ease;"></div>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:1rem;font-size:.58rem;color:var(--dim);margin-top:2px;"><span>Spent: ' + fmt(mc.spent) + '</span><span>Saved: ' + fmt(mc.savings) + '</span></div></div>';
-  });
-  html += '</div>';
-
-  // Top stores
-  html += '<div class="card"><div class="card-title"><span class="icon">\u{1F3EA}</span> Top Stores</div>';
-  if (topStores.length > 0) {
-    topStores.forEach(function(s, i) {
-      html += '<div class="store-row"><div class="store-rank">' + (i + 1) + '</div>';
-      html += '<div class="store-name">' + s.name + '</div>';
-      html += '<div style="text-align:right"><div class="store-amt">' + fmt(s.total) + '</div>';
-      html += '<div class="store-count">' + s.count + ' visit' + (s.count > 1 ? 's' : '') + '</div></div></div>';
+  // Monthly spending sparkline per category (top 5)
+  const sparkCats = ['groceries','housing','transport','health','recurring'];
+  const sparkData = sparkCats.map(catKey => {
+    const cat = CATEGORIES.find(c => c.key === catKey);
+    const vals = months.map(m => {
+      if (cat.hasLines) return biSum(m.id, [catKey]);
+      return txSum(m.id, [catKey]);
     });
-  } else {
-    html += '<div style="text-align:center;color:var(--dim);padding:2rem;">No store data yet</div>';
-  }
-  html += '</div></div>';
-
-  // Savings visual
-  html += '<div class="card reveal" style="margin-bottom:1.5rem;">';
-  html += '<div class="card-title"><span class="icon">\u{1F3E6}</span> Savings Breakdown</div>';
-  html += '<div class="savings-visual">';
-  html += ringSVG(income ? Math.round(savings / income * 100) : 0, 'var(--accent2)', 120);
-  html += '<div style="text-align:center;"><div style="font-family:\'DM Mono\',monospace;font-size:1.6rem;font-weight:700;color:var(--accent2)">' + (income ? Math.round(savings / income * 100) : 0) + '%</div>';
-  html += '<div style="font-size:.7rem;color:var(--muted)">of income saved</div></div>';
-  html += '<div class="savings-info">';
-  html += '<div class="savings-row"><span class="label">To Bank</span><span class="val" style="color:var(--green)">' + fmt(Number(m.savings_bank) || 0) + '</span></div>';
-  html += '<div class="savings-row"><span class="label">Invested</span><span class="val" style="color:var(--accent2)">' + fmt(Number(m.savings_invested) || 0) + '</span></div>';
-  html += '<div class="savings-row"><span class="label">Total Savings</span><span class="val" style="color:var(--text);font-weight:700">' + fmt(savings) + '</span></div>';
-  html += '<div class="savings-row"><span class="label">After Spend + Save</span><span class="val" style="color:' + (remaining > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(remaining) + '</span></div>';
-  html += '</div></div></div>';
-
-  // Footer
-  html += '<div style="text-align:center;padding:2rem 0;color:var(--dim);font-size:.7rem;">Budget Dashboard 2026 &mdash; Data refreshed live from Supabase</div>';
-
-  document.getElementById('app').innerHTML = html;
-
-  // Scroll reveal animation
-  requestAnimationFrame(function() {
-    var reveals = document.querySelectorAll('.reveal');
-    for (var r = 0; r < reveals.length; r++) {
-      (function(el, idx) {
-        setTimeout(function() { el.classList.add('visible'); }, idx * 100);
-      })(reveals[r], r);
-    }
+    const max = Math.max(...vals, 1);
+    return { label: cat.emoji, vals, max, current: catKey === 'recurring' ? biSum(current.id, [catKey]) : txSum(current.id, [catKey]) };
   });
+
+  // Build SVG donut
+  let donutSvg = '';
+  if (donutData.length) {
+    let cumAngle = -90;
+    const cx = 75, cy = 75, r = 55, r2 = 35;
+    donutData.forEach((c, i) => {
+      const angle = (c.spent / donutTotal) * 360;
+      const startRad = cumAngle * Math.PI / 180;
+      const endRad = (cumAngle + angle) * Math.PI / 180;
+      const largeArc = angle > 180 ? 1 : 0;
+      const x1 = cx + r * Math.cos(startRad), y1 = cy + r * Math.sin(startRad);
+      const x2 = cx + r * Math.cos(endRad), y2 = cy + r * Math.sin(endRad);
+      const x3 = cx + r2 * Math.cos(endRad), y3 = cy + r2 * Math.sin(endRad);
+      const x4 = cx + r2 * Math.cos(startRad), y4 = cy + r2 * Math.sin(startRad);
+      donutSvg += `<path d="M${x1},${y1} A${r},${r} 0 ${largeArc},1 ${x2},${y2} L${x3},${y3} A${r2},${r2} 0 ${largeArc},0 ${x4},${y4} Z" fill="${DONUT_COLORS[i % DONUT_COLORS.length]}" />`;
+      cumAngle += angle;
+    });
+    donutSvg = `<svg class="donut-svg" viewBox="0 0 150 150">${donutSvg}<text x="75" y="72" text-anchor="middle" font-family="DM Mono" font-size="13" font-weight="600" fill="var(--text)">${fmt(donutTotal)}</text><text x="75" y="86" text-anchor="middle" font-family="DM Sans" font-size="8" fill="var(--dim)">total spent</text></svg>`;
+  }
+
+  // Build velocity gauge SVG
+  const gaugeAngle = Math.min(spentPct, 1.5) * 180;
+  const idealAngle = dayPct * 180;
+  const arcPath = (angle, radius) => {
+    const rad = (angle - 180) * Math.PI / 180;
+    const x = 70 + radius * Math.cos(rad);
+    const y = 75 + radius * Math.sin(rad);
+    const large = angle > 180 ? 1 : 0;
+    return `M${70 - radius},75 A${radius},${radius} 0 ${large},1 ${x},${y}`;
+  };
+  const gaugeSvg = `<svg viewBox="0 0 140 85" style="width:100%;height:100%;">
+    <path d="${arcPath(180, 50)}" fill="none" stroke="var(--surface2)" stroke-width="10" stroke-linecap="round"/>
+    <path d="${arcPath(gaugeAngle, 50)}" fill="none" stroke="${paceColor}" stroke-width="10" stroke-linecap="round"/>
+    <line x1="${70 + 55 * Math.cos((idealAngle - 180) * Math.PI / 180)}" y1="${75 + 55 * Math.sin((idealAngle - 180) * Math.PI / 180)}" x2="${70 + 42 * Math.cos((idealAngle - 180) * Math.PI / 180)}" y2="${75 + 42 * Math.sin((idealAngle - 180) * Math.PI / 180)}" stroke="var(--dim)" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+    <text x="70" y="72" text-anchor="middle" font-family="DM Mono" font-size="16" font-weight="700" fill="var(--text)">${pct(spentPct)}</text>
+    <text x="70" y="83" text-anchor="middle" font-family="DM Sans" font-size="7" fill="var(--dim)">of budget used</text>
+  </svg>`;
+
+  // Render
+  document.getElementById('root').innerHTML = `
+    <!-- Hero metrics -->
+    <div class="grid grid-hero">
+      <div class="card card-sm hero-card hero-accent">
+        <div class="card-title">Remaining</div>
+        <div class="card-val" style="color:${remaining >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(remaining)}</div>
+        <div class="card-sub">of ${fmt(income)} income</div>
+        <div class="progress-track"><div class="progress-fill ${totalSpent/income < .85 ? 'green' : totalSpent/income < 1 ? 'amber' : 'red'}" style="width:${Math.min(totalSpent/income*100,100)}%"></div></div>
+      </div>
+      <div class="card card-sm hero-card hero-green">
+        <div class="card-title">Savings Rate</div>
+        <div class="card-val sm">${pct(savingsRate)}</div>
+        <div class="card-sub">${fmt(savings)} saved this month</div>
+      </div>
+      <div class="card card-sm hero-card hero-neutral">
+        <div class="card-title">YTD Saved</div>
+        <div class="card-val sm" style="color:var(--green);">${fmt(ytdSavings)}</div>
+        <div class="card-sub">of ${fmt(yearSavings)} projected</div>
+      </div>
+      <div class="card card-sm hero-card ${alertCount > 0 ? 'hero-amber' : 'hero-neutral'}">
+        <div class="card-title">Alerts</div>
+        <div class="card-val sm" style="color:${alertCount > 0 ? 'var(--amber)' : 'var(--green)'};">${alertCount > 0 ? alertCount : 'None'}</div>
+        <div class="card-sub">${overBudget.length ? overBudget.map(c => c.emoji).join(' ') + ' over' : ''}${overBudget.length && nearLimit.length ? ' · ' : ''}${nearLimit.length ? nearLimit.map(c => c.emoji).join(' ') + ' near limit' : ''}${!alertCount ? 'All categories on track' : ''}</div>
+      </div>
+    </div>
+
+    <!-- Spending velocity + Category donut -->
+    <div class="grid grid-main">
+      <div class="card">
+        <div class="card-title">Spending Pace</div>
+        <div class="velocity-wrap">
+          <div class="velocity-gauge">${gaugeSvg}</div>
+          <div class="velocity-text">
+            <div class="velocity-status" style="color:${paceColor};">${paceStatus}</div>
+            <div class="velocity-detail">
+              ${paceLabel}<br>
+              Day ${todayDay} of ${daysInMonth} (${pct(dayPct)} through month)<br>
+              ${fmt(spendableSpent)} spent of ${fmt(spendableBudget)} budget<br>
+              Projected end-of-month: ${fmt(projected)} ${projDiff > 0 ? '<span style="color:var(--red);">(+'+fmt(projDiff)+' over)</span>' : '<span style="color:var(--green);">('+fmt(Math.abs(projDiff))+' under)</span>'}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Where Your Money Goes</div>
+        <div class="donut-wrap">
+          ${donutSvg}
+          <div class="donut-legend">
+            ${donutData.map((c, i) => `<div class="legend-item"><span class="legend-dot" style="background:${DONUT_COLORS[i]}"></span><span>${c.emoji} ${c.label}</span><span class="legend-val">${fmt(c.spent)}</span></div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category status grid -->
+    <div class="grid grid-wide">
+      <div class="card">
+        <div class="card-title">Category Status — ${current.month_name}</div>
+        <div class="cat-grid">
+          ${catData.filter(c => c.budget > 0 || c.spent > 0).map(c => {
+            const ratio = c.budget ? c.spent / c.budget : 0;
+            const cls = ratio > 1 ? 'over' : ratio > .85 ? 'warn' : 'ok';
+            const barColor = ratio > 1 ? 'var(--red)' : ratio > .85 ? 'var(--amber)' : 'var(--green)';
+            return `<div class="cat-item ${cls}">
+              <div class="cat-emoji">${c.emoji}</div>
+              <div class="cat-name">${c.label}</div>
+              <div class="cat-nums">${fmt(c.spent)} / ${fmt(c.budget)}</div>
+              <div class="cat-rem ${c.remaining >= 0 ? 'pos' : 'neg'}">${c.remaining >= 0 ? fmt(c.remaining) + ' left' : fmt(Math.abs(c.remaining)) + ' over'}</div>
+              ${c.budget ? `<div class="cat-bar"><div class="cat-bar-fill" style="width:${Math.min(ratio*100,100)}%;background:${barColor}"></div></div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Month comparison + Savings trajectory + Spending trends -->
+    <div class="grid grid-triple">
+      <div class="card">
+        <div class="card-title">Month Comparison</div>
+        ${compareData.map(d => `
+          <div class="compare-row">
+            <span class="compare-label">${d.month}</span>
+            <div class="compare-bar-wrap">
+              <div class="compare-bar" style="width:${(d.spent/compareMax)*100}%;background:var(--accent);"></div>
+            </div>
+            <span class="compare-val">${fmt(d.spent)}</span>
+          </div>
+        `).join('')}
+        <div class="card-sub" style="margin-top:.75rem;">Spending only (excludes savings, tab allocations)</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Savings This Year</div>
+        <div class="savings-bars">
+          ${savData.map(d => `<div class="sav-bar ${d.past ? 'filled' : ''}" style="height:${(d.amount/savMax)*100}%" title="${d.month}: ${fmt(d.amount)}"></div>`).join('')}
+        </div>
+        <div class="sav-labels">
+          ${savData.map(d => `<span>${d.month.charAt(0)}</span>`).join('')}
+        </div>
+        <div class="card-sub" style="margin-top:.5rem;">YTD: ${fmt(ytdSavings)} · Year target: ${fmt(yearSavings)}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Spending Trends (12 mo)</div>
+        ${sparkData.map(sd => `
+          <div class="spark-row">
+            <span class="spark-label">${sd.label}</span>
+            <div class="spark-bars">
+              ${sd.vals.map((v, i) => {
+                const cls = i + 1 === todayMonth ? 'current' : i + 1 > todayMonth ? 'future' : '';
+                return `<div class="spark-bar ${cls}" style="height:${(v/sd.max)*100}%" title="${months[i].month_name.slice(0,3)}: ${fmt(v)}"></div>`;
+              }).join('')}
+            </div>
+            <span class="spark-val">${fmt(sd.current)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Income breakdown -->
+    <div class="grid grid-main">
+      <div class="card">
+        <div class="card-title">Income This Month</div>
+        ${[
+          { label: 'Petachya', val: Number(current.income_petachya)||0 },
+          { label: 'Clalit', val: Number(current.income_clalit)||0 },
+          { label: 'Private', val: Number(current.income_private)||0 },
+        ].filter(s => s.val > 0).map(s => `
+          <div class="compare-row">
+            <span class="compare-label" style="width:60px;">${s.label}</span>
+            <div class="compare-bar-wrap">
+              <div class="compare-bar" style="width:${(s.val/income)*100}%;background:var(--accent);"></div>
+            </div>
+            <span class="compare-val">${fmt(s.val)} <span style="color:var(--dim);font-size:.55rem;">${pct(s.val/income)}</span></span>
+          </div>
+        `).join('')}
+        <div style="margin-top:.5rem;font-size:.72rem;font-weight:600;">Total: ${fmt(income)}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Year at a Glance</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
+          <div><span style="font-size:.62rem;color:var(--dim);text-transform:uppercase;">YTD Income</span><div style="font-family:'DM Mono';font-weight:600;">${fmt(ytdIncome)}</div></div>
+          <div><span style="font-size:.62rem;color:var(--dim);text-transform:uppercase;">Year Projected</span><div style="font-family:'DM Mono';font-weight:600;">${fmt(yearIncome)}</div></div>
+          <div><span style="font-size:.62rem;color:var(--dim);text-transform:uppercase;">Avg / Month</span><div style="font-family:'DM Mono';font-weight:600;">${fmt(yearIncome / 12)}</div></div>
+          <div><span style="font-size:.62rem;color:var(--dim);text-transform:uppercase;">Savings Rate (YTD)</span><div style="font-family:'DM Mono';font-weight:600;color:var(--green);">${pct(ytdIncome ? ytdSavings / ytdIncome : 0)}</div></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
-function switchMonth(num) {
-  currentMonth = data.months.find(function(m) { return m.month_num === num; });
-  if (currentMonth) render();
-}
-
-async function refreshData(btn) {
-  if (btn) btn.classList.add('spinning');
-  await loadData();
-  if (btn) btn.classList.remove('spinning');
-}
-
-loadData();
+loadDashboard().catch(err => {
+  console.error(err);
+  document.getElementById('root').innerHTML = '<div class="loading" style="color:var(--red);">Error loading: ' + err.message + '</div>';
+});
 </script>
 </body>
 </html>
