@@ -311,20 +311,22 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
 .year-tab-wrap { padding: 1rem 0; }
-.year-summary { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-.year-sum-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .6rem .9rem; min-width: 110px; flex: 1; }
-.year-sum-label { font-size: .62rem; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .15rem; }
-.year-sum-val { font-size: 1.05rem; font-weight: 700; }
-.year-sum-val.green { color: var(--green); }
-.year-sticky-bar { position: sticky; top: 57px; z-index: 80; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .45rem .9rem; margin-bottom: .8rem; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
-.year-sticky-line { font-size: .82rem; line-height: 1.6; color: var(--text); }
+.year-compact-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .4rem .7rem; margin-bottom: .75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.05); position: sticky; top: 57px; z-index: 80; }
+.year-compact-stat { font-size: .72rem; color: var(--text); white-space: nowrap; }
+.year-compact-stat strong { font-weight: 700; }
+.year-compact-stat strong.green { color: var(--green); }
+.year-compact-label { font-size: .6rem; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.year-compact-sep { color: var(--dim); font-size: .6rem; margin: 0 .15rem; }
+.year-table-wrap { position: relative; }
+.year-table thead { position: sticky; top: 90px; z-index: 5; }
+.year-table thead th { background: var(--surface); }
 .year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
 .year-table { border-collapse: collapse; width: 100%; font-size: .78rem; }
 .year-table th, .year-table td { padding: .35rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
 .year-table tr { border-bottom: 1px solid var(--border); }
 .year-table tbody tr:nth-child(even):not(.year-row-section) { background: rgba(0,0,0,.015); }
-.year-th-label { position: sticky; left: 0; background: var(--card); z-index: 4; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--border); }
-.year-th-month { text-align: right; font-size: .68rem; min-width: 68px; background: var(--card); }
+.year-th-label { position: sticky; left: 0; background: var(--surface); z-index: 6; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--border); }
+.year-th-month { text-align: right; font-size: .68rem; min-width: 68px; background: var(--surface); }
 .year-th-month.current-month { background: var(--gsoft); color: var(--accent); font-weight: 700; }
 .year-th-month.future-month { color: var(--dim); }
 .year-th-extra { text-align: right; background: var(--gsoft); font-size: .65rem; min-width: 72px; border-left: 2px solid var(--border); }
@@ -3697,7 +3699,7 @@ function yrExpandAll() {
 
 // -- Year Snapshot ------------------------------------------------------
 async function loadYearData() {
-  if (state.yearData && state.yearData.incomeItems) return;
+  // Always fetch fresh data so edits are reflected immediately
   const monthIds = state.months.map(m => m.id);
   const [txRes, biRes, budgetRes, incItemsRes] = await Promise.all([
     sb.from('transactions').select('*').in('month_id', monthIds),
@@ -3906,16 +3908,20 @@ function renderYearSnapshot() {
   const totalAdminSpent = months.reduce((s,m) => s + adminSpentV(m.month_num), 0);
   const adminGap = totalAdminBudget - totalAdminSpent;
 
-  const summaryHtml = '<div class="year-summary">'
-    + '<div class="year-sum-card"><div class="year-sum-label">YTD Income</div><div class="year-sum-val">'+fmtY(ytdIncome)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Year Projected</div><div class="year-sum-val">'+fmtY(totalAnnInc)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Avg / Month</div><div class="year-sum-val">'+fmtY(totalAnnInc/12)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Saved So Far</div><div class="year-sum-val green">'+fmtY(ytdSavings)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">Year Savings</div><div class="year-sum-val">'+fmtY(projSavings)+'</div></div>'
-    + '</div>'
-    + '<div class="year-sticky-bar">'
-    + '<div class="year-sticky-line">✈️ Travel: <strong>'+fmtY(totalTravelBudget)+'</strong> allocated · <span style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(travelGap)+'</strong> '+(travelGap>=0?'remaining':'over')+'</span></div>'
-    + '<div class="year-sticky-line">📋 Admin: <strong>'+fmtY(totalAdminBudget)+'</strong> allocated · <span style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(adminGap)+'</strong> '+(adminGap>=0?'remaining':'over')+'</span></div>'
+  // Summary stats rendered as compact frozen rows inside thead (no big cards)
+  const summaryStats = [
+    { label: 'YTD Income', val: fmtY(ytdIncome) },
+    { label: 'Year Projected', val: fmtY(totalAnnInc) },
+    { label: 'Avg/mo', val: fmtY(totalAnnInc/12) },
+    { label: 'Saved So Far', val: fmtY(ytdSavings), cls: 'green' },
+    { label: 'Year Savings', val: fmtY(projSavings) },
+  ];
+  const summaryHtml = '<div class="year-compact-bar">'
+    + summaryStats.map(s => '<span class="year-compact-stat"><span class="year-compact-label">'+s.label+'</span> <strong'+(s.cls?' class="'+s.cls+'"':'')+'>'+s.val+'</strong></span>').join('<span class="year-compact-sep">·</span>')
+    + '<span class="year-compact-sep">|</span>'
+    + '<span class="year-compact-stat">✈️ <strong>'+fmtY(totalTravelBudget)+'</strong> alloc · <span style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(travelGap)+'</strong> '+(travelGap>=0?'rem':'over')+'</span></span>'
+    + '<span class="year-compact-sep">·</span>'
+    + '<span class="year-compact-stat">📋 <strong>'+fmtY(totalAdminBudget)+'</strong> alloc · <span style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'"><strong>'+fmtY(adminGap)+'</strong> '+(adminGap>=0?'rem':'over')+'</span></span>'
     + '</div>';
 
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
