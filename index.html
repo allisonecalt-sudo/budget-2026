@@ -3808,20 +3808,19 @@ function renderYearSnapshot() {
       + (budgetMap[m.id]?.['savings_invested'] || 0);
   };
 
-  // Total spent for a month — mirrors spentByCategory() logic from budget tab
+  // Total spent for a month — mirrors ribbon's spentByCategory() exactly
+  // For ALL months: actual transactions, with committed items (housing/recurring) as floor
+  // Tab categories (charity/travel/admin) always count their budget allocation
+  // Savings always count as spent
   const totalSpentFor = (m, future) => {
-    const isPastOrCurrent = m.month_num <= todayMonth;
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
-      // hasLines (housing/recurring): max of transactions vs committed items (matches ribbon)
       if (c.hasLines) {
         const committed = biSum(m.id, [c.key]);
         const actual = txSum(m.id, [c.key]);
         return sum + Math.max(committed, actual);
       }
-      if (isPastOrCurrent) return sum + txSum(m.id, [c.key]);
-      if (!showProjected) return sum;
-      return sum + (budgetV(m.id, [c.key]) || biSum(m.id, [c.key]));
+      return sum + txSum(m.id, [c.key]); // actual transactions only
     }, 0)
       + (Number(m.savings_bank) || 0)
       + (Number(m.savings_invested) || 0);
