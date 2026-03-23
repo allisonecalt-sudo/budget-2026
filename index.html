@@ -3526,6 +3526,17 @@ function snToggle(gid) {
   if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
 }
 
+function yrToggle(grp) {
+  var rows = document.querySelectorAll('.yr-grp-'+grp);
+  var hdr = document.getElementById('yr-hdr-'+grp);
+  var chev = hdr && hdr.querySelector('.sn-chev');
+  var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
+  rows.forEach(function(r) { r.classList.toggle('collapsed'); });
+  if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
+  // Save state to localStorage
+  localStorage.setItem('yr-collapse-'+grp, isCollapsed ? 'open' : 'closed');
+}
+
 // -- Year Snapshot ------------------------------------------------------
 async function loadYearData() {
   if (state.yearData && state.yearData.incomeItems) return;
@@ -3644,30 +3655,65 @@ function renderYearSnapshot() {
     incomeSubRows.push({ type:'sub', label:'\u2937 '+lbl, valFn: m => incItemsFor(m.id, lbl) });
   });
 
+  // Housing: sum all housing budget_items (rent, arnona, etc.) + actual household transactions
+  const housingV = (m, f) => {
+    const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
+    const hhSpend = f ? biSum(m.id,['household']) : txSum(m.id,['household']);
+    return hBi + hhSpend;
+  };
+  // Recurring: sum all recurring budget_items
+  const recurringV = m => budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
+
+  // Travel/Admin: budget vs spent gap
+  const travelBudgetV = (mn) => { const m = months.find(mo=>mo.month_num===mn); return m ? (budgetMap[m.id]?.['travel']||0) : 0; };
+  const travelSpentV = (mn) => {
+    const m = months.find(mo=>mo.month_num===mn);
+    if (!m) return 0;
+    return txns.filter(t=>t.month_id===m.id && t.category==='travel').reduce((s,t)=>s+(Number(t.amount)||0),0);
+  };
+  const adminBudgetV = (mn) => Number(state.admin.allocations?.[mn]?.amount || 0);
+  const adminSpentV = (mn) => {
+    const items = (state.admin.items || []).filter(i => i.month_num === mn);
+    return items.reduce((s,i) => s + (Number(i.amount)||0), 0);
+  };
+
   const ROWS = [
-    { type:'section', label:'\u{1F4C8} Income' },
-    { type:'row', bold:true, label:'Total Income', valFn: m => incFor(m) },
-    ...incomeSubRows,
-    { type:'section', label:'\u{1F4B0} Savings' },
-    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0) },
-    { type:'section', label:'\u{1F4CA} Spending' },
-    { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f) },
-    { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => biSum(m.id,['housing'])+(f?biSum(m.id,['household']):txSum(m.id,['household'])) },
-    { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f) },
-    { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f) },
-    { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => biSum(m.id,['recurring']) },
-    { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f) },
-    { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f) },
-    { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f) },
-    { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f) },
-    { type:'section', label:'\u{1F4CA} Budget Overview' },
-    { type:'row', bold:true, label:'Total Budgeted',   valFn: (m,f) => totalBudgetedFor(m) },
-    { type:'row', bold:true, label:'Total Spent',      valFn: (m,f) => totalSpentFor(m, f) },
-    { type:'net',            label:'\u{1F4B0} Unbudgeted',    valFn: (m,f) => incFor(m) - totalBudgetedFor(m) },
-    { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f) },
-    { type:'section', label:'\u{1F49A} Charity Overview' },
-    { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f) },
-    { type:'sub',            label:'Charity % of Income', special:'charityPct' },
+    { type:'section', label:'\u{1F4C8} Income', collapsible: 'income' },
+    { type:'row', bold:true, label:'Total Income', valFn: m => incFor(m), sectionGroup: 'income' },
+    ...incomeSubRows.map(r => ({...r, sectionGroup: 'income'})),
+    { type:'section', label:'\u{1F4B0} Savings', collapsible: 'savings' },
+    { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
+    { type:'section', label:'\u{1F4CA} Spending', collapsible: 'spending' },
+    { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => housingV(m, f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => recurringV(m), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f), expandable: 'leisure', sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Take Out',        valFn: (m,f) => spendV(m,['takeout'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Eating Out',      valFn: (m,f) => spendV(m,['eatingout'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Entertainment',   valFn: (m,f) => spendV(m,['entertainment'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Retail & Shopping', valFn: (m,f) => spendV(m,['retail'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Holiday',         valFn: (m,f) => spendV(m,['holiday'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Gifts',           valFn: (m,f) => spendV(m,['gifts'],f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f), sectionGroup: 'spending' },
+    { type:'section', label:'\u{1F4CA} Budget Overview', collapsible: 'overview' },
+    { type:'row', bold:true, label:'Total Budgeted',   valFn: (m,f) => totalBudgetedFor(m), sectionGroup: 'overview' },
+    { type:'row', bold:true, label:'Total Spent',      valFn: (m,f) => totalSpentFor(m, f), sectionGroup: 'overview' },
+    { type:'net',            label:'\u{1F4B0} Unbudgeted',    valFn: (m,f) => incFor(m) - totalBudgetedFor(m), sectionGroup: 'overview' },
+    { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f), sectionGroup: 'overview' },
+    { type:'section', label:'\u2708\uFE0F Travel & Admin Gaps', collapsible: 'gaps' },
+    { type:'row',            label:'Travel Budget',    valFn: (m,f) => travelBudgetV(m.month_num), sectionGroup: 'gaps' },
+    { type:'row',            label:'Travel Spent',     valFn: (m,f) => travelSpentV(m.month_num), sectionGroup: 'gaps' },
+    { type:'net',            label:'Travel Remaining', valFn: (m,f) => travelBudgetV(m.month_num) - travelSpentV(m.month_num), sectionGroup: 'gaps' },
+    { type:'row',            label:'Admin Budget',     valFn: (m,f) => adminBudgetV(m.month_num), sectionGroup: 'gaps' },
+    { type:'row',            label:'Admin Spent',      valFn: (m,f) => adminSpentV(m.month_num), sectionGroup: 'gaps' },
+    { type:'net',            label:'Admin Remaining',  valFn: (m,f) => adminBudgetV(m.month_num) - adminSpentV(m.month_num), sectionGroup: 'gaps' },
+    { type:'section', label:'\u{1F49A} Charity Overview', collapsible: 'charity' },
+    { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f), sectionGroup: 'charity' },
+    { type:'sub',            label:'Charity % of Income', special:'charityPct', sectionGroup: 'charity' },
   ];
 
   const computed = ROWS.map(row => {
@@ -3710,23 +3756,33 @@ function renderYearSnapshot() {
     + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
     + '</tr></thead>';
 
+  // Format: always show ₪0 instead of dashes
+  const fmtYZ = n => '\u20aa'+Math.round(n||0).toLocaleString('en-US');
+
   const tbody = computed.map(function(item) {
     const row = item.row, values = item.values, total = item.total, avg = item.avg;
-    if (row.type==='section') return '<tr class="year-row-section"><td colspan="'+(months.length+4)+'">'+row.label+'</td></tr>';
-    const rowCls = row.type==='sub' ? 'year-row-sub' : row.type==='net' ? 'year-row-net' : row.bold ? 'year-row-bold' : 'year-row';
+    if (row.type==='section') {
+      const chevron = row.collapsible ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;cursor:pointer;">▼</span>' : '';
+      const clickAttr = row.collapsible ? ' onclick="yrToggle(\'sec-'+row.collapsible+'\')" style="cursor:pointer;" id="yr-hdr-sec-'+row.collapsible+'"' : '';
+      return '<tr class="year-row-section"'+clickAttr+'><td colspan="'+(months.length+4)+'">'+chevron+row.label+'</td></tr>';
+    }
+    let rowCls = row.type==='sub' ? 'year-row-sub' : row.type==='net' ? 'year-row-net' : row.bold ? 'year-row-bold' : 'year-row';
+    // Grouped sub-rows (leisure etc): hidden by default
+    if (row.group) rowCls += ' yr-grp-'+row.group+' collapsed';
+    // Section-grouped rows: collapsible with section header
+    if (row.sectionGroup) rowCls += ' yr-grp-sec-'+row.sectionGroup;
 
     if (item.isPct) {
-      // Render percentage row
       const cells = months.map(function(m,i) {
         const v = values[i];
         let cls = 'year-cell';
         if (m.month_num > todayMonth) cls += ' future';
         if (m.month_num === todayMonth) cls += ' current-col';
-        const pctStr = v ? (v*100).toFixed(1)+'%' : '\u2014';
+        const pctStr = (v*100).toFixed(1)+'%';
         const color = v >= 0.05 ? 'var(--green)' : v > 0 ? 'var(--accent)' : '';
         return '<td class="'+cls+'" style="'+(color?'color:'+color:'')+'">'+ pctStr +'</td>';
       }).join('');
-      const totalPctStr = total ? (total*100).toFixed(1)+'%' : '\u2014';
+      const totalPctStr = (total*100).toFixed(1)+'%';
       return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="year-cell-extra">'+totalPctStr+'</td><td class="year-cell-avg">\u2014</td><td class="year-cell-pct"></td></tr>';
     }
 
@@ -3736,12 +3792,17 @@ function renderYearSnapshot() {
       if (m.month_num > todayMonth) cls += ' future';
       if (m.month_num === todayMonth) cls += ' current-col';
       if (row.type === 'net') cls += v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '';
-      return '<td class="'+cls+'">'+(v ? fmtY(v) : '\u2014')+'</td>';
+      return '<td class="'+cls+'">'+fmtYZ(v)+'</td>';
     }).join('');
     const totCls = 'year-cell-extra' + (row.type==='net' ? (total>0 ? ' net-pos' : total<0 ? ' net-neg' : '') : '');
     const showPct = row.type !== 'section' && row.label !== 'Total Income' && row.label !== 'Total Budgeted' && row.label !== 'Total Spent';
     const pct = (showPct && totalAnnInc) ? fmtPct(total/totalAnnInc) : '';
-    return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="'+totCls+'">'+(total ? fmtY(total) : '\u2014')+'</td><td class="year-cell-avg">'+(avg ? fmtY(avg) : '\u2014')+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
+    // Expandable row: add chevron + click handler
+    const labelHtml = row.expandable
+      ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;color:var(--muted);cursor:pointer;">▶</span>'+row.label
+      : row.label;
+    const expandAttr = row.expandable ? ' onclick="yrToggle(\''+row.expandable+'\')" style="cursor:pointer;" id="yr-hdr-'+row.expandable+'"' : '';
+    return '<tr class="'+rowCls+'"'+expandAttr+'><td class="year-col-label">'+labelHtml+'</td>'+cells+'<td class="'+totCls+'">'+fmtYZ(total)+'</td><td class="year-cell-avg">'+fmtYZ(avg)+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
   }).join('');
 
   const toggleHtml = '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;">'
