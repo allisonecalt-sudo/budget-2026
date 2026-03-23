@@ -340,6 +340,7 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .year-cell-extra { text-align: right; background: var(--gsoft); font-weight: 600; border-left: 2px solid var(--border); }
 .year-cell-avg { text-align: right; background: var(--gsoft); }
 .year-cell-pct { text-align: right; background: var(--gsoft); color: var(--dim); font-size: .67rem; }
+tr.collapsed { display: none; }
 .year-overview-row td { padding: .4rem .5rem; }
 .year-overview-row.positive .ov-val { color: var(--green); font-weight: 700; }
 .year-overview-row.negative .ov-val { color: var(--red); font-weight: 700; }
@@ -3533,8 +3534,14 @@ function yrToggle(grp) {
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
   rows.forEach(function(r) { r.classList.toggle('collapsed'); });
   if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
-  // Save state to localStorage
-  localStorage.setItem('yr-collapse-'+grp, isCollapsed ? 'open' : 'closed');
+}
+function yrCollapseAll() {
+  document.querySelectorAll('[class*="yr-grp-"]').forEach(function(r) { r.classList.add('collapsed'); });
+  document.querySelectorAll('[id^="yr-hdr-"]').forEach(function(h) { var c = h.querySelector('.sn-chev'); if(c) c.textContent = '▶'; });
+}
+function yrExpandAll() {
+  document.querySelectorAll('[class*="yr-grp-"]').forEach(function(r) { r.classList.remove('collapsed'); });
+  document.querySelectorAll('[id^="yr-hdr-"]').forEach(function(h) { var c = h.querySelector('.sn-chev'); if(c) c.textContent = '▼'; });
 }
 
 // -- Year Snapshot ------------------------------------------------------
@@ -3683,6 +3690,7 @@ function renderYearSnapshot() {
     ...incomeSubRows.map(r => ({...r, sectionGroup: 'income'})),
     { type:'section', label:'\u{1F4B0} Savings', collapsible: 'savings' },
     { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
+    { type:'row',            label:'\u{1F4C8} Invested',      valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_invested)||0), sectionGroup: 'savings' },
     { type:'section', label:'\u{1F4CA} Spending', collapsible: 'spending' },
     { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => housingV(m, f), sectionGroup: 'spending' },
@@ -3809,6 +3817,9 @@ function renderYearSnapshot() {
     + '<span style="font-size:.72rem;color:var(--dim);">View:</span>'
     + '<button onclick="localStorage.setItem(\'yearViewMode\',\'projected\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(showProjected?'var(--accent)':'var(--border)')+';background:'+(showProjected?'var(--accent)':'none')+';color:'+(showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Full Year (Projected)</button>'
     + '<button onclick="localStorage.setItem(\'yearViewMode\',\'actual\');renderApp()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid '+(!showProjected?'var(--accent)':'var(--border)')+';background:'+(!showProjected?'var(--accent)':'none')+';color:'+(!showProjected?'#fff':'var(--dim)')+';cursor:pointer;font-family:\'DM Sans\',sans-serif;">Actual Only</button>'
+    + '<span style="margin-left:auto;"></span>'
+    + '<button onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>'
+    + '<button onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>'
     + '</div>';
   return '<div class="year-tab-wrap">'+toggleHtml+summaryHtml+'<div class="year-table-wrap"><table class="year-table">'+thead+'<tbody>'+tbody+'</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>';
 }
