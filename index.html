@@ -321,41 +321,46 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 
 /* -- Year Snapshot Tab ------------------------------------------------ */
 .year-tab-wrap { padding: 1rem 0; }
-.year-summary-row td, .year-summary-row th { background: var(--surface2); font-size: .65rem; color: var(--text); padding: .25rem .5rem; border-bottom: 1px solid var(--border); }
+/* Summary rows in thead */
+.year-summary-row td, .year-summary-row th { background: var(--surface); font-size: .65rem; color: var(--text); padding: .25rem .5rem; border-bottom: 1px solid var(--border); }
 .year-sum-td { font-size: .65rem; font-weight: 500; text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .year-sum-cell { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); }
-.year-sum-cell-extra { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); background: var(--gsoft); border-left: 2px solid var(--border); }
-.year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+.year-sum-cell-extra { text-align: right; font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--dim); border-left: 1px solid var(--border); }
+/* Table structure */
+.year-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
 .year-table { border-collapse: collapse; width: 100%; font-size: .78rem; }
-.year-table th, .year-table td { padding: .35rem .5rem; border-right: 1px solid var(--border); white-space: nowrap; }
-.year-table tr { border-bottom: 1px solid var(--border); }
-.year-table tbody tr:nth-child(even):not(.year-row-section) { background: rgba(0,0,0,.015); }
-.year-th-label { position: sticky; left: 0; background: var(--surface); z-index: 6; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--border); }
-.year-th-month { text-align: right; font-size: .68rem; min-width: 68px; background: var(--surface); }
-.year-th-month.current-month { background: var(--gsoft); color: var(--accent); font-weight: 700; }
-.year-th-month.future-month { color: var(--dim); }
-.year-th-extra { text-align: right; background: var(--gsoft); font-size: .65rem; min-width: 72px; border-left: 2px solid var(--border); }
-.year-col-label { position: sticky; left: 0; background: var(--bg); z-index: 2; text-align: left; border-right: 2px solid var(--border); font-size: .72rem; }
-.year-row-section td { background: var(--gsoft); font-weight: 700; font-size: .65rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); padding: .45rem .5rem; border-top: 2px solid var(--border); }
-.year-row-bold .year-col-label, .year-row-bold td { font-weight: 700; }
+.year-table th, .year-table td { padding: .4rem .55rem; border-right: 1px solid rgba(0,0,0,.06); white-space: nowrap; }
+.year-table tr { border-bottom: 1px solid rgba(0,0,0,.06); }
+.year-table tbody tr:hover:not(.year-row-section) { background: rgba(0,0,0,.02); }
+/* Header row */
+.year-th-label { position: sticky; left: 0; background: var(--surface); z-index: 6; text-align: left; min-width: 155px; font-size: .65rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-right: 1px solid var(--border); }
+.year-th-month { text-align: right; font-size: .7rem; font-weight: 600; min-width: 72px; background: var(--surface); color: var(--text); }
+.year-th-month.current-month { color: var(--accent); font-weight: 700; border-bottom: 2px solid var(--accent); }
+.year-th-month.future-month { color: var(--dim); font-weight: 400; }
+.year-th-extra { text-align: right; font-size: .65rem; font-weight: 600; min-width: 72px; border-left: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+/* Data rows */
+.year-col-label { position: sticky; left: 0; background: var(--surface); z-index: 2; text-align: left; border-right: 1px solid var(--border); font-size: .72rem; }
+.year-row-section td { background: var(--surface2); font-weight: 600; font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: .35rem .55rem; }
+.year-row-bold .year-col-label, .year-row-bold td { font-weight: 600; }
 .year-row-sub .year-col-label { padding-left: 1.3rem; color: var(--dim); font-size: .67rem; }
 .year-row-sub td { color: var(--dim); font-size: .67rem; }
-.year-row-net td { font-weight: 700; background: var(--surface); }
-.year-row-net .year-col-label { background: var(--surface); }
-.year-cell { text-align: right; }
-.year-cell.future { color: var(--text); }
-.year-cell.current-col { background: rgba(99,102,241,.06); }
-.year-cell.net-pos { color: var(--green); font-weight: 700; }
-.year-cell.net-neg { color: var(--red); font-weight: 700; }
-.year-cell-extra { text-align: right; background: var(--gsoft); font-weight: 600; border-left: 2px solid var(--border); }
-.year-cell-avg { text-align: right; background: var(--gsoft); }
-.year-cell-pct { text-align: right; background: var(--gsoft); color: var(--dim); font-size: .67rem; }
+.year-row-net td { font-weight: 600; }
+.year-row-net .year-col-label { font-weight: 600; }
+/* Cells */
+.year-cell { text-align: right; color: var(--text); }
+.year-cell.future { color: var(--dim); }
+.year-cell.current-col { background: rgba(45,106,79,.04); }
+.year-cell.net-pos { color: var(--green); font-weight: 600; }
+.year-cell.net-neg { color: var(--red); font-weight: 600; }
+.year-cell-extra { text-align: right; font-weight: 600; border-left: 1px solid var(--border); }
+.year-cell-avg { text-align: right; color: var(--muted); border-left: 1px solid var(--border); }
+.year-cell-pct { text-align: right; color: var(--dim); font-size: .67rem; border-left: 1px solid var(--border); }
 tr.collapsed { display: none !important; }
 .year-overview-row td { padding: .4rem .5rem; }
-.year-overview-row.positive .ov-val { color: var(--green); font-weight: 700; }
-.year-overview-row.negative .ov-val { color: var(--red); font-weight: 700; }
+.year-overview-row.positive .ov-val { color: var(--green); font-weight: 600; }
+.year-overview-row.negative .ov-val { color: var(--red); font-weight: 600; }
 .year-overview-row.zero .ov-val { color: var(--dim); }
-.year-overview-row.section-row td { background: var(--gsoft); font-weight: 700; font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+.year-overview-row.section-row td { background: var(--surface2); font-weight: 600; font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .ov-month-link { cursor: pointer; text-decoration: none; color: inherit; }
 .ov-month-link:hover { color: var(--accent); text-decoration: underline; }
 .ov-charity-pct { font-size: .62rem; color: var(--dim); }
