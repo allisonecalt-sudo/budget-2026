@@ -3861,12 +3861,12 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => recurringV(m), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f), expandable: 'leisure', sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Take Out',        valFn: (m,f) => spendV(m,['takeout'],f), sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Eating Out',      valFn: (m,f) => spendV(m,['eatingout'],f), sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Entertainment',   valFn: (m,f) => spendV(m,['entertainment'],f), sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Retail & Shopping', valFn: (m,f) => spendV(m,['retail'],f), sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Holiday',         valFn: (m,f) => spendV(m,['holiday'],f), sectionGroup: 'spending' },
-    { type:'sub', group:'leisure', label:'\u2937 Gifts',           valFn: (m,f) => spendV(m,['gifts'],f), sectionGroup: 'spending' },
+    { type:'sub', group:'leisure', label:'\u2937 Take Out',        valFn: (m,f) => spendV(m,['takeout'],f) },
+    { type:'sub', group:'leisure', label:'\u2937 Eating Out',      valFn: (m,f) => spendV(m,['eatingout'],f) },
+    { type:'sub', group:'leisure', label:'\u2937 Entertainment',   valFn: (m,f) => spendV(m,['entertainment'],f) },
+    { type:'sub', group:'leisure', label:'\u2937 Retail & Shopping', valFn: (m,f) => spendV(m,['retail'],f) },
+    { type:'sub', group:'leisure', label:'\u2937 Holiday',         valFn: (m,f) => spendV(m,['holiday'],f) },
+    { type:'sub', group:'leisure', label:'\u2937 Gifts',           valFn: (m,f) => spendV(m,['gifts'],f) },
     { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f), sectionGroup: 'spending' },
@@ -3912,12 +3912,10 @@ function renderYearSnapshot() {
     + '<div class="year-sum-card"><div class="year-sum-label">Year Savings</div><div class="year-sum-val">'+fmtY(projSavings)+'</div></div>'
     + '</div>'
     + '<div class="year-summary" style="margin-top:.5rem;">'
-    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Budget</div><div class="year-sum-val">'+fmtY(totalTravelBudget)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Spent</div><div class="year-sum-val">'+fmtY(totalTravelSpent)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Left</div><div class="year-sum-val" style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(travelGap)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Budget</div><div class="year-sum-val">'+fmtY(totalAdminBudget)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Spent</div><div class="year-sum-val">'+fmtY(totalAdminSpent)+'</div></div>'
-    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Left</div><div class="year-sum-val" style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(adminGap)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Allocated</div><div class="year-sum-val">'+fmtY(totalTravelBudget)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">✈️ Travel Remaining</div><div class="year-sum-val" style="color:'+(travelGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(travelGap)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Allocated</div><div class="year-sum-val">'+fmtY(totalAdminBudget)+'</div></div>'
+    + '<div class="year-sum-card"><div class="year-sum-label">📋 Admin Remaining</div><div class="year-sum-val" style="color:'+(adminGap>=0?'var(--green)':'var(--red)')+'">'+fmtY(adminGap)+'</div></div>'
     + '</div>';
 
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
