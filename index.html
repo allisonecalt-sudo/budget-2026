@@ -340,6 +340,16 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .year-cell-extra { text-align: right; background: var(--gsoft); font-weight: 600; border-left: 2px solid var(--border); }
 .year-cell-avg { text-align: right; background: var(--gsoft); }
 .year-cell-pct { text-align: right; background: var(--gsoft); color: var(--dim); font-size: .67rem; }
+.year-overview-row td { padding: .4rem .5rem; }
+.year-overview-row.positive .ov-val { color: var(--green); font-weight: 700; }
+.year-overview-row.negative .ov-val { color: var(--red); font-weight: 700; }
+.year-overview-row.zero .ov-val { color: var(--dim); }
+.year-overview-row.section-row td { background: var(--gsoft); font-weight: 700; font-size: .62rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); }
+.ov-month-link { cursor: pointer; text-decoration: none; color: inherit; }
+.ov-month-link:hover { color: var(--accent); text-decoration: underline; }
+.ov-charity-pct { font-size: .62rem; color: var(--dim); }
+.ov-charity-good { color: var(--green); }
+.ov-charity-low { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -1582,10 +1592,10 @@ function renderApp() {
                         <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
                           <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
                             onclick="event.stopPropagation()"
-                            oninput="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);renderApp();})(this.value)"
-                            onblur="(function(v){const pct=parseFloat(v)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;})(this.value)"
+                            oninput="(function(el){const pct=parseFloat(el.value)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
+                            onblur="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
                             onkeydown="if(event.key==='Enter'){this.blur()}"
-                            style="width:50px">
+                            style="width:60px">
                           <span style="font-size:.8rem;color:var(--muted);">%</span>
                           ${charityCalc ? `<span class="cat-spent-bold">= ${fmt(charityCalc)}</span>` : ''}
                         </div>
@@ -3520,18 +3530,19 @@ function snToggle(gid) {
 async function loadYearData() {
   if (state.yearData) return;
   const monthIds = state.months.map(m => m.id);
-  const [txRes, biRes, budgetRes] = await Promise.all([
+  const [txRes, biRes, budgetRes, incItemsRes] = await Promise.all([
     sb.from('transactions').select('*').in('month_id', monthIds),
     sb.from('budget_items').select('*').in('month_id', monthIds),
     sb.from('budgets').select('*').in('month_id', monthIds),
+    sb.from('income_items').select('*').in('month_id', monthIds),
   ]);
   if (!state.admin.items.length) await loadAdminData();
-  state.yearData = { txns: txRes.data || [], budgetItems: biRes.data || [], allBudgets: budgetRes.data || [] };
+  state.yearData = { txns: txRes.data || [], budgetItems: biRes.data || [], allBudgets: budgetRes.data || [], incomeItems: incItemsRes.data || [] };
 }
 
 function renderYearSnapshot() {
   if (!state.yearData) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
-  const { txns, budgetItems, allBudgets } = state.yearData;
+  const { txns, budgetItems, allBudgets, incomeItems } = state.yearData;
   const months = [...state.months].sort((a,b) => a.month_num - b.month_num);
   const todayMonth = new Date().getMonth() + 1;
   const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
@@ -3544,6 +3555,22 @@ function renderYearSnapshot() {
   const budgetMap = {};
   (allBudgets || []).forEach(b => { if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {}; budgetMap[b.month_id][b.category] = b.amount; });
   const budgetV = (mid, cats) => cats.reduce((s, cat) => s + (budgetMap[mid]?.[cat] || 0), 0);
+
+  // Income items grouped by month
+  const incItemsByMonth = {};
+  (incomeItems || []).forEach(i => {
+    if (!incItemsByMonth[i.month_id]) incItemsByMonth[i.month_id] = [];
+    incItemsByMonth[i.month_id].push(i);
+  });
+  // Collect unique custom income source labels across all months
+  const customIncLabels = [];
+  const seenLabels = new Set();
+  (incomeItems || []).forEach(i => {
+    const lbl = (i.label || 'Other').trim();
+    if (!seenLabels.has(lbl)) { seenLabels.add(lbl); customIncLabels.push(lbl); }
+  });
+  const incItemsFor = (mid, label) => (incItemsByMonth[mid] || []).filter(i => (i.label||'Other').trim() === label).reduce((s,i) => s + (Number(i.amount)||0), 0);
+  const incItemsTotalFor = mid => (incItemsByMonth[mid] || []).reduce((s,i) => s + (Number(i.amount)||0), 0);
 
   const spendV = (m, cats, future) => {
     if (future && !showProjected) return 0;
@@ -3561,18 +3588,66 @@ function renderYearSnapshot() {
     const m = months.find(mo => mo.month_num === mn);
     return m ? (budgetMap[m.id]?.['travel'] || 0) : 0;
   };
-  const incFor   = m  => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0);
+  // Income includes fixed fields + custom income items (no income_other — replaced by income_items)
+  const incFor = m => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0)+incItemsTotalFor(m.id);
 
   const fmtY   = n => !n ? '\u2014' : '\u20aa'+Math.round(n).toLocaleString('en-US');
   const fmtPct = n => n ? Math.round(n*100)+'%' : '';
 
+  // Helper: budget item total for a month (mirrors catBudget logic but for year data)
+  const yearBiTotal = (mid, catKey) => {
+    const items = budgetItems.filter(b => b.month_id === mid && b.category === catKey);
+    return items.length ? items.reduce((s,b) => s + (Number(b.amount)||0), 0) : null;
+  };
+  const yearCatBudget = (mid, catKey) => {
+    const catDef = CATEGORIES.find(c => c.key === catKey);
+    if (catDef && catDef.linkedLine) {
+      const parentItems = budgetItems.filter(b => b.month_id === mid && b.category === catDef.linkedLine.parent);
+      const linked = parentItems.find(i => (i.label||'').toLowerCase() === catDef.linkedLine.label.toLowerCase());
+      if (linked) return Number(linked.amount) || 0;
+    }
+    const fromItems = yearBiTotal(mid, catKey);
+    return fromItems !== null ? fromItems : (budgetMap[mid]?.[catKey] || 0);
+  };
+
+  // Total budgeted for a month (all categories + savings)
+  const totalBudgetedFor = m => {
+    return CATEGORIES.reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0)
+      + (budgetMap[m.id]?.['savings_bank'] || 0)
+      + (budgetMap[m.id]?.['savings_invested'] || 0);
+  };
+
+  // Total spent for a month (matches ribbon logic)
+  const totalSpentFor = (m, future) => {
+    return CATEGORIES.reduce((sum, c) => {
+      if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
+      if (future && !showProjected) return sum;
+      if (future) return sum + (budgetV(m.id, [c.key]) || biSum(m.id, [c.key]));
+      return sum + txSum(m.id, [c.key]);
+    }, 0)
+      + (Number(m.savings_bank) || 0)
+      + (Number(m.savings_invested) || 0);
+  };
+
+  // Build income sub-rows dynamically
+  const incomeSubRows = [
+    { type:'sub', label:'\u2937 Petachya',  valFn: m => Number(m.income_petachya)||0 },
+    { type:'sub', label:'\u2937 Clalit',    valFn: m => Number(m.income_clalit)||0 },
+    { type:'sub', label:'\u2937 Private',   valFn: m => Number(m.income_private)||0 },
+  ];
+  // Add a row for income_other if any month has it
+  if (months.some(m => Number(m.income_other) > 0)) {
+    incomeSubRows.push({ type:'sub', label:'\u2937 Other', valFn: m => Number(m.income_other)||0 });
+  }
+  // Add a row for each custom income source label
+  customIncLabels.forEach(lbl => {
+    incomeSubRows.push({ type:'sub', label:'\u2937 '+lbl, valFn: m => incItemsFor(m.id, lbl) });
+  });
+
   const ROWS = [
     { type:'section', label:'\u{1F4C8} Income' },
-    { type:'row', bold:true, label:'Total Income',            valFn: m      => incFor(m) },
-    { type:'sub',            label:'\u2937 Petachya',         valFn: m      => Number(m.income_petachya)||0 },
-    { type:'sub',            label:'\u2937 Clalit',           valFn: m      => Number(m.income_clalit)||0 },
-    { type:'sub',            label:'\u2937 Private',          valFn: m      => Number(m.income_private)||0 },
-    { type:'sub',            label:'\u2937 Other',            valFn: m      => Number(m.income_other)||0 },
+    { type:'row', bold:true, label:'Total Income', valFn: m => incFor(m) },
+    ...incomeSubRows,
     { type:'section', label:'\u{1F4B0} Savings' },
     { type:'row',            label:'\u{1F3E6} Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0) },
     { type:'section', label:'\u{1F4CA} Spending' },
@@ -3585,11 +3660,29 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u{1F49A} Charity',       valFn: (m,f)  => charityV(m.month_num, f) },
     { type:'row',            label:'\u2708\uFE0F Travel',     valFn: (m,f)  => travelV(m.month_num, f) },
     { type:'row',            label:'\u{1F4CB} Admin',         valFn: (m,f)  => adminV(m.month_num, f) },
-    { type:'section', label:'\u2696\uFE0F Balance' },
+    { type:'section', label:'\u{1F4CA} Budget Overview' },
+    { type:'row', bold:true, label:'Total Budgeted',   valFn: (m,f) => totalBudgetedFor(m) },
+    { type:'row', bold:true, label:'Total Spent',      valFn: (m,f) => totalSpentFor(m, f) },
+    { type:'net',            label:'\u{1F4B0} Unbudgeted',    valFn: (m,f) => incFor(m) - totalBudgetedFor(m) },
+    { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f) },
+    { type:'section', label:'\u{1F49A} Charity Overview' },
+    { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f) },
+    { type:'sub',            label:'Charity % of Income', special:'charityPct' },
   ];
 
   const computed = ROWS.map(row => {
     if (row.type==='section') return { row, values:null, total:0, avg:0 };
+    if (row.special === 'charityPct') {
+      // Special: compute charity as % of income per month
+      const values = months.map(m => {
+        const inc = incFor(m);
+        const ch = charityV(m.month_num, m.month_num >= todayMonth);
+        return inc ? ch / inc : 0;
+      });
+      const totalCh = months.reduce((s,m) => s + charityV(m.month_num, m.month_num >= todayMonth), 0);
+      const totalI = months.reduce((s,m) => s + incFor(m), 0);
+      return { row, values, total: totalI ? totalCh/totalI : 0, avg: 0, isPct: true };
+    }
     const values = months.map(m => (row.valFn(m, m.month_num >= todayMonth))||0);
     const total  = values.reduce((s,v)=>s+v,0);
     return { row, values, total, avg: total/12 };
@@ -3612,7 +3705,7 @@ function renderYearSnapshot() {
   const thead = '<thead><tr><th class="year-th-label">Category</th>'
     + months.map(m => {
         const cls = m.month_num===todayMonth ? 'year-th-month current-month' : m.month_num>todayMonth ? 'year-th-month future-month' : 'year-th-month';
-        return '<th class="'+cls+'">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</th>';
+        return '<th class="'+cls+'"><a class="ov-month-link" onclick="switchTab(\'budget\');switchMonth(\''+m.id+'\')">'+m.month_name.slice(0,3)+(m.month_num===todayMonth?' \u25C9':'')+'</a></th>';
       }).join('')
     + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
     + '</tr></thead>';
@@ -3621,6 +3714,22 @@ function renderYearSnapshot() {
     const row = item.row, values = item.values, total = item.total, avg = item.avg;
     if (row.type==='section') return '<tr class="year-row-section"><td colspan="'+(months.length+4)+'">'+row.label+'</td></tr>';
     const rowCls = row.type==='sub' ? 'year-row-sub' : row.type==='net' ? 'year-row-net' : row.bold ? 'year-row-bold' : 'year-row';
+
+    if (item.isPct) {
+      // Render percentage row
+      const cells = months.map(function(m,i) {
+        const v = values[i];
+        let cls = 'year-cell';
+        if (m.month_num > todayMonth) cls += ' future';
+        if (m.month_num === todayMonth) cls += ' current-col';
+        const pctStr = v ? (v*100).toFixed(1)+'%' : '\u2014';
+        const color = v >= 0.05 ? 'var(--green)' : v > 0 ? 'var(--accent)' : '';
+        return '<td class="'+cls+'" style="'+(color?'color:'+color:'')+'">'+ pctStr +'</td>';
+      }).join('');
+      const totalPctStr = total ? (total*100).toFixed(1)+'%' : '\u2014';
+      return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="year-cell-extra">'+totalPctStr+'</td><td class="year-cell-avg">\u2014</td><td class="year-cell-pct"></td></tr>';
+    }
+
     const cells = months.map(function(m,i) {
       const v = values[i];
       let cls = 'year-cell';
@@ -3630,7 +3739,7 @@ function renderYearSnapshot() {
       return '<td class="'+cls+'">'+(v ? fmtY(v) : '\u2014')+'</td>';
     }).join('');
     const totCls = 'year-cell-extra' + (row.type==='net' ? (total>0 ? ' net-pos' : total<0 ? ' net-neg' : '') : '');
-    const showPct = row.type !== 'section' && row.label !== 'Total Income';
+    const showPct = row.type !== 'section' && row.label !== 'Total Income' && row.label !== 'Total Budgeted' && row.label !== 'Total Spent';
     const pct = (showPct && totalAnnInc) ? fmtPct(total/totalAnnInc) : '';
     return '<tr class="'+rowCls+'"><td class="year-col-label">'+row.label+'</td>'+cells+'<td class="'+totCls+'">'+(total ? fmtY(total) : '\u2014')+'</td><td class="year-cell-avg">'+(avg ? fmtY(avg) : '\u2014')+'</td><td class="year-cell-pct">'+pct+'</td></tr>';
   }).join('');
@@ -3648,8 +3757,13 @@ function openSnapshot() {
   if (!current) return;
   const income = totalIncome(current);
   const spent = spentByCategory();
-  const totalSpent = Object.values(spent).reduce((a,b) => a+b, 0);
-  const totalBudgeted = Object.values(state.budgets).reduce((a,b) => a+b, 0);
+  // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
+  // Also include savings as "spent" (money allocated out of income)
+  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
+    + (Number(current.savings_bank) || 0)
+    + (Number(current.savings_invested) || 0);
+  const totalBudgeted = CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0)
+    + (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0);
   const leftToBudget = income - totalBudgeted;
   const remainingInBudget = totalBudgeted - totalSpent;
 
