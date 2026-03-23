@@ -268,18 +268,18 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
   .stat-card { padding: .85rem; }
   .income-grid { grid-template-columns: 1fr; }
   .income-input { width: 90px; }
-  /* Ribbon: clean 2×2 grid on mobile — show 4 key stats */
+  /* Ribbon: 3×2 grid on mobile — show 6 key stats (Saved hidden) */
   .ribbon-panel { position: static !important; overflow-x: visible !important; }
-  .ribbon { display: grid !important; grid-template-columns: repeat(2,1fr) !important; padding: .4rem .6rem !important; min-width: unset !important; gap: 0 !important; }
-  .ribbon-stat { padding: .3rem .4rem !important; border-right: 1px solid var(--border) !important; border-bottom: 1px solid var(--border) !important; border-left: none !important; margin: 0 !important; }
-  .ribbon-stat:nth-child(even) { border-right: none !important; }
+  .ribbon { display: grid !important; grid-template-columns: repeat(3,1fr) !important; padding: .4rem .4rem !important; min-width: unset !important; gap: 0 !important; }
+  .ribbon-stat { padding: .3rem .3rem !important; border-right: 1px solid var(--border) !important; border-bottom: 1px solid var(--border) !important; border-left: none !important; margin: 0 !important; }
+  .ribbon-stat:nth-child(3n) { border-right: none !important; }
   .ribbon-hide-mobile { display: none !important; }
-  .ribbon-label { font-size: .55rem !important; letter-spacing: .04em !important; }
-  .ribbon-val { font-size: .85rem !important; }
+  .ribbon-label { font-size: .5rem !important; letter-spacing: .03em !important; }
+  .ribbon-val { font-size: .75rem !important; }
   /* Saved stat — remove accent border on mobile, fits in grid */
   .ribbon-stat[style*="border-left:2px"] { border-left: none !important; padding-left: .4rem !important; margin-left: 0 !important; }
   /* Buttons cell — hide "full view", keep ✕ */
-  .ribbon > div:last-child { margin: 0 !important; padding: .2rem .25rem !important; display: flex !important; align-items: center !important; justify-content: center !important; border-left: none !important; grid-column: span 2 !important; border-bottom: none !important; }
+  .ribbon > div:last-child { margin: 0 !important; padding: .2rem .25rem !important; display: flex !important; align-items: center !important; justify-content: center !important; border-left: none !important; grid-column: span 3 !important; border-bottom: none !important; }
   .ribbon > div:last-child .ribbon-toggle:first-child { display: none !important; }
   .month-tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
   .tx-header, .tx-item { grid-template-columns: 70px 1fr 65px 22px; }
@@ -1386,7 +1386,9 @@ function renderApp() {
       // Leisure sub-ribbon
       const leisureGroup = CATEGORY_GROUPS.find(g => g.label === 'Leisure & Lifestyle');
       const leisureCats = leisureGroup.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
-      const leisureExpanded = localStorage.getItem('leisureExpanded') !== 'false';
+      const isMobile = window.innerWidth <= 600;
+      const leisureDefault = isMobile ? 'false' : 'true';
+      const leisureExpanded = (localStorage.getItem('leisureExpanded') ?? leisureDefault) !== 'false';
       const leisureSpent = leisureCats.reduce((sum,c) => sum+(spent[c.key]||0), 0);
       const leisureBudget = leisureCats.reduce((sum,c) => sum+(state.budgets[c.key]||0), 0);
       const leisureSubRibbon = `<div class="sub-ribbon">
@@ -1411,12 +1413,12 @@ function renderApp() {
       return `<div class="ribbon-panel">
         <div class="ribbon">
           <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId)?' <span style="color:#b45309;font-size:.55rem;">~EST</span>':''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId)?'color:#d97706;':''}">${isAnyEstimated(state.currentMonthId)?'~':''}${fmt(income)}</div></div>
-          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget>=0?'var(--green)':'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${(income-totalSpent)>=0?'var(--green)':'var(--red)'}">${fmt(income-totalSpent)}</div></div>
-          <div class="ribbon-stat ribbon-hide-mobile"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
-          <div class="ribbon-stat" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget>=0?'var(--green)':'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((Number(current.savings_bank)||0)+(Number(current.savings_invested)||0))}</div></div>
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
             <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
@@ -3802,6 +3804,7 @@ function renderYearSnapshot() {
   const totalSpentFor = (m, future) => {
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
+      if (c.hasLines) return sum + biSum(m.id, [c.key]); // housing/recurring: use budget items, not transactions
       if (future && !showProjected) return sum;
       if (future) return sum + (budgetV(m.id, [c.key]) || biSum(m.id, [c.key]));
       return sum + txSum(m.id, [c.key]);
