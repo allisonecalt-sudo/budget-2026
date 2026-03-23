@@ -3910,13 +3910,16 @@ function renderYearSnapshot() {
   const ytdSavings  = pastMs.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
   const projSavings = months.reduce((s,m)=>s+(Number(m.savings_bank)||0),0);
 
-  // Travel & Admin yearly gaps
-  const totalTravelBudget = months.reduce((s,m) => s + travelBudgetV(m.month_num), 0);
-  const totalTravelSpent = months.reduce((s,m) => s + travelSpentV(m.month_num), 0);
-  const travelGap = totalTravelBudget - totalTravelSpent;
-  const totalAdminBudget = months.reduce((s,m) => s + adminBudgetV(m.month_num), 0);
-  const totalAdminSpent = months.reduce((s,m) => s + adminSpentV(m.month_num), 0);
-  const adminGap = totalAdminBudget - totalAdminSpent;
+  // Travel & Admin: projected budget from items, allocated from monthly allocations, gap = budget - allocated
+  const totalTravelProjected = (state.travel.items || []).reduce((s,i) => s + (Number(i.projected_amount)||0), 0);
+  const totalTravelAlloc = Object.values(state.travel.allocations || {}).reduce((s,a) => s + (Number(a.amount)||0), 0);
+  const travelGap = totalTravelProjected - totalTravelAlloc;
+  const totalAdminProjected = (state.admin.items || []).reduce((s,i) => s + (Number(i.projected_amount)||0), 0);
+  const totalAdminAlloc = Object.values(state.admin.allocations || {}).reduce((s,a) => s + (Number(a.amount)||0), 0);
+  const adminGap = totalAdminProjected - totalAdminAlloc;
+
+  // Format: always show ₪0 instead of dashes
+  const fmtYZ = n => '\u20aa'+Math.round(n||0).toLocaleString('en-US');
 
   // Summary as 2 compact rows inside thead (scrolls with table, no separate bar)
   const summaryHtml = '';
@@ -3941,9 +3944,6 @@ function renderYearSnapshot() {
       }).join('')
     + '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>'
     + '</tr>'+sumRow1+sumRow2+'</thead>';
-
-  // Format: always show ₪0 instead of dashes
-  const fmtYZ = n => '\u20aa'+Math.round(n||0).toLocaleString('en-US');
 
   const tbody = computed.map(function(item) {
     const row = item.row, values = item.values, total = item.total, avg = item.avg;
