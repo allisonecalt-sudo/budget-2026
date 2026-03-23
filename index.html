@@ -4198,6 +4198,14 @@ function renderProjectionsTab() {
 
   const fmt = n => '\u20aa' + Math.round(n).toLocaleString('en-US');
 
+  // Category actual spending (matching Year tab logic)
+  const catActualFor = (mid, catKey) => {
+    const catDef = CATEGORIES.find(c => c.key === catKey);
+    if (catDef && catDef.hasTab) return yearCatBudget(mid, catKey);
+    if (catDef && catDef.hasLines) return Math.max(biSum(mid, [catKey]), txSum(mid, [catKey]));
+    return txSum(mid, [catKey]);
+  };
+
   // ── Compute projections ──
   const pastMonths = months.filter(m => m.month_num < todayMonth);
   const curMonth = months.find(m => m.month_num === todayMonth);
@@ -4253,17 +4261,6 @@ function renderProjectionsTab() {
   const completedMonths = pastMonths.length;
   const avgMonthlySpend = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + totalSpentFor(m), 0) / completedMonths) : 0;
   const avgMonthlyIncome = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + incFor(m), 0) / completedMonths) : 0;
-
-  // ── Category actual spending (matching Year tab logic) ──
-  // For hasTab cats (charity/travel/admin): "spent" = budget allocation (they're committed funds)
-  // For hasLines cats (housing/recurring): "spent" = max(committed budget_items, actual transactions)
-  // For regular cats: "spent" = actual transactions
-  const catActualFor = (mid, catKey) => {
-    const catDef = CATEGORIES.find(c => c.key === catKey);
-    if (catDef && catDef.hasTab) return yearCatBudget(mid, catKey);
-    if (catDef && catDef.hasLines) return Math.max(biSum(mid, [catKey]), txSum(mid, [catKey]));
-    return txSum(mid, [catKey]);
-  };
 
   // ── Category projections ──
   const catProj = CATEGORIES.filter(c => !c.linkedLine).map(c => {
