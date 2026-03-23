@@ -3528,7 +3528,7 @@ function snToggle(gid) {
 
 // -- Year Snapshot ------------------------------------------------------
 async function loadYearData() {
-  if (state.yearData) return;
+  if (state.yearData && state.yearData.incomeItems) return;
   const monthIds = state.months.map(m => m.id);
   const [txRes, biRes, budgetRes, incItemsRes] = await Promise.all([
     sb.from('transactions').select('*').in('month_id', monthIds),
