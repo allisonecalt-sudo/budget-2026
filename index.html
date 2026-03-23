@@ -374,6 +374,59 @@ tr.collapsed { display: none !important; }
 .ov-charity-pct { font-size: .62rem; color: var(--dim); }
 .ov-charity-good { color: var(--green); }
 .ov-charity-low { color: var(--accent); }
+
+/* -- Projections Tab --------------------------------------------------- */
+.proj-wrap { padding: 1.5rem 1rem; max-width: 1100px; margin: 0 auto; }
+.proj-section { margin-bottom: 2rem; }
+.proj-section-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .75rem; display: flex; align-items: center; gap: .5rem; }
+.proj-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.5rem; }
+.proj-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.1rem; box-shadow: var(--shadow); }
+.proj-card-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: .4rem; }
+.proj-card-val { font-family: 'DM Mono', monospace; font-size: 1.5rem; font-weight: 500; line-height: 1; }
+.proj-card-sub { font-size: .68rem; color: var(--muted); margin-top: .35rem; }
+.proj-bar-row { display: flex; align-items: center; gap: .6rem; padding: .55rem 0; border-bottom: 1px solid rgba(0,0,0,.04); }
+.proj-bar-row:last-child { border-bottom: none; }
+.proj-bar-emoji { font-size: .95rem; width: 22px; text-align: center; flex-shrink: 0; }
+.proj-bar-info { flex: 1; min-width: 0; }
+.proj-bar-name { font-size: .75rem; font-weight: 500; margin-bottom: .3rem; display: flex; justify-content: space-between; }
+.proj-bar-track { height: 7px; background: var(--surface3); border-radius: 100px; overflow: hidden; position: relative; }
+.proj-bar-fill { height: 100%; border-radius: 100px; transition: width .5s ease; }
+.proj-bar-budget { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--text); opacity: .3; }
+.proj-bar-nums { font-family: 'DM Mono', monospace; font-size: .68rem; display: flex; justify-content: space-between; margin-top: .2rem; color: var(--dim); }
+.proj-bar-right { font-family: 'DM Mono', monospace; font-size: .75rem; font-weight: 500; text-align: right; width: 100px; flex-shrink: 0; }
+.proj-bar-right .over { color: var(--red); font-weight: 600; }
+.proj-bar-right .under { color: var(--green); }
+.proj-chart { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rl); padding: 1.25rem; box-shadow: var(--shadow); }
+.proj-chart-title { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 1rem; }
+.proj-bars-container { display: flex; align-items: flex-end; gap: 3px; height: 160px; padding-top: 10px; }
+.proj-month-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.proj-month-bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; position: relative; cursor: default; }
+.proj-month-bar:hover { filter: brightness(1.1); }
+.proj-month-label { font-size: .55rem; color: var(--dim); margin-top: .3rem; }
+.proj-month-bar .proj-tip { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem; font-size: .65rem; white-space: nowrap; z-index: 10; box-shadow: var(--shadow); }
+.proj-month-bar:hover .proj-tip { display: block; }
+.proj-stacked { display: flex; flex-direction: column-reverse; width: 100%; }
+.proj-stacked-seg { width: 100%; min-height: 1px; }
+.proj-stacked-seg:first-child { border-radius: 4px 4px 0 0; }
+.proj-stacked-seg:last-child { border-radius: 0 0 4px 4px; }
+.proj-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: .75rem; }
+.proj-legend-item { display: flex; align-items: center; gap: .35rem; font-size: .68rem; color: var(--muted); }
+.proj-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+.proj-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.proj-savings-ring { display: flex; align-items: center; gap: 1.5rem; }
+.proj-savings-info { flex: 1; }
+.proj-sav-row { display: flex; justify-content: space-between; padding: .35rem 0; border-bottom: 1px solid rgba(0,0,0,.04); font-size: .78rem; }
+.proj-sav-row:last-child { border-bottom: none; }
+.proj-sav-label { color: var(--muted); }
+.proj-sav-val { font-family: 'DM Mono', monospace; font-weight: 600; }
+@media (max-width: 900px) {
+  .proj-cards { grid-template-columns: repeat(2, 1fr); }
+  .proj-grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 500px) {
+  .proj-cards { grid-template-columns: 1fr 1fr; }
+  .proj-card-val { font-size: 1.2rem; }
+}
 </style>
 </head>
 <body>
@@ -1344,6 +1397,7 @@ function renderApp() {
           <button class="ptab ${state.activeTab === 'charity' ? 'active' : ''}" onclick="switchTab('charity')">Charity 💚</button>
           <button class="ptab ${state.activeTab === 'cash' ? 'active' : ''}" onclick="switchTab('cash')">Cash 💰</button>
           <button class="ptab ${state.activeTab === 'year' ? 'active' : ''}" onclick="switchTab('year')">Year 📊</button>
+          <button class="ptab ${state.activeTab === 'projections' ? 'active' : ''}" onclick="switchTab('projections')">Projections 🔮</button>
         </div>
       </div>
       <div class="hdr-actions">
@@ -1461,8 +1515,8 @@ function renderApp() {
       </div>`;
     })()}
 
-    <div class="${state.activeTab === 'year' ? 'main-full' : 'main'}">
-      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'year' ? renderYearSnapshot() : state.activeTab === 'cash' ? renderCashTab() : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
+    <div class="${(state.activeTab === 'year' || state.activeTab === 'projections') ? 'main-full' : 'main'}">
+      ${state.loading ? '<div class="loading">Loading...</div>' : state.activeTab === 'projections' ? renderProjectionsTab() : state.activeTab === 'year' ? renderYearSnapshot() : state.activeTab === 'cash' ? renderCashTab() : state.activeTab === 'charity' ? renderCharityTab() : state.activeTab === 'travel' ? renderTravelTab() : state.activeTab === 'admin' ? renderAdminTab() : state.activeTab === 'biz' ? renderBizTab(current) : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
         <div class="sidenav-label">Jump to</div>
@@ -2112,6 +2166,11 @@ async function switchTab(tab) {
     await loadCashData();
     state.loading = false;
   } else if (tab === 'year') {
+    state.loading = true;
+    renderApp();
+    await loadYearData();
+    state.loading = false;
+  } else if (tab === 'projections') {
     state.loading = true;
     renderApp();
     await loadYearData();
@@ -4094,6 +4153,282 @@ async function refreshBiz() {
   renderApp();
 }
 
+// ── Projections Tab ───────────────────────────────────────────────────
+function renderProjectionsTab() {
+  if (!state.yearData) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
+  const { txns, budgetItems, allBudgets, incomeItems } = state.yearData;
+  const months = [...state.months].sort((a,b) => a.month_num - b.month_num);
+  const todayMonth = new Date().getMonth() + 1;
+  const todayDay = new Date().getDate();
+  const daysInCurrentMonth = new Date(2026, todayMonth, 0).getDate();
+  const MNAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Reuse year data helpers
+  const txSum = (mid, cats) => txns.filter(t => t.month_id===mid && cats.includes(t.category)).reduce((s,t)=>s+(Number(t.amount)||0),0);
+  const biSum = (mid, cats) => budgetItems.filter(b => b.month_id===mid && cats.includes(b.category)).reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const budgetMap = {};
+  (allBudgets || []).forEach(b => { if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {}; budgetMap[b.month_id][b.category] = b.amount; });
+  const budgetV = (mid, cats) => cats.reduce((s, cat) => s + (budgetMap[mid]?.[cat] || 0), 0);
+
+  const incItemsByMonth = {};
+  (incomeItems || []).forEach(i => { if (!incItemsByMonth[i.month_id]) incItemsByMonth[i.month_id] = []; incItemsByMonth[i.month_id].push(i); });
+  const incItemsTotalFor = mid => (incItemsByMonth[mid] || []).reduce((s,i) => s + (Number(i.amount)||0), 0);
+  const incFor = m => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0)+incItemsTotalFor(m.id);
+
+  const yearCatBudget = (mid, catKey) => {
+    const catDef = CATEGORIES.find(c => c.key === catKey);
+    if (catDef && catDef.linkedLine) {
+      const parentItems = budgetItems.filter(b => b.month_id === mid && b.category === catDef.linkedLine.parent);
+      const linked = parentItems.find(i => (i.label||'').toLowerCase() === catDef.linkedLine.label.toLowerCase());
+      if (linked) return Number(linked.amount) || 0;
+    }
+    const items = budgetItems.filter(b => b.month_id === mid && b.category === catKey);
+    if (items.length) return items.reduce((s,b) => s + (Number(b.amount)||0), 0);
+    return budgetMap[mid]?.[catKey] || 0;
+  };
+
+  const totalSpentFor = m => {
+    return CATEGORIES.reduce((sum, c) => {
+      if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
+      if (c.hasLines) return sum + Math.max(biSum(m.id, [c.key]), txSum(m.id, [c.key]));
+      return sum + txSum(m.id, [c.key]);
+    }, 0) + (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0);
+  };
+  const totalBudgetedFor = m => CATEGORIES.reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0) + (budgetMap[m.id]?.['savings_bank']||0) + (budgetMap[m.id]?.['savings_invested']||0);
+
+  const fmt = n => '\u20aa' + Math.round(n).toLocaleString('en-US');
+
+  // ── Compute projections ──
+  const pastMonths = months.filter(m => m.month_num < todayMonth);
+  const curMonth = months.find(m => m.month_num === todayMonth);
+  const futureMonths = months.filter(m => m.month_num > todayMonth);
+
+  // Actual totals for completed months
+  let ytdIncome = pastMonths.reduce((s, m) => s + incFor(m), 0);
+  let ytdSpent = pastMonths.reduce((s, m) => s + totalSpentFor(m), 0);
+  let ytdSavings = pastMonths.reduce((s, m) => s + (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0), 0);
+
+  // Current month: prorate spending if mid-month
+  let curSpent = 0, curIncome = 0, curSavings = 0, curBudgeted = 0;
+  if (curMonth) {
+    curSpent = totalSpentFor(curMonth);
+    curIncome = incFor(curMonth);
+    curSavings = (Number(curMonth.savings_bank)||0) + (Number(curMonth.savings_invested)||0);
+    curBudgeted = totalBudgetedFor(curMonth);
+    ytdIncome += curIncome;
+    ytdSpent += curSpent;
+    ytdSavings += curSavings;
+  }
+
+  // Project current month's spending to end of month
+  const curMonthProjected = todayDay > 0 ? Math.round(curSpent * (daysInCurrentMonth / todayDay)) : curSpent;
+
+  // Future months: use budgeted amounts
+  let futureIncome = futureMonths.reduce((s, m) => s + incFor(m), 0);
+  let futureBudgeted = futureMonths.reduce((s, m) => s + totalBudgetedFor(m), 0);
+  let futureSavings = futureMonths.reduce((s, m) => s + (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0), 0);
+
+  // Year-end projections
+  const projectedYearIncome = ytdIncome + futureIncome;
+  const projectedYearSpent = ytdSpent + (curMonthProjected - curSpent) + futureBudgeted;
+  const projectedYearSavings = ytdSavings + futureSavings;
+  const projectedYearRemaining = projectedYearIncome - projectedYearSpent;
+
+  // Monthly average spending (past completed months only)
+  const completedMonths = pastMonths.length;
+  const avgMonthlySpend = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + totalSpentFor(m), 0) / completedMonths) : 0;
+  const avgMonthlyIncome = completedMonths > 0 ? Math.round(pastMonths.reduce((s,m) => s + incFor(m), 0) / completedMonths) : 0;
+
+  // ── Category projections ──
+  const catProj = CATEGORIES.filter(c => !c.linkedLine).map(c => {
+    const yearBudget = months.reduce((s, m) => s + yearCatBudget(m.id, c.key), 0);
+    const ytdActual = pastMonths.reduce((s, m) => s + txSum(m.id, [c.key]), 0) + (curMonth ? txSum(curMonth.id, [c.key]) : 0);
+    // Project: actual so far + budget for remaining months
+    const projected = ytdActual + futureMonths.reduce((s, m) => s + yearCatBudget(m.id, c.key), 0);
+    const pct = yearBudget > 0 ? Math.round((ytdActual / yearBudget) * 100) : 0;
+    // How far through the year are we (by month)?
+    const yearPct = Math.round((todayMonth / 12) * 100);
+    const pace = yearBudget > 0 ? (pct > yearPct + 10 ? 'over' : pct < yearPct - 10 ? 'under' : 'on') : 'na';
+    return { key: c.key, label: c.label, emoji: c.emoji, yearBudget, ytdActual, projected, pct, pace };
+  }).filter(c => c.yearBudget > 0 || c.ytdActual > 0).sort((a,b) => b.ytdActual - a.ytdActual);
+
+  // ── Month-by-month chart data ──
+  const monthData = months.map(m => {
+    const isFuture = m.month_num > todayMonth;
+    const isCurrent = m.month_num === todayMonth;
+    const income = incFor(m);
+    const spent = isFuture ? totalBudgetedFor(m) : totalSpentFor(m);
+    const savings = (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0);
+    return { num: m.month_num, income, spent, savings, isFuture, isCurrent };
+  });
+  const maxBar = Math.max(...monthData.map(d => Math.max(d.income, d.spent)), 1);
+
+  // ── Savings trajectory ──
+  let cumSavings = 0;
+  const savingsTrajectory = months.map(m => {
+    const sav = (Number(m.savings_bank)||0) + (Number(m.savings_invested)||0);
+    cumSavings += sav;
+    return { num: m.month_num, cumulative: cumSavings, monthly: sav, isFuture: m.month_num > todayMonth };
+  });
+  const maxCumSavings = Math.max(...savingsTrajectory.map(s => s.cumulative), 1);
+
+  // ── Year progress ──
+  const yearPctComplete = Math.round(((todayMonth - 1 + todayDay / daysInCurrentMonth) / 12) * 100);
+  const budgetPctUsed = projectedYearSpent > 0 ? Math.round((ytdSpent / projectedYearSpent) * 100) : 0;
+
+  // ── Build HTML ──
+  var h = '<div class="proj-wrap">';
+
+  // Hero cards
+  h += '<div class="proj-cards">';
+  h += '<div class="proj-card"><div class="proj-card-label">Year-End Income</div>';
+  h += '<div class="proj-card-val" style="color:var(--green)">' + fmt(projectedYearIncome) + '</div>';
+  h += '<div class="proj-card-sub">' + fmt(ytdIncome) + ' earned so far</div></div>';
+
+  h += '<div class="proj-card"><div class="proj-card-label">Year-End Spending</div>';
+  h += '<div class="proj-card-val" style="color:var(--text)">' + fmt(projectedYearSpent) + '</div>';
+  h += '<div class="proj-card-sub">' + fmt(ytdSpent) + ' spent so far</div></div>';
+
+  h += '<div class="proj-card"><div class="proj-card-label">Year-End Savings</div>';
+  h += '<div class="proj-card-val" style="color:var(--accent)">' + fmt(projectedYearSavings) + '</div>';
+  h += '<div class="proj-card-sub">' + (projectedYearIncome > 0 ? Math.round(projectedYearSavings / projectedYearIncome * 100) + '% of income' : '') + '</div></div>';
+
+  var remColor = projectedYearRemaining >= 0 ? 'var(--green)' : 'var(--red)';
+  h += '<div class="proj-card"><div class="proj-card-label">Year-End Unallocated</div>';
+  h += '<div class="proj-card-val" style="color:' + remColor + '">' + fmt(projectedYearRemaining) + '</div>';
+  h += '<div class="proj-card-sub">' + yearPctComplete + '% through the year</div></div>';
+  h += '</div>';
+
+  // ── Current month pace ──
+  if (curMonth) {
+    var daysLeft = daysInCurrentMonth - todayDay;
+    var curRemaining = curIncome - curSpent - curSavings;
+    var dailyBudget = daysLeft > 0 ? Math.round(curRemaining / daysLeft) : 0;
+    var paceColor = curMonthProjected > curBudgeted * 1.1 ? 'var(--red)' : curMonthProjected > curBudgeted * 0.9 ? 'var(--amber)' : 'var(--green)';
+
+    h += '<div class="proj-section"><div class="proj-section-title">\u{1F4C5} ' + MNAMES[todayMonth-1] + ' Pace</div>';
+    h += '<div class="proj-chart" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">';
+    // Progress bar
+    h += '<div style="flex:1;min-width:250px;">';
+    h += '<div style="display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:.4rem;"><span>Day ' + todayDay + ' of ' + daysInCurrentMonth + '</span><span style="color:var(--muted)">' + daysLeft + ' days left</span></div>';
+    h += '<div class="proj-bar-track" style="height:12px;"><div class="proj-bar-fill" style="width:' + Math.round(todayDay/daysInCurrentMonth*100) + '%;background:var(--accent);"></div></div>';
+    h += '<div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--dim);margin-top:.3rem;"><span>Spent: ' + fmt(curSpent) + '</span><span>Budget: ' + fmt(curBudgeted) + '</span></div>';
+    h += '</div>';
+    // Key numbers
+    h += '<div style="display:flex;gap:1.5rem;flex-wrap:wrap;">';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Projected</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + paceColor + '">' + fmt(curMonthProjected) + '</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Daily Budget</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (dailyBudget > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(dailyBudget) + '</div></div>';
+    h += '<div style="text-align:center;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.3rem;">Remaining</div>';
+    h += '<div style="font-family:\'DM Mono\',monospace;font-size:1.1rem;font-weight:600;color:' + (curRemaining > 0 ? 'var(--green)' : 'var(--red)') + '">' + fmt(curRemaining) + '</div></div>';
+    h += '</div>';
+    h += '</div></div>';
+  }
+
+  // ── Monthly income vs spending chart ──
+  h += '<div class="proj-section"><div class="proj-section-title">\u{1F4CA} Monthly Income vs Spending</div>';
+  h += '<div class="proj-chart">';
+  h += '<div class="proj-bars-container">';
+  monthData.forEach(function(d) {
+    var incH = Math.round((d.income / maxBar) * 140);
+    var spH = Math.round((d.spent / maxBar) * 140);
+    var opacity = d.isFuture ? '.4' : '1';
+    h += '<div class="proj-month-col" style="opacity:' + opacity + '">';
+    // Two bars side by side
+    h += '<div style="display:flex;gap:1px;align-items:flex-end;width:100%;height:100%;">';
+    h += '<div class="proj-month-bar" style="flex:1;height:' + incH + 'px;background:var(--green);opacity:.6;"><div class="proj-tip">' + MNAMES[d.num-1] + ' income: ' + fmt(d.income) + '</div></div>';
+    h += '<div class="proj-month-bar" style="flex:1;height:' + spH + 'px;background:' + (d.isFuture ? 'var(--dim)' : d.spent > d.income ? 'var(--red)' : 'var(--accent)') + ';"><div class="proj-tip">' + MNAMES[d.num-1] + (d.isFuture ? ' budget' : ' spent') + ': ' + fmt(d.spent) + '</div></div>';
+    h += '</div>';
+    h += '<div class="proj-month-label" style="' + (d.isCurrent ? 'color:var(--accent);font-weight:700' : '') + '">' + MNAMES[d.num-1] + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div class="proj-legend"><div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--green);opacity:.6;"></div>Income</div>';
+  h += '<div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--accent);"></div>Actual</div>';
+  h += '<div class="proj-legend-item"><div class="proj-legend-dot" style="background:var(--dim);"></div>Budgeted (future)</div></div>';
+  h += '</div></div>';
+
+  // ── Category projections + Savings side by side ──
+  h += '<div class="proj-grid-2">';
+
+  // Category projections
+  h += '<div class="proj-section"><div class="proj-section-title">\u{1F3AF} Category Year Pace</div>';
+  h += '<div class="proj-chart" style="padding:.75rem 1rem;">';
+  var yearPct = Math.round((todayMonth / 12) * 100);
+  h += '<div style="font-size:.65rem;color:var(--dim);margin-bottom:.75rem;">You\'re ' + yearPct + '% through the year. Categories ahead of that pace are flagged.</div>';
+  catProj.forEach(function(c) {
+    var fillPct = Math.min(c.pct, 120);
+    var fillColor = c.pace === 'over' ? 'var(--red)' : c.pace === 'under' ? 'var(--green)' : 'var(--accent)';
+    var paceLabel = c.pace === 'over' ? 'Ahead' : c.pace === 'under' ? 'Under' : 'On track';
+    var paceStyle = c.pace === 'over' ? 'color:var(--red);font-weight:600' : c.pace === 'under' ? 'color:var(--green)' : 'color:var(--muted)';
+    h += '<div class="proj-bar-row">';
+    h += '<div class="proj-bar-emoji">' + c.emoji + '</div>';
+    h += '<div class="proj-bar-info">';
+    h += '<div class="proj-bar-name"><span>' + c.label + '</span><span style="font-size:.65rem;' + paceStyle + '">' + paceLabel + ' (' + c.pct + '%)</span></div>';
+    h += '<div class="proj-bar-track" style="position:relative;">';
+    h += '<div class="proj-bar-fill" style="width:' + Math.min(fillPct, 100) + '%;background:' + fillColor + ';"></div>';
+    // Year progress marker
+    h += '<div class="proj-bar-budget" style="left:' + yearPct + '%;"></div>';
+    h += '</div>';
+    h += '<div class="proj-bar-nums"><span>' + fmt(c.ytdActual) + ' spent</span><span>' + fmt(c.yearBudget) + ' year budget</span></div>';
+    h += '</div>';
+    h += '<div class="proj-bar-right">';
+    if (c.yearBudget > 0) {
+      var diff = c.yearBudget - c.ytdActual;
+      h += '<div class="' + (diff < 0 ? 'over' : 'under') + '">' + fmt(Math.abs(diff)) + '</div>';
+      h += '<div style="font-size:.58rem;color:var(--dim)">' + (diff < 0 ? 'over' : 'left') + '</div>';
+    }
+    h += '</div></div>';
+  });
+  h += '</div></div>';
+
+  // Savings trajectory
+  h += '<div class="proj-section"><div class="proj-section-title">\u{1F4B0} Savings Trajectory</div>';
+  h += '<div class="proj-chart">';
+  // Bar chart of cumulative savings
+  h += '<div class="proj-bars-container" style="height:130px;">';
+  savingsTrajectory.forEach(function(s) {
+    var barH = Math.round((s.cumulative / maxCumSavings) * 120);
+    var opacity = s.isFuture ? '.4' : '1';
+    h += '<div class="proj-month-col" style="opacity:' + opacity + '">';
+    h += '<div class="proj-month-bar" style="height:' + barH + 'px;background:var(--accent);"><div class="proj-tip">' + MNAMES[s.num-1] + ': ' + fmt(s.cumulative) + ' total (' + fmt(s.monthly) + '/mo)</div></div>';
+    h += '<div class="proj-month-label">' + MNAMES[s.num-1] + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  // Savings summary
+  h += '<div style="display:flex;gap:1.5rem;margin-top:1rem;flex-wrap:wrap;">';
+  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Year target</span><span class="proj-sav-val">' + fmt(projectedYearSavings) + '</span></div>';
+  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Saved so far</span><span class="proj-sav-val" style="color:var(--green)">' + fmt(ytdSavings) + '</span></div>';
+  var savPct = projectedYearSavings > 0 ? Math.round(ytdSavings / projectedYearSavings * 100) : 0;
+  h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Progress</span><span class="proj-sav-val">' + savPct + '%</span></div>';
+  if (avgMonthlyIncome > 0) {
+    var savRate = Math.round(projectedYearSavings / projectedYearIncome * 100);
+    h += '<div class="proj-sav-row" style="border:none;gap:1rem;"><span class="proj-sav-label">Savings rate</span><span class="proj-sav-val">' + savRate + '%</span></div>';
+  }
+  h += '</div>';
+  h += '</div></div>';
+
+  h += '</div>'; // close proj-grid-2
+
+  // ── Monthly averages summary ──
+  if (completedMonths > 0) {
+    h += '<div class="proj-section"><div class="proj-section-title">\u{1F4CB} Monthly Averages (based on ' + completedMonths + ' completed month' + (completedMonths > 1 ? 's' : '') + ')</div>';
+    h += '<div class="proj-cards">';
+    h += '<div class="proj-card"><div class="proj-card-label">Avg Income</div><div class="proj-card-val" style="color:var(--green);font-size:1.2rem;">' + fmt(avgMonthlyIncome) + '</div></div>';
+    h += '<div class="proj-card"><div class="proj-card-label">Avg Spending</div><div class="proj-card-val" style="font-size:1.2rem;">' + fmt(avgMonthlySpend) + '</div></div>';
+    var avgNet = avgMonthlyIncome - avgMonthlySpend;
+    h += '<div class="proj-card"><div class="proj-card-label">Avg Net</div><div class="proj-card-val" style="color:' + (avgNet >= 0 ? 'var(--green)' : 'var(--red)') + ';font-size:1.2rem;">' + fmt(avgNet) + '</div></div>';
+    var avgSav = completedMonths > 0 ? Math.round(ytdSavings / completedMonths) : 0;
+    h += '<div class="proj-card"><div class="proj-card-label">Avg Savings</div><div class="proj-card-val" style="color:var(--accent);font-size:1.2rem;">' + fmt(avgSav) + '</div></div>';
+    h += '</div></div>';
+  }
+
+  h += '</div>'; // close proj-wrap
+  return h;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────
 // MIGRATION REQUIRED (run once in Supabase SQL editor):
 //   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
@@ -4119,7 +4454,7 @@ async function loadFresh() {
   ]);
   const tab = state.activeTab;
   if (tab === 'biz') await loadBizData();
-  else if (tab === 'year') await loadYearData();
+  else if (tab === 'year' || tab === 'projections') await loadYearData();
   state.loading = false;
   saveCache();
 }
