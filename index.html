@@ -3841,6 +3841,7 @@ function renderYearSnapshot() {
   // Tab categories (charity/travel/admin) always count their budget allocation
   // Savings always count as spent
   const totalSpentFor = (m, future) => {
+    if (future && !showProjected) return 0;
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
       if (c.hasLines) {
@@ -3871,12 +3872,13 @@ function renderYearSnapshot() {
 
   // Housing: sum all housing budget_items (rent, arnona, etc.) + actual household transactions
   const housingV = (m, f) => {
+    if (f && !showProjected) return 0;
     const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
     const hhSpend = f ? (budgetV(m.id,['household']) || biSum(m.id,['household'])) : txSum(m.id,['household']);
     return hBi + hhSpend;
   };
   // Recurring: sum all recurring budget_items
-  const recurringV = m => budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const recurringV = (m, f) => (f && !showProjected) ? 0 : budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
 
   // Travel/Admin: budget vs spent gap
   const travelBudgetV = (mn) => { const m = months.find(mo=>mo.month_num===mn); return m ? (budgetMap[m.id]?.['travel']||0) : 0; };
@@ -3917,7 +3919,7 @@ function renderYearSnapshot() {
     { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => housingV(m, f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f), sectionGroup: 'spending' },
-    { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => recurringV(m), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F504} Recurring',     valFn: (m,f)  => recurringV(m,f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F389} Leisure',       valFn: (m,f)  => spendV(m,LEISURE,f), expandable: 'leisure', sectionGroup: 'spending' },
     { type:'sub', group:'leisure', label:'\u2937 Take Out',        valFn: (m,f) => spendV(m,['takeout'],f) },
     { type:'sub', group:'leisure', label:'\u2937 Eating Out',      valFn: (m,f) => spendV(m,['eatingout'],f) },
