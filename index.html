@@ -1373,8 +1373,8 @@ function renderApp() {
   if (!state.currentMonthId) state.currentMonthId = current.id;
 
   const income = totalIncome(current);
-  // Sync charity % from localStorage into state.budgets so snapshot sees it immediately
-  const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
+  // Sync charity % from DB into state.budgets so snapshot sees it immediately
+  const _chPct = parseFloat(current.charity_pct);
   if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
@@ -1667,8 +1667,7 @@ function renderApp() {
                 const txs = state.transactions.filter(tx => tx.category === c.key);
                 if (c.hasTab) {
                   if (c.key === 'charity') {
-                    const charityPctKey = 'charityPct_' + state.currentMonthId;
-                    const charityPct = parseFloat(localStorage.getItem(charityPctKey)) || (state.budgets['charity'] && income ? +(state.budgets['charity'] / income * 100).toFixed(1) : '');
+                    const charityPct = parseFloat((state.months.find(m=>m.id===state.currentMonthId)||{}).charity_pct) || (state.budgets['charity'] && income ? +(state.budgets['charity'] / income * 100).toFixed(1) : '');
                     const charityCalc = charityPct ? Math.round(income * charityPct / 100) : (state.budgets['charity'] || 0);
                     return `<div class="cat-row" id="cat-charity">
                       <div class="cat-top">
@@ -1676,8 +1675,8 @@ function renderApp() {
                         <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
                           <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
                             onclick="event.stopPropagation()"
-                            oninput="(function(el){const pct=parseFloat(el.value)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
-                            onblur="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
+                            oninput="(function(el){const pct=parseFloat(el.value)||0;const m=state.months.find(m=>m.id===state.currentMonthId);if(m)m.charity_pct=pct;const inc=totalIncome(m);const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
+                            onblur="(function(v){const pct=parseFloat(v)||0;const m=state.months.find(m=>m.id===state.currentMonthId);if(m)m.charity_pct=pct;saveCharityPct(pct);const inc=totalIncome(m);const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
                             onkeydown="if(event.key==='Enter'){this.blur()}"
                             style="width:60px">
                           <span style="font-size:.8rem;color:var(--muted);">%</span>
@@ -1954,6 +1953,11 @@ async function saveSavingsField(field, value) {
   pushUndo({ label: 'savings '+field, undo: async()=>{ await sb.from('months').update({[field]:old}).eq('id',state.currentMonthId); if(month)month[field]=old; }, redo: async()=>{ await sb.from('months').update({[field]:num}).eq('id',state.currentMonthId); if(month)month[field]=num; } });
   renderApp();
   toast('Saved ✓');
+}
+
+async function saveCharityPct(pct) {
+  const num = parseFloat(pct) || 0;
+  await sb.from('months').update({ charity_pct: num }).eq('id', state.currentMonthId);
 }
 
 async function saveBudget(catKey, amount) {
