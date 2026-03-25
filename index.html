@@ -3894,7 +3894,7 @@ function renderYearSnapshot() {
     { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f), sectionGroup: 'overview' },
     // 3. Savings & Investment
     { type:'section', label:'\u{1F4B0} Savings & Investment', collapsible: 'savings' },
-    { type:'row', bold:true, label:'Total Savings',   valFn: (m,f) => (!showProjected && f) ? 0 : ((Number(m.savings_bank)||0)+(Number(m.savings_invested)||0)), sectionGroup: 'savings', stickyInSection: true },
+    { type:'row', bold:true, label:'Total Savings',   valFn: (m,f) => (Number(m.savings_bank)||0)+(Number(m.savings_invested)||0), sectionGroup: 'savings', stickyInSection: true },
     { type:'sub',            label:'\u2937 Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
     { type:'sub',            label:'\u2937 Invested',      valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_invested)||0), sectionGroup: 'savings' },
     // 5. Charity Overview
