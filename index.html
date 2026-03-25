@@ -1152,7 +1152,7 @@ function spentByCategory() {
   if (currentMonth) {
     const mn = currentMonth.month_num;
     totals['travel'] += (state.travel.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
-    totals['admin'] += (state.admin.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
+    totals['admin'] += (state.admin.subItems || []).filter(s => s.is_paid && s.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
     totals['charity'] += (state.charity.payments || []).filter(p => p.month_num === mn).reduce((s, p) => s + Number(p.amount), 0);
   }
   return totals;
@@ -2501,7 +2501,7 @@ function renderTravelTab() {
   const remaining = budget - totalSpent;
 
   const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   const tvSort = localStorage.getItem('travelItemSort') || 'created';
   const sortedItems = [...items].sort((a,b) => {
@@ -2752,7 +2752,7 @@ function renderCharityTab() {
   const remaining = budget - totalSpent;
 
   const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   // Pre-compute sort buttons HTML
   const ciSort = localStorage.getItem('charityItemSort') || 'created';
@@ -2961,7 +2961,6 @@ function renderAdminTab() {
   const allocs = state.admin.allocations || {};
   const currentMonthObj = state.months.find(m => m.id === state.currentMonthId);
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
-  const payments = state.admin.payments || [];
 
   const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
   const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
@@ -2972,7 +2971,7 @@ function renderAdminTab() {
   const remaining = budget - totalSpent;
 
   const fmtA = n => '₪' + Number(n||0).toLocaleString('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const esc = s => (s||'').replace(/"/g,'&quot;');
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   // Pre-compute sort buttons HTML
   const aiSort = localStorage.getItem('adminItemSort') || 'created';
@@ -3075,7 +3074,6 @@ function renderAdminTab() {
       const subs = (state.admin.subItems || []).filter(sub => sub.item_id === i.id);
       return s + subs.filter(sub=>sub.is_paid).reduce((n,sub)=>n+Number(sub.amount),0);
     }, 0);
-    // Also count payments from payment log that match items in this category
     const pct = catBudget > 0 ? Math.min(100, Math.round(catPaid / catBudget * 100)) : 0;
     const st = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent)' : 'var(--amber)';
     return { catBudget, catPaid, pct, st };
@@ -3202,8 +3200,8 @@ function renderAdminTab() {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
       ${adminView === 'category' ? `
         <!-- By Item View -->
-        ${viewMode !== 'category' ? `<div style="display:grid;grid-template-columns:30px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
-          <span></span><span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">Est</span><span></span><span></span>
+        ${viewMode !== 'category' ? `<div style="display:grid;grid-template-columns:24px 1fr 80px 22px;gap:.3rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
+          <span></span><span>Item</span><span style="text-align:right;">Projected</span><span></span>
         </div>` : ''}
         ${activeItemsHtml}
         <button onclick="addAdminItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
@@ -3285,12 +3283,15 @@ async function saveAdminItem(id, field, value) {
 async function deleteAdminItem(id) {
   const snap = state.admin.items.find(i => i.id === id);
   if (!snap) return;
+  const snapSubs = (state.admin.subItems || []).filter(s => s.item_id === id);
+  await sb.from('admin_sub_items').delete().eq('item_id', id);
   await sb.from('admin_items').delete().eq('id', id);
   state.admin.items = state.admin.items.filter(i => i.id !== id);
+  state.admin.subItems = (state.admin.subItems || []).filter(s => s.item_id !== id);
   pushUndo({
     label: 'delete admin item',
-    undo: async () => { const { data } = await sb.from('admin_items').insert(snap).select().single(); if (data) { state.admin.items.push(data); } renderApp(); },
-    redo: async () => { await sb.from('admin_items').delete().eq('id', id); state.admin.items = state.admin.items.filter(i => i.id !== id); renderApp(); }
+    undo: async () => { const { data } = await sb.from('admin_items').insert(snap).select().single(); if (data) { state.admin.items.push(data); for (const ss of snapSubs) { const { data: sd } = await sb.from('admin_sub_items').insert(ss).select().single(); if (sd) state.admin.subItems.push(sd); } } renderApp(); },
+    redo: async () => { await sb.from('admin_sub_items').delete().eq('item_id', id); await sb.from('admin_items').delete().eq('id', id); state.admin.items = state.admin.items.filter(i => i.id !== id); state.admin.subItems = (state.admin.subItems || []).filter(s => s.item_id !== id); renderApp(); }
   });
   renderApp();
 }
