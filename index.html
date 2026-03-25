@@ -1313,9 +1313,7 @@ function renderApp() {
   if (!state.currentMonthId) state.currentMonthId = current.id;
 
   const income = totalIncome(current);
-  // Sync charity % from localStorage into state.budgets so snapshot sees it immediately
-  const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
-  if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
+  // Charity budget comes from DB (budgets table) — the % is just a UI shortcut for setting it
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
   const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
@@ -1606,8 +1604,9 @@ function renderApp() {
                 if (c.hasTab) {
                   if (c.key === 'charity') {
                     const charityPctKey = 'charityPct_' + state.currentMonthId;
-                    const charityPct = parseFloat(localStorage.getItem(charityPctKey)) || (state.budgets['charity'] && income ? +(state.budgets['charity'] / income * 100).toFixed(1) : '');
-                    const charityCalc = charityPct ? Math.round(income * charityPct / 100) : (state.budgets['charity'] || 0);
+                    const charityBudgetDB = state.budgets['charity'] || 0;
+                    const charityPct = parseFloat(localStorage.getItem(charityPctKey)) || (charityBudgetDB && income ? +(charityBudgetDB / income * 100).toFixed(1) : '');
+                    const charityCalc = charityBudgetDB || (charityPct ? Math.round(income * charityPct / 100) : 0);
                     return `<div class="cat-row" id="cat-charity">
                       <div class="cat-top">
                         <div class="cat-name"><span class="cat-emoji">💚</span>Charity</div>
