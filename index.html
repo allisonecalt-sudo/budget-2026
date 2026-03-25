@@ -1347,7 +1347,7 @@ function renderApp() {
   if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
-  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (spent[c.key]||0), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
   const remaining = income - totalSpent;
@@ -1404,11 +1404,11 @@ function renderApp() {
         const gr = gb - gs;
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
         const catRows = cats.map(c => {
-          const b = catBudget(c.key)||0; const s = spent[c.key]||0; const r = b-s;
+          const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
           return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
         }).join('');
         if (cats.length === 1) {
-          const c = cats[0]; const b = catBudget(c.key)||0; const s = spent[c.key]||0; const r = b-s;
+          const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
           return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
         }
         return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
@@ -4092,7 +4092,7 @@ function openSnapshot() {
   const spent = spentByCategory();
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
   // Also include savings as "spent" (money allocated out of income)
-  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (spent[c.key]||0), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
   const totalBudgeted = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + catBudget(c.key), 0)
@@ -4120,7 +4120,7 @@ function openSnapshot() {
       </tr>`;
     }).join('');
     if (cats.length === 1) {
-      const c = cats[0]; const b = catBudget(c.key)||0; const s = spent[c.key]||0; const r = b-s;
+      const c = cats[0]; const b = catBudget(c.key)||0; const s = c.hasTab ? b : (spent[c.key]||0); const r = b-s;
       return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b?n(b):''}</td><td>${b?n(s):''}</td><td class="${r<0?'sn-over':r>0?'sn-ok':''}">${b?n(r):''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
