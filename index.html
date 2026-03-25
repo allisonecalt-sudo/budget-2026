@@ -427,13 +427,34 @@ tr.collapsed { display: none !important; }
   .proj-cards { grid-template-columns: 1fr 1fr; }
   .proj-card-val { font-size: 1.2rem; }
 }
+#login-screen{display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg);padding:1.5rem;}
+#login-screen.active{display:flex;}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;box-shadow:0 8px 32px rgba(26,25,21,.12);max-width:360px;width:100%;text-align:center;}
+.login-card h2{font-size:1.3rem;margin-bottom:.5rem;}
+.login-card p{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem;}
+.login-card input{margin-bottom:.75rem;padding:.6rem .85rem;border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:.875rem;background:var(--surface2);color:var(--text);outline:none;width:100%;box-sizing:border-box;}
+.login-card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(45,106,79,.18);}
+.login-card .btn-login{width:100%;padding:.7rem;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;font-size:.9rem;background:var(--accent);color:white;margin-top:.5rem;}
+.login-card .btn-login:hover{opacity:.9;}
+.login-err{color:#c0392b;font-size:.8rem;margin-top:.75rem;display:none;}
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
 
-<div id="root">
+<div id="login-screen">
+  <div class="login-card">
+    <h2>Budget 2026</h2>
+    <p>Log in to access your budget</p>
+    <input type="email" id="login-email" placeholder="Email" value="allisonecalt@gmail.com">
+    <input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn-login" onclick="doLogin()">Log in</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<div id="root" style="display:none">
   <div class="loading">Loading...</div>
 </div>
 
@@ -4630,7 +4651,25 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z'&&e.shiftKey))) { e.preventDefault(); doRedo(); }
 });
-init();
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const errEl=document.getElementById('login-err');
+  errEl.style.display='none';
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){errEl.textContent=error.message;errEl.style.display='block';return;}
+  document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('root').style.display='';
+  init();
+}
+async function doLogout(){await sb.auth.signOut();document.getElementById('root').style.display='none';document.getElementById('login-screen').classList.add('active');}
+
+(async()=>{
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){document.getElementById('root').style.display='';init();}
+  else{document.getElementById('login-screen').classList.add('active');}
+})();
 </script>
 </body>
 </html>
