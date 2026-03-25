@@ -1074,14 +1074,16 @@ async function setItemAsDefault(id) {
 }
 
 // When loading a month that has no budget items for a hasLines category,
-// copy from template if template exists
+// copy from template if template exists — checks DB directly to avoid race conditions
 async function seedBudgetItemsFromTemplate(monthId) {
   const linesCats = CATEGORIES.filter(c => c.hasLines).map(c => c.key);
   for (const catKey of linesCats) {
-    if (state.budgetItems[catKey] && state.budgetItems[catKey].length > 0) continue;
+    // Check DB directly instead of state (state can be wiped by concurrent loadBudgetItems)
+    const { count } = await sb.from('budget_items').select('id', { count: 'exact', head: true }).eq('month_id', monthId).eq('category', catKey);
+    if (count > 0) continue;
     const { data: tmpl } = await sb.from('budget_item_templates').select('*').eq('category', catKey).order('sort_order');
     if (!tmpl || tmpl.length === 0) continue;
-    const inserts = tmpl.map(t => ({ month_id: monthId, category: catKey, label: t.label, amount: t.amount, sort_order: t.sort_order }));
+    const inserts = tmpl.map(t => ({ month_id: monthId, category: catKey, label: t.label, amount: t.amount, sort_order: t.sort_order, subcategory: t.subcategory || null }));
     const { data: newItems } = await sb.from('budget_items').insert(inserts).select();
     state.budgetItems[catKey] = newItems || [];
   }
@@ -1603,18 +1605,17 @@ function renderApp() {
                 const txs = state.transactions.filter(tx => tx.category === c.key);
                 if (c.hasTab) {
                   if (c.key === 'charity') {
-                    const charityPctKey = 'charityPct_' + state.currentMonthId;
-                    const charityBudgetDB = state.budgets['charity'] || 0;
-                    const charityPct = parseFloat(localStorage.getItem(charityPctKey)) || (charityBudgetDB && income ? +(charityBudgetDB / income * 100).toFixed(1) : '');
-                    const charityCalc = charityBudgetDB || (charityPct ? Math.round(income * charityPct / 100) : 0);
+                    const curMonth = state.months.find(m => m.id === state.currentMonthId);
+                    const charityPct = parseFloat(curMonth?.charity_pct) || 0;
+                    const charityCalc = state.budgets['charity'] || (charityPct && income ? Math.round(income * charityPct / 100) : 0);
                     return `<div class="cat-row" id="cat-charity">
                       <div class="cat-top">
                         <div class="cat-name"><span class="cat-emoji">💚</span>Charity</div>
                         <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
-                          <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
+                          <input type="number" class="budget-inline" value="${charityPct || ''}" placeholder="%" min="0" max="100" step="0.1"
                             onclick="event.stopPropagation()"
-                            oninput="(function(el){const pct=parseFloat(el.value)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
-                            onblur="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
+                            oninput="(function(el){const pct=parseFloat(el.value)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
+                            onblur="(function(v){const pct=parseFloat(v)||0;const m=state.months.find(m=>m.id===state.currentMonthId);if(m)m.charity_pct=pct;sb.from('months').update({charity_pct:pct}).eq('id',state.currentMonthId);const inc=totalIncome(m);const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
                             onkeydown="if(event.key==='Enter'){this.blur()}"
                             style="width:60px">
                           <span style="font-size:.8rem;color:var(--muted);">%</span>
