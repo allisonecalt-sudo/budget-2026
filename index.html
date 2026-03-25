@@ -427,8 +427,8 @@ tr.collapsed { display: none !important; }
   .proj-cards { grid-template-columns: 1fr 1fr; }
   .proj-card-val { font-size: 1.2rem; }
 }
-#login-screen{display:none;min-height:100vh;align-items:center;justify-content:center;background:var(--bg);padding:1.5rem;}
-#login-screen.active{display:flex;}
+#login-screen{display:flex;min-height:100vh;align-items:center;justify-content:center;background:var(--bg);padding:1.5rem;}
+#login-screen.hidden{display:none;}
 .login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2.5rem 2rem;box-shadow:0 8px 32px rgba(26,25,21,.12);max-width:360px;width:100%;text-align:center;}
 .login-card h2{font-size:1.3rem;margin-bottom:.5rem;}
 .login-card p{color:var(--muted);font-size:.85rem;margin-bottom:1.5rem;}
@@ -4659,16 +4659,15 @@ async function doLogin(){
   errEl.style.display='none';
   const{error}=await sb.auth.signInWithPassword({email,password:pass});
   if(error){errEl.textContent=error.message;errEl.style.display='block';return;}
-  document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('root').style.display='';
   init();
 }
-async function doLogout(){await sb.auth.signOut();document.getElementById('root').style.display='none';document.getElementById('login-screen').classList.add('active');}
+async function doLogout(){await sb.auth.signOut();document.getElementById('root').style.display='none';document.getElementById('login-screen').classList.remove('hidden');}
 
 (async()=>{
   const{data:{session}}=await sb.auth.getSession();
-  if(session){document.getElementById('root').style.display='';init();}
-  else{document.getElementById('login-screen').classList.add('active');}
+  if(session){document.getElementById('login-screen').classList.add('hidden');document.getElementById('root').style.display='';init();}
 })();
 </script>
 </body>
