@@ -401,7 +401,7 @@ const CATEGORIES = [
   { key: 'health',       label: 'Health',               emoji: '🏥', hasStore: false },
   { key: 'therapy',      label: 'Therapy',              emoji: '🧠', hasStore: false },
   { key: 'housing',      label: 'Housing',              emoji: '🏠', hasStore: false, hasLines: true },
-  { key: 'household',    label: 'Household Items',      emoji: '🧹', hasStore: true, linkedLine: { parent: 'housing', label: 'Household' } },
+  { key: 'household',    label: 'Household Items',      emoji: '🧹', hasStore: true },
   { key: 'recurring',    label: 'Recurring Payments',   emoji: '🔄', hasStore: false, hasLines: true },
   { key: 'charity',      label: 'Charity',              emoji: '💚', hasStore: false, hasTab: true },
   { key: 'travel',       label: 'Travel',               emoji: '✈️', hasStore: false, hasTab: true },
@@ -791,8 +791,8 @@ function editHousingCell(label, monthNum, currentVal) {
 
 function renderHousingGrid() {
   const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const SUBCAT_ORDER = ['rent','utilities','bills','household'];
-  const SUBCAT_LABELS = { rent: 'Rent', utilities: 'Utilities', bills: 'Bills', household: 'Household' };
+  const SUBCAT_ORDER = ['rent','utilities','bills'];
+  const SUBCAT_LABELS = { rent: 'Rent', utilities: 'Utilities', bills: 'Bills' };
   const today = new Date().getMonth() + 1;
 
   const itemMap = {};
@@ -964,13 +964,6 @@ function budgetItemsTotal(catKey) {
 }
 
 function catBudget(catKey) {
-  // For linked categories (e.g. Household → Housing line item), use the parent line item amount
-  const catDef = CATEGORIES.find(c => c.key === catKey);
-  if (catDef && catDef.linkedLine) {
-    const parentItems = state.budgetItems[catDef.linkedLine.parent] || [];
-    const linked = parentItems.find(i => i.label.toLowerCase() === catDef.linkedLine.label.toLowerCase());
-    if (linked) return Number(linked.amount) || 0;
-  }
   const fromItems = budgetItemsTotal(catKey);
   return fromItems !== null ? fromItems : (state.budgets[catKey] || 0);
 }
@@ -1325,12 +1318,11 @@ function renderApp() {
   if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
-  const totalSpent = CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
   const remaining = income - totalSpent;
-  const totalBudgeted = CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0)
+  const totalBudgeted = CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0)
     + (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0);
 
   root.innerHTML = `
@@ -1657,8 +1649,8 @@ function renderApp() {
                           ? `<span style="font-size:.65rem;color:var(--dim);margin-right:.25rem;">committed</span><span class="cat-spent-bold">${fmt(b)}</span>`
                           : `<span class="cat-spent-bold">${fmt(s)}</span>
                         <span style="color:var(--muted)"> / </span>
-                        ${(hasItems || c.linkedLine)
-                          ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>${c.linkedLine ? '<span style="font-size:.58rem;color:var(--muted);margin-left:.2rem;">from housing</span>' : ''}`
+                        ${hasItems
+                          ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
                           : `<input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set budget" min="0" step="1"
                               onclick="event.stopPropagation()"
                               onchange="saveBudget('${c.key}', this.value)"
@@ -1680,7 +1672,7 @@ function renderApp() {
                       <div class="budget-items-list">
                         ${(()=>{
                           if (!hasItems) return '';
-                          const HOUSING_SUBCATS = { rent: 'Rent', utilities: 'Utilities', bills: 'Bills', household: 'Household' };
+                          const HOUSING_SUBCATS = { rent: 'Rent', utilities: 'Utilities', bills: 'Bills' };
                           const RECURRING_SUBCATS = { tashlumim: 'תשלומים', digital: 'Digital', insurance: 'Insurance', bills: 'Bills', fitness: 'Fitness' };
                           const subcatOpts = c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
                           const isGridCat = c.key === 'housing' || c.key === 'recurring';
@@ -3792,20 +3784,13 @@ function renderYearSnapshot() {
     return items.length ? items.reduce((s,b) => s + (Number(b.amount)||0), 0) : null;
   };
   const yearCatBudget = (mid, catKey) => {
-    const catDef = CATEGORIES.find(c => c.key === catKey);
-    if (catDef && catDef.linkedLine) {
-      const parentItems = budgetItems.filter(b => b.month_id === mid && b.category === catDef.linkedLine.parent);
-      const linked = parentItems.find(i => (i.label||'').toLowerCase() === catDef.linkedLine.label.toLowerCase());
-      if (linked) return Number(linked.amount) || 0;
-    }
     const fromItems = yearBiTotal(mid, catKey);
     return fromItems !== null ? fromItems : (budgetMap[mid]?.[catKey] || 0);
   };
 
   // Total budgeted for a month (all categories + savings)
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   const totalBudgetedFor = m => {
-    return CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0)
+    return CATEGORIES.reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0)
       + (budgetMap[m.id]?.['savings_bank'] || 0)
       + (budgetMap[m.id]?.['savings_invested'] || 0);
   };
@@ -3813,10 +3798,9 @@ function renderYearSnapshot() {
   // Total spent for a month — mirrors ribbon's spentByCategory() exactly
   // For ALL months: actual transactions, with committed items (housing/recurring) as floor
   // Tab categories (charity/travel/admin) always count their budget allocation
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   // Savings always count as spent
   const totalSpentFor = (m, future) => {
-    return CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => {
+    return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
       if (c.hasLines) {
         const committed = biSum(m.id, [c.key]);
@@ -3844,13 +3828,11 @@ function renderYearSnapshot() {
     incomeSubRows.push({ type:'sub', label:'\u2937 '+lbl, valFn: m => incItemsFor(m.id, lbl) });
   });
 
-  // Housing: sum all housing budget_items (rent, arnona, etc.)
-  // Household is already included as a budget_item inside housing, so use max(budget_item, actual_tx) to avoid double-count
+  // Housing: sum all housing budget_items (rent, arnona, etc.) — household is now independent
   const housingV = (m, f) => {
-    const housingBiExclHH = budgetItems.filter(b => b.month_id===m.id && b.category==='housing' && b.subcategory!=='household').reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const hhBudgetItem = budgetItems.filter(b => b.month_id===m.id && b.category==='housing' && b.subcategory==='household').reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const hhActual = txSum(m.id, ['household']);
-    return housingBiExclHH + Math.max(hhBudgetItem, hhActual);
+    const committed = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
+    const actual = txSum(m.id, ['housing']);
+    return Math.max(committed, actual);
   };
   // Recurring: sum all recurring budget_items
   const recurringV = m => budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
@@ -3892,6 +3874,7 @@ function renderYearSnapshot() {
     { type:'section', label:'\u{1F4CA} Spending Breakdown', collapsible: 'spending' },
     { type:'row',            label:'\u{1F6D2} Groceries',     valFn: (m,f)  => spendV(m,['groceries'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F3E0} Housing',       valFn: (m,f)  => housingV(m, f), sectionGroup: 'spending' },
+    { type:'row',            label:'\u{1F9F9} Household',     valFn: (m,f)  => spendV(m,['household'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F697} Transport',     valFn: (m,f)  => spendV(m,['transport'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F3E5} Health & Therapy', valFn: (m,f) => spendV(m,['health','therapy'],f), sectionGroup: 'spending' },
     { type:'row',            label:'\u{1F504} Recurring',     valFn: m      => recurringV(m), sectionGroup: 'spending' },
@@ -4034,12 +4017,11 @@ function openSnapshot() {
   const income = totalIncome(current);
   const spent = spentByCategory();
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   // Also include savings as "spent" (money allocated out of income)
-  const totalSpent = CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
-  const totalBudgeted = CATEGORIES.filter(c => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0)
+  const totalBudgeted = CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0)
     + (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0);
   const leftToBudget = income - totalBudgeted;
   const remainingInBudget = totalBudgeted - totalSpent;
