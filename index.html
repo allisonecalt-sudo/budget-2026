@@ -3792,20 +3792,22 @@ function renderYearSnapshot() {
   const incItemsTotalFor = mid => (incItemsByMonth[mid] || []).reduce((s,i) => s + (Number(i.amount)||0), 0);
 
   const spendV = (m, cats, future) => {
-    if (future && !showProjected) return 0;
+    if (future && !showProjected) return biSum(m.id, cats);
     if (future) return budgetV(m.id, cats) || biSum(m.id, cats);
     return txSum(m.id, cats);
   };
   const charityV = (mn, future) => {
-    if (!showProjected && future) return 0;
     const m = months.find(mo => mo.month_num === mn);
-    return m ? (budgetMap[m.id]?.['charity'] || 0) : 0;
+    if (!m) return 0;
+    if (!showProjected && future) return biSum(m.id, ['charity']);
+    return budgetMap[m.id]?.['charity'] || 0;
   };
   const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]?.amount || 0);
   const travelV  = (mn, future) => {
-    if (!showProjected && future) return 0;
     const m = months.find(mo => mo.month_num === mn);
-    return m ? (budgetMap[m.id]?.['travel'] || 0) : 0;
+    if (!m) return 0;
+    if (!showProjected && future) return biSum(m.id, ['travel']);
+    return budgetMap[m.id]?.['travel'] || 0;
   };
   // Income includes fixed fields + custom income items (no income_other — replaced by income_items)
   const incFor = m => (Number(m.income_petachya)||0)+(Number(m.income_clalit)||0)+(Number(m.income_private)||0)+(Number(m.income_other)||0)+incItemsTotalFor(m.id);
@@ -3841,7 +3843,14 @@ function renderYearSnapshot() {
   // Tab categories (charity/travel/admin) always count their budget allocation
   // Savings always count as spent
   const totalSpentFor = (m, future) => {
-    if (future && !showProjected) return 0;
+    if (future && !showProjected) {
+      // Actual Only: show committed line items for future months
+      return CATEGORIES.reduce((sum, c) => {
+        return sum + biSum(m.id, [c.key]);
+      }, 0)
+        + (Number(m.savings_bank) || 0)
+        + (Number(m.savings_invested) || 0);
+    }
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
       if (c.hasLines) {
@@ -3871,14 +3880,14 @@ function renderYearSnapshot() {
   });
 
   // Housing: sum all housing budget_items (rent, arnona, etc.) + actual household transactions
+  // Exclude subcategory='household' from hBi to avoid double-counting with hhSpend
   const housingV = (m, f) => {
-    if (f && !showProjected) return 0;
-    const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const hhSpend = f ? (budgetV(m.id,['household']) || biSum(m.id,['household'])) : txSum(m.id,['household']);
+    const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing' && b.subcategory!=='household').reduce((s,b)=>s+(Number(b.amount)||0),0);
+    const hhSpend = f ? ((!showProjected) ? biSum(m.id,['household']) : (budgetV(m.id,['household']) || biSum(m.id,['household']))) : txSum(m.id,['household']);
     return hBi + hhSpend;
   };
   // Recurring: sum all recurring budget_items
-  const recurringV = (m, f) => (f && !showProjected) ? 0 : budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
+  const recurringV = (m, f) => budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
 
   // Travel/Admin: budget vs spent gap
   const travelBudgetV = (mn) => { const m = months.find(mo=>mo.month_num===mn); return m ? (budgetMap[m.id]?.['travel']||0) : 0; };
