@@ -3799,14 +3799,12 @@ function renderYearSnapshot() {
   const charityV = (mn, future) => {
     const m = months.find(mo => mo.month_num === mn);
     if (!m) return 0;
-    if (!showProjected && future) return biSum(m.id, ['charity']);
     return budgetMap[m.id]?.['charity'] || 0;
   };
-  const adminV   = (mn, future) => (!showProjected && future) ? 0 : Number(state.admin.allocations?.[mn]?.amount || 0);
+  const adminV   = (mn, future) => Number(state.admin.allocations?.[mn]?.amount || 0);
   const travelV  = (mn, future) => {
     const m = months.find(mo => mo.month_num === mn);
     if (!m) return 0;
-    if (!showProjected && future) return biSum(m.id, ['travel']);
     return budgetMap[m.id]?.['travel'] || 0;
   };
   // Income includes fixed fields + custom income items (no income_other — replaced by income_items)
@@ -3843,14 +3841,6 @@ function renderYearSnapshot() {
   // Tab categories (charity/travel/admin) always count their budget allocation
   // Savings always count as spent
   const totalSpentFor = (m, future) => {
-    if (future && !showProjected) {
-      // Actual Only: show committed line items for future months
-      return CATEGORIES.reduce((sum, c) => {
-        return sum + biSum(m.id, [c.key]);
-      }, 0)
-        + (Number(m.savings_bank) || 0)
-        + (Number(m.savings_invested) || 0);
-    }
     return CATEGORIES.reduce((sum, c) => {
       if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
       if (c.hasLines) {
@@ -3858,7 +3848,7 @@ function renderYearSnapshot() {
         const actual = txSum(m.id, [c.key]);
         return sum + Math.max(committed, actual);
       }
-      return sum + txSum(m.id, [c.key]); // actual transactions only
+      return sum + txSum(m.id, [c.key]);
     }, 0)
       + (Number(m.savings_bank) || 0)
       + (Number(m.savings_invested) || 0);
@@ -3879,12 +3869,14 @@ function renderYearSnapshot() {
     incomeSubRows.push({ type:'sub', label:'\u2937 '+lbl, valFn: m => incItemsFor(m.id, lbl) });
   });
 
-  // Housing: sum all housing budget_items (rent, arnona, etc.) + actual household transactions
-  // Exclude subcategory='household' from hBi to avoid double-counting with hhSpend
+  // Housing: sum all housing budget_items (rent, arnona, etc.)
+  // Household spending is included via subcategory='household' items inside housing budget_items
+  // Do NOT add household transactions separately — that double-counts
   const housingV = (m, f) => {
-    const hBi = budgetItems.filter(b => b.month_id===m.id && b.category==='housing' && b.subcategory!=='household').reduce((s,b)=>s+(Number(b.amount)||0),0);
-    const hhSpend = f ? ((!showProjected) ? biSum(m.id,['household']) : (budgetV(m.id,['household']) || biSum(m.id,['household']))) : txSum(m.id,['household']);
-    return hBi + hhSpend;
+    if (f && !showProjected) return 0;
+    const committed = budgetItems.filter(b => b.month_id===m.id && b.category==='housing').reduce((s,b)=>s+(Number(b.amount)||0),0);
+    const actual = txSum(m.id, ['housing']) + txSum(m.id, ['household']);
+    return Math.max(committed, actual);
   };
   // Recurring: sum all recurring budget_items
   const recurringV = (m, f) => budgetItems.filter(b => b.month_id===m.id && b.category==='recurring').reduce((s,b)=>s+(Number(b.amount)||0),0);
@@ -3915,9 +3907,9 @@ function renderYearSnapshot() {
     { type:'net',            label:'\u2705 Remaining',        valFn: (m,f) => incFor(m) - totalSpentFor(m, f), sectionGroup: 'overview' },
     // 3. Savings & Investment
     { type:'section', label:'\u{1F4B0} Savings & Investment', collapsible: 'savings' },
-    { type:'row', bold:true, label:'Total Savings',   valFn: (m,f) => (!showProjected && f) ? 0 : ((Number(m.savings_bank)||0)+(Number(m.savings_invested)||0)), sectionGroup: 'savings', stickyInSection: true },
-    { type:'sub',            label:'\u2937 Saved (Bank)',  valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_bank)||0), sectionGroup: 'savings' },
-    { type:'sub',            label:'\u2937 Invested',      valFn: (m,f)  => (!showProjected && f) ? 0 : (Number(m.savings_invested)||0), sectionGroup: 'savings' },
+    { type:'row', bold:true, label:'Total Savings',   valFn: (m,f) => ((Number(m.savings_bank)||0)+(Number(m.savings_invested)||0)), sectionGroup: 'savings', stickyInSection: true },
+    { type:'sub',            label:'\u2937 Saved (Bank)',  valFn: (m,f)  => (Number(m.savings_bank)||0), sectionGroup: 'savings' },
+    { type:'sub',            label:'\u2937 Invested',      valFn: (m,f)  => (Number(m.savings_invested)||0), sectionGroup: 'savings' },
     // 5. Charity Overview
     { type:'section', label:'\u{1F49A} Charity Overview', collapsible: 'charity' },
     { type:'row',            label:'Charity ₪',       valFn: (m,f) => charityV(m.month_num, f), sectionGroup: 'charity' },
