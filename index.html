@@ -3031,43 +3031,66 @@ function renderAdminTab() {
       subsHtml = '<div style="padding:.4rem .6rem .6rem 1.8rem;background:var(--surface2);border-radius:0 0 6px 6px;border-top:1px solid var(--border);">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem;">'
         + (subs.length > 0 ? '<span style="font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Payments</span>' : '<span></span>')
-        + '<select onchange="saveAdminItem(\''+item.id+'\',\'category\',this.value)" style="font-size:.62rem;padding:.1rem .25rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;" title="Category">'+catOptions+'</select>'
+        + '<div style="display:flex;gap:.3rem;align-items:center;">'
+        + '<select onchange="saveAdminItem(\''+item.id+'\',\'category\',this.value)" onclick="event.stopPropagation()" style="font-size:.62rem;padding:.1rem .25rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;" title="Category">'+catOptions+'</select>'
+        + '<button onclick="event.stopPropagation();saveAdminItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'This is an estimate — click to mark as exact':'Mark as exact (confirmed amount)')+'" style="background:'+(item.is_estimate?'none':'var(--gsoft)')+';border:1px solid '+(item.is_estimate?'var(--border)':'var(--green)')+';border-radius:4px;color:'+(item.is_estimate?'var(--dim)':'var(--green)')+';cursor:pointer;font-size:.58rem;padding:.1rem .25rem;font-weight:'+(item.is_estimate?'400':'700')+';font-family:\'DM Sans\',sans-serif;">'+(item.is_estimate?'~est':'exact')+'</button>'
+        + '<button onclick="event.stopPropagation();deleteAdminItem(\''+item.id+'\')" title="Delete item" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.72rem;padding:.1rem .25rem;line-height:1;" onmouseover="this.style.color=\'var(--red)\';this.style.borderColor=\'var(--red)\'" onmouseout="this.style.color=\'var(--dim)\';this.style.borderColor=\'var(--border)\'">×</button>'
+        + '</div>'
         + '</div>'
         + subRows
         + '<button onclick="addAdminSub(\''+item.id+'\')" style="margin-top:.4rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>'
         + progressBar
         + '</div>';
     }
-    return '<div style="border-bottom:1px solid var(--border);">'
-      + '<div onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="display:grid;grid-template-columns:30px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;cursor:pointer;'+rowOpacity+'">'
-      + '<div style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);font-size:.9rem;padding:.15rem .25rem;line-height:1;text-align:center;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;">'+(isOpen?'▾':'▸')+'</div>'
-      + '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" onclick="event.stopPropagation()" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+'</div>'
-      + '<input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:100%;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'projected_amount\',this.value)">'
-      + '<button onclick="event.stopPropagation();saveAdminItem(\''+item.id+'\',\'is_estimate\','+(!item.is_estimate)+')" title="'+(item.is_estimate?'This is an estimate — click to mark as exact':'Mark as estimate')+'" style="background:'+estBg+';border:1px solid '+estBorder+';border-radius:12px;color:'+estColor+';cursor:pointer;font-size:.6rem;padding:.15rem .35rem;font-weight:'+estWeight+';font-family:\'DM Sans\',sans-serif;white-space:nowrap;">est</button>'
-      + '<button onclick="event.stopPropagation();deleteAdminItem(\''+item.id+'\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>'
+    // Flipped est logic: estimates are default (no badge). Only show "exact" when confirmed.
+    const exactBadge = !item.is_estimate ? '<span style="font-size:.55rem;color:var(--green);font-weight:700;margin-left:.2rem;">✓</span>' : '';
+    return '<div class="adm-item-row" style="border-bottom:1px solid var(--border);">'
+      + '<div onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="display:grid;grid-template-columns:24px 1fr 80px 22px;gap:.3rem;align-items:center;padding:.4rem .2rem;cursor:pointer;'+rowOpacity+'">'
+      + '<div style="color:var(--dim);font-size:.8rem;text-align:center;">'+(isOpen?'▾':'▸')+'</div>'
+      + '<div style="display:flex;align-items:baseline;min-width:0;overflow:hidden;"><input type="text" value="'+esc(item.label)+'" placeholder="Item name" onclick="event.stopPropagation()" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'label\',this.value)">'+subBadge+exactBadge+'</div>'
+      + '<div style="display:flex;align-items:center;justify-content:flex-end;gap:.2rem;"><input type="number" value="'+(item.projected_amount||'')+'" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:'+amtColor+';outline:none;text-align:right;width:70px;-moz-appearance:textfield;'+strikeLabel+'" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\''+item.id+'\',\'projected_amount\',this.value)"></div>'
       + '<div onclick="event.stopPropagation();saveAdminItem(\''+item.id+'\',\'is_logged\','+(!item.is_logged)+')" title="'+(item.is_logged?'Mark as not done':'Mark as done')+'" style="width:18px;height:18px;border-radius:4px;border:2px solid '+(item.is_logged?'var(--accent)':'var(--border)')+';background:'+(item.is_logged?'var(--accent)':'none')+';cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:.7rem;font-weight:700;transition:all .15s ease;">'+logIcon+'</div>'
       + '</div>'
       + subsHtml
       + '</div>';
   };
 
-  // Build grouped or flat view
+  // Build grouped view with progress bars
+  const grouped = {};
+  activeItems.forEach(item => {
+    const cat = item.category || 'Other';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(item);
+  });
+  const doneItemsHtml = doneItems.map(renderItemRow).join('');
+  const doneTotal = doneItems.reduce((s, i) => s + Number(i.projected_amount), 0);
+
+  // Category progress data
+  const catProgressHtml = (catItems) => {
+    const catBudget = catItems.reduce((s,i) => s + Number(i.projected_amount), 0);
+    const catPaid = catItems.reduce((s,i) => {
+      const subs = (state.admin.subItems || []).filter(sub => sub.item_id === i.id);
+      return s + subs.filter(sub=>sub.is_paid).reduce((n,sub)=>n+Number(sub.amount),0);
+    }, 0);
+    // Also count payments from payment log that match items in this category
+    const pct = catBudget > 0 ? Math.min(100, Math.round(catPaid / catBudget * 100)) : 0;
+    const st = pct >= 100 ? 'var(--green)' : pct > 50 ? 'var(--accent)' : 'var(--amber)';
+    return { catBudget, catPaid, pct, st };
+  };
+
   let activeItemsHtml;
   if (viewMode === 'category') {
-    const grouped = {};
-    activeItems.forEach(item => {
-      const cat = item.category || 'Other';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(item);
-    });
     activeItemsHtml = ADMIN_CATEGORIES.filter(c => grouped[c] && grouped[c].length > 0).map(cat => {
       const catItems = grouped[cat];
-      const catTotal = catItems.reduce((s,i) => s + Number(i.projected_amount), 0);
+      const { catBudget: cBudget, catPaid: cPaid, pct, st } = catProgressHtml(catItems);
       return '<div style="margin-top:.6rem;">'
-        + '<div style="display:flex;align-items:center;gap:.35rem;padding:.25rem .2rem;margin-bottom:.15rem;">'
+        + '<div style="padding:.35rem .4rem;margin-bottom:.15rem;background:var(--surface2);border-radius:6px;">'
+        + '<div style="display:flex;align-items:center;gap:.35rem;margin-bottom:.2rem;">'
         + '<span style="font-size:.75rem;">'+(catEmoji[cat]||'📌')+'</span>'
         + '<span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">'+cat+'</span>'
-        + '<span style="font-size:.62rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:auto;">'+fmtA(catTotal)+'</span>'
+        + '<span style="font-size:.62rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:auto;">'+fmtA(cPaid)+' / '+fmtA(cBudget)+'</span>'
+        + '</div>'
+        + '<div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;"><div style="height:100%;background:'+st+';border-radius:2px;width:'+pct+'%;transition:width .3s ease;"></div></div>'
         + '</div>'
         + catItems.map(renderItemRow).join('')
         + '</div>';
@@ -3075,51 +3098,112 @@ function renderAdminTab() {
   } else {
     activeItemsHtml = activeItems.map(renderItemRow).join('');
   }
-  const doneItemsHtml = doneItems.map(renderItemRow).join('');
-  const doneTotal = doneItems.reduce((s, i) => s + Number(i.projected_amount), 0);
+
+  // Payment log — By Month view
+  const adminView = localStorage.getItem('adminTabView') || 'category';
+  let paymentsByMonthHtml = '';
+  if (adminView === 'payments') {
+    const ps = localStorage.getItem('adminPaySort') || 'month';
+    const sorted = [...payments].sort((a,b) => {
+      if (ps==='month') return a.month_num - b.month_num;
+      if (ps==='month-desc') return b.month_num - a.month_num;
+      if (ps==='high') return Number(b.amount) - Number(a.amount);
+      if (ps==='low') return Number(a.amount) - Number(b.amount);
+      return 0;
+    });
+    // Group by month
+    const byMonth = {};
+    sorted.forEach(p => {
+      const mn = MONTH_NAMES[p.month_num-1];
+      if (!byMonth[mn]) byMonth[mn] = { items: [], total: 0 };
+      byMonth[mn].items.push(p);
+      byMonth[mn].total += Number(p.amount);
+    });
+    const sb2 = (key, label) => `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.62rem;padding:.1rem .3rem;cursor:pointer;color:${ps===key?'var(--accent)':'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps===key?'600':'400'};border-color:${ps===key?'var(--accent)':'var(--border)'};">${label}</button>`;
+    paymentsByMonthHtml = `
+      <div style="display:flex;align-items:center;gap:.3rem;margin-bottom:.5rem;">
+        <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
+        ${sb2('month','Mo ↑')}${sb2('month-desc','Mo ↓')}${sb2('high','Highest')}${sb2('low','Lowest')}
+      </div>
+      ${Object.entries(byMonth).map(([mn, grp]) => `
+        <div style="margin-bottom:.5rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.2rem .3rem;background:var(--surface2);border-radius:4px;margin-bottom:.15rem;">
+            <span style="font-size:.7rem;font-weight:700;color:var(--muted);">${mn}</span>
+            <span style="font-size:.68rem;font-family:'DM Mono',monospace;color:var(--dim);">${fmtA(grp.total)}</span>
+          </div>
+          ${grp.items.map(p => `
+          <div style="display:grid;grid-template-columns:1fr 80px 26px;gap:.25rem;align-items:center;padding:.25rem .3rem;border-bottom:1px solid var(--border);font-size:.8rem;">
+            <input type="text" value="${esc(p.label)}" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;width:100%;"
+              onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
+              onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
+              onchange="updateAdminPayment('${p.id}','label',this.value)">
+            <input type="number" value="${p.amount}" min="0" step="0.01" style="font-size:.8rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;"
+              onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
+              onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
+              onchange="updateAdminPayment('${p.id}','amount',this.value)">
+            <button onclick="deleteAdminPayment('${p.id}')" title="Delete" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem;line-height:1;opacity:.4;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.4">×</button>
+          </div>`).join('')}
+        </div>
+      `).join('')}`;
+  }
+
+  // Spent percentage for ribbon bar
+  const spentPct = budget > 0 ? Math.min(100, Math.round(totalSpent / budget * 100)) : 0;
+  const allocPct = budget > 0 ? Math.min(100, Math.round(totalAlloc / budget * 100)) : 0;
+
+  // Allocation section toggle
+  const showAlloc = localStorage.getItem('adminShowAlloc') !== '0';
 
   return `
-  <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
-    <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected total</div>
+  <div style="max-width:900px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Compact Summary Ribbon -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:.85rem 1.25rem;box-shadow:var(--shadow);margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
+        <div style="display:flex;align-items:baseline;gap:.4rem;">
+          <span style="font-family:'DM Mono',monospace;font-size:1.3rem;font-weight:600;">${fmtA(budget)}</span>
+          <span style="font-size:.65rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;">budget</span>
+        </div>
+        <div style="display:flex;gap:1.2rem;align-items:center;">
+          <div style="text-align:center;">
+            <div style="font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;">${fmtA(totalSpent)}</div>
+            <div style="font-size:.58rem;color:var(--muted);font-weight:600;text-transform:uppercase;">spent</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;color:var(--accent);">${fmtA(remaining)}</div>
+            <div style="font-size:.58rem;color:var(--accent);font-weight:600;text-transform:uppercase;">remaining</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-family:'DM Mono',monospace;font-size:.95rem;font-weight:600;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${gap > 0 ? '−'+fmtA(gap) : '✓'}</div>
+            <div style="font-size:.58rem;color:var(--muted);font-weight:600;text-transform:uppercase;">alloc gap</div>
+          </div>
+        </div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+      <!-- Progress bar -->
+      <div style="margin-top:.5rem;height:6px;background:var(--border);border-radius:3px;overflow:hidden;position:relative;">
+        <div style="position:absolute;height:100%;background:var(--surface2);border-radius:3px;width:${allocPct}%;"></div>
+        <div style="position:absolute;height:100%;background:${spentPct > 90 ? 'var(--red)' : 'var(--accent)'};border-radius:3px;width:${spentPct}%;transition:width .3s ease;"></div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(gap))}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
+      <div style="display:flex;justify-content:space-between;margin-top:.2rem;">
+        <span style="font-size:.55rem;color:var(--dim);">${spentPct}% spent</span>
+        <span style="font-size:.55rem;color:var(--dim);">${allocPct}% allocated</span>
       </div>
     </div>
 
-    <div class="tab-two-col" style="display:grid;grid-template-columns:1.1fr 1fr;gap:1.25rem;align-items:start;">
+    <!-- View Toggle: By Category | By Month | + Add Payment -->
+    <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.8rem;">
+      <button onclick="localStorage.setItem('adminTabView','category');renderApp()" style="font-size:.72rem;padding:.35rem .75rem;border:1px solid ${adminView==='category'?'var(--accent)':'var(--border)'};border-radius:6px;background:${adminView==='category'?'var(--gsoft)':'var(--surface)'};color:${adminView==='category'?'var(--accent)':'var(--muted)'};cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:${adminView==='category'?'700':'500'};">By Item</button>
+      <button onclick="localStorage.setItem('adminTabView','payments');renderApp()" style="font-size:.72rem;padding:.35rem .75rem;border:1px solid ${adminView==='payments'?'var(--accent)':'var(--border)'};border-radius:6px;background:${adminView==='payments'?'var(--gsoft)':'var(--surface)'};color:${adminView==='payments'?'var(--accent)':'var(--muted)'};cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:${adminView==='payments'?'700':'500'};">By Month</button>
+      <div style="margin-left:auto;display:flex;gap:.25rem;align-items:center;">
+        ${adminView === 'category' ? `
+          <button onclick="localStorage.setItem('adminViewMode','${viewMode==='category'?'list':'category'}');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid ${viewMode==='category'?'var(--accent)':'var(--border)'};border-radius:4px;background:${viewMode==='category'?'var(--gsoft)':'none'};color:${viewMode==='category'?'var(--accent)':'var(--dim)'};cursor:pointer;font-family:'DM Sans',sans-serif;" title="Toggle grouped/flat view">${viewMode==='category'?'Grouped':'List'}</button>
+          ${sortBtnsHtml}` : ''}
+      </div>
+    </div>
 
-      <!-- LEFT: Yearly Items -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
-          <div style="display:flex;gap:.25rem;align-items:center;">
-            <button onclick="localStorage.setItem('adminViewMode','${viewMode==='category'?'list':'category'}');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid ${viewMode==='category'?'var(--accent)':'var(--border)'};border-radius:4px;background:${viewMode==='category'?'var(--gsoft)':'none'};color:${viewMode==='category'?'var(--accent)':'var(--dim)'};cursor:pointer;font-family:'DM Sans',sans-serif;" title="Toggle grouped/flat view">${viewMode==='category'?'Grouped':'List'}</button>
-            ${sortBtnsHtml}
-          </div>
-        </div>
+    <!-- Main Content -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
+      ${adminView === 'category' ? `
+        <!-- By Item View -->
         ${viewMode !== 'category' ? `<div style="display:grid;grid-template-columns:30px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
           <span></span><span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">Est</span><span></span><span></span>
         </div>` : ''}
@@ -3137,90 +3221,50 @@ function renderAdminTab() {
           <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
           <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
         </div>
-      </div>
-
-      <!-- RIGHT: Allocations + Payments -->
-      <div style="display:flex;flex-direction:column;gap:1rem;">
-
-        <!-- Monthly Allocations -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">
-            ${MONTH_NAMES.map((mn, i) => {
-              const mnum = i + 1;
-              const val = allocs[mnum] ? allocs[mnum].amount : '';
-              const isCurrent = mnum === currentMonthNum;
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent?'var(--gsoft)':'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent?'var(--accent)':'transparent'};">
-                <span style="font-size:.72rem;color:${isCurrent?'var(--accent)':'var(--muted)'};font-weight:${isCurrent?'700':'600'};">${mn}</span>
-                <span style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent?'var(--accent)':'var(--text)'};font-weight:${isCurrent?'600':'400'};display:inline-block;" title="Set from Budget page">${val ? fmtA(val) : '₪0'}</span>
-              </div>`;
-            }).join('')}
-          </div>
-          <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
-            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓'}</span>
-          </div>
+      ` : `
+        <!-- By Month View (Payment Log) -->
+        <!-- Add payment form -->
+        <div style="display:grid;grid-template-columns:70px 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+          <select id="ap-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
+            ${MONTH_NAMES.map((mn,i) => `<option value="${i+1}"${i+1===currentMonthNum?' selected':''}>${mn}</option>`).join('')}
+          </select>
+          <input type="text" id="ap-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+            onkeydown="if(event.key==='Enter')addAdminPayment()">
+          <input type="number" id="ap-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
+            onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+            onkeydown="if(event.key==='Enter')addAdminPayment()">
+          <button onclick="addAdminPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
         </div>
+        ${payments.length === 0 ? '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>' : paymentsByMonthHtml}
+        <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;">${fmtA(totalSpent)}</span>
+        </div>
+      `}
+    </div>
 
-        <!-- Payment Log -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
-
-          <!-- Add payment form -->
-          <div style="display:grid;grid-template-columns:70px 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
-            <select id="ap-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
-              ${MONTH_NAMES.map((mn,i) => `<option value="${i+1}"${i+1===currentMonthNum?' selected':''}>${mn}</option>`).join('')}
-            </select>
-            <input type="text" id="ap-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onkeydown="if(event.key==='Enter')addAdminPayment()">
-            <input type="number" id="ap-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onkeydown="if(event.key==='Enter')addAdminPayment()">
-            <button onclick="addAdminPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
-          </div>
-
-          ${payments.length === 0 ? '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>' : (()=>{
-            const ps = localStorage.getItem('adminPaySort') || 'month';
-            const sorted = [...payments].sort((a,b) => {
-              if (ps==='month') return a.month_num - b.month_num;
-              if (ps==='month-desc') return b.month_num - a.month_num;
-              if (ps==='high') return Number(b.amount) - Number(a.amount);
-              if (ps==='low') return Number(a.amount) - Number(b.amount);
-              return 0;
-            });
-            const sb2 = (key, label) => `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps===key?'var(--accent)':'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps===key?'600':'400'};border-color:${ps===key?'var(--accent)':'var(--border)'};">${label}</button>`;
-            return `
-            <div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
-              <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
-              ${sb2('month','Mo ↑')}${sb2('month-desc','Mo ↓')}${sb2('high','Highest')}${sb2('low','Lowest')}
-            </div>
-            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
-              <span>Mo</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>
-            </div>
-            ${sorted.map(p => `
-            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;${p.is_estimate?'background:var(--ambersoft,#fffbf0);':''}">
-              <span style="font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace;">${MONTH_NAMES[p.month_num-1]}</span>
-              <input type="text" value="${esc(p.label)}" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;width:100%;"
-                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
-                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
-                onchange="updateAdminPayment('${p.id}','label',this.value)">
-              <input type="number" value="${p.amount}" min="0" step="0.01" style="font-size:.8rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:${p.is_estimate?'var(--amber)':'var(--text)'};font-weight:${p.is_estimate?'700':'400'};outline:none;text-align:right;width:100%;-moz-appearance:textfield;"
-                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
-                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
-                onchange="updateAdminPayment('${p.id}','amount',this.value)">
-              <button onclick="updateAdminPayment('${p.id}','is_estimate',${!p.is_estimate})"
-                title="${p.is_estimate?'Marked as estimate — click to confirm':'Mark as estimate'}"
-                style="background:${p.is_estimate?'var(--ambersoft,#fff3cd)':'none'};border:1px solid ${p.is_estimate?'var(--amber)':'var(--border)'};border-radius:4px;color:${p.is_estimate?'var(--amber)':'var(--dim)'};cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:${p.is_estimate?'700':'400'};font-family:'DM Sans',sans-serif;width:100%;">~est</button>
-              <button onclick="deleteAdminPayment('${p.id}')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>
-            </div>`).join('')}
-            <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
-              <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>
-              <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;">${fmtA(totalSpent)}</span>
+    <!-- Monthly Allocation — Collapsible -->
+    <div style="margin-top:1rem;">
+      <button onclick="localStorage.setItem('adminShowAlloc',${showAlloc?'0':'1'});renderApp()" style="background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.3rem;padding:.3rem 0;width:100%;">
+        <span style="font-size:.65rem;color:var(--dim);">${showAlloc?'▾':'▸'}</span>
+        <span style="font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Monthly Allocation</span>
+        <span style="font-family:'DM Mono',monospace;font-size:.75rem;margin-left:auto;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓'}</span>
+      </button>
+      ${showAlloc ? `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);margin-top:.3rem;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.35rem;">
+          ${MONTH_NAMES.map((mn, i) => {
+            const mnum = i + 1;
+            const val = allocs[mnum] ? allocs[mnum].amount : '';
+            const isCurrent = mnum === currentMonthNum;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.2rem .35rem;background:${isCurrent?'var(--gsoft)':'var(--surface2)'};border-radius:5px;border:1px solid ${isCurrent?'var(--accent)':'transparent'};">
+              <span style="font-size:.68rem;color:${isCurrent?'var(--accent)':'var(--muted)'};font-weight:${isCurrent?'700':'600'};">${mn}</span>
+              <span style="font-size:.72rem;font-family:'DM Mono',monospace;color:${isCurrent?'var(--accent)':'var(--text)'};font-weight:${isCurrent?'600':'400'};">${val ? fmtA(val) : '₪0'}</span>
             </div>`;
-          })()}
+          }).join('')}
         </div>
-      </div>
+      </div>` : ''}
     </div>
   </div>`;
 }
