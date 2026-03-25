@@ -3010,6 +3010,7 @@ function renderAdminTab() {
     const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
     const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
     const logIcon = item.is_logged ? '✓' : '';
+    const catOptions = ADMIN_CATEGORIES.map(c => '<option value="'+c+'"'+(c===(item.category||'Other')?' selected':'')+'>'+( catEmoji[c]||'')+ ' '+c+'</option>').join('');
     let subsHtml = '';
     if (isOpen) {
       const paidCount = subs.filter(s=>s.is_paid).length;
@@ -3037,7 +3038,6 @@ function renderAdminTab() {
         + progressBar
         + '</div>';
     }
-    const catOptions = ADMIN_CATEGORIES.map(c => '<option value="'+c+'"'+(c===(item.category||'Other')?' selected':'')+'>'+( catEmoji[c]||'')+ ' '+c+'</option>').join('');
     return '<div style="border-bottom:1px solid var(--border);">'
       + '<div onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="display:grid;grid-template-columns:30px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;cursor:pointer;'+rowOpacity+'">'
       + '<div style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);font-size:.9rem;padding:.15rem .25rem;line-height:1;text-align:center;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;">'+(isOpen?'▾':'▸')+'</div>'
