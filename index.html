@@ -1427,6 +1427,7 @@ function renderApp() {
         <button id="redo-btn" class="mtab" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">↪</button>
         <button class="mtab" onclick="openSnapshot()" title="Snapshot">📊</button>
         <button class="mtab" onclick="collapseAll()" title="Collapse all">⊟</button>
+        <button class="mtab" onclick="doLogout()" title="Log out">🚪</button>
       </div>
       <div class="hdr-months">
         <div class="month-tabs">
@@ -4666,8 +4667,10 @@ async function doLogin(){
 async function doLogout(){await sb.auth.signOut();document.getElementById('root').style.display='none';document.getElementById('login-screen').classList.remove('hidden');}
 
 (async()=>{
-  const{data:{session}}=await sb.auth.getSession();
-  if(session){document.getElementById('login-screen').classList.add('hidden');document.getElementById('root').style.display='';init();}
+  try{
+    const{data:{session}}=await sb.auth.getSession();
+    if(session){document.getElementById('login-screen').classList.add('hidden');document.getElementById('root').style.display='';init();}
+  }catch(e){console.error('Auth check failed:',e);}
 })();
 </script>
 </body>
