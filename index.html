@@ -1378,11 +1378,11 @@ function renderApp() {
   if (_chPct && income) state.budgets['charity'] = Math.round(income * _chPct / 100);
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
-  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
   const remaining = income - totalSpent;
-  const totalBudgeted = CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0)
+  const totalBudgeted = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + catBudget(c.key), 0)
     + (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0);
 
   root.innerHTML = `
@@ -1430,8 +1430,8 @@ function renderApp() {
       // Snapshot table rows for expanded view
       const groupRows = CATEGORY_GROUPS.map(group => {
         const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
-        const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
-        const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
+        const gs = cats.reduce((sum,c) => c.linkedLine ? sum : sum + (spent[c.key]||0), 0);
+        const gb = cats.reduce((sum,c) => c.linkedLine ? sum : sum + catBudget(c.key), 0);
         const gr = gb - gs;
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
         const catRows = cats.map(c => {
@@ -1642,8 +1642,8 @@ function renderApp() {
 
         ${CATEGORY_GROUPS.map(group => {
           const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
-          const groupSpent = cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0);
-          const groupBudget = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
+          const groupSpent = cats.reduce((sum, c) => c.linkedLine ? sum : sum + (spent[c.key] || 0), 0);
+          const groupBudget = cats.reduce((sum, c) => c.linkedLine ? sum : sum + catBudget(c.key), 0);
           const groupSt = status(groupSpent, groupBudget);
           const singleCat = cats.length === 1;
           return `
@@ -4094,10 +4094,10 @@ function openSnapshot() {
   const spent = spentByCategory();
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
   // Also include savings as "spent" (money allocated out of income)
-  const totalSpent = CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
+  const totalSpent = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + (c.hasTab ? (catBudget(c.key)||0) : (spent[c.key]||0)), 0)
     + (Number(current.savings_bank) || 0)
     + (Number(current.savings_invested) || 0);
-  const totalBudgeted = CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0)
+  const totalBudgeted = CATEGORIES.reduce((sum, c) => c.linkedLine ? sum : sum + catBudget(c.key), 0)
     + (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0);
   const leftToBudget = income - totalBudgeted;
   const remainingInBudget = totalBudgeted - totalSpent;
@@ -4106,8 +4106,8 @@ function openSnapshot() {
 
   const groupRows = CATEGORY_GROUPS.map(group => {
     const cats = group.keys.map(k => CATEGORIES.find(c => c.key === k)).filter(Boolean);
-    const gs = cats.reduce((sum,c) => sum + (spent[c.key]||0), 0);
-    const gb = cats.reduce((sum,c) => sum + catBudget(c.key), 0);
+    const gs = cats.reduce((sum,c) => c.linkedLine ? sum : sum + (spent[c.key]||0), 0);
+    const gb = cats.reduce((sum,c) => c.linkedLine ? sum : sum + catBudget(c.key), 0);
     const gr = gb - gs;
     const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g,'-');
     const catRows = cats.map(c => {
