@@ -254,10 +254,10 @@ select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .toast.show { opacity: 1; }
 
 /* Undo toast */
-.undo-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); color: var(--text); padding: .75rem 1.25rem; border-radius: var(--rl); font-size: .82rem; font-weight: 500; z-index: 1000; box-shadow: var(--shadowlg); border: 1px solid var(--border); display: flex; flex-direction: column; gap: .4rem; max-width: 380px; animation: slideInRight .25s ease-out; }
-.undo-toast .undo-toast-msg { font-size: .8rem; line-height: 1.3; }
-.undo-toast .undo-toast-link { font-size: .72rem; color: var(--accent); cursor: pointer; text-decoration: underline; font-weight: 600; }
-.undo-toast .undo-toast-link:hover { color: var(--abright); }
+.undo-toast { position: fixed; bottom: 4rem; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: .75rem 1.25rem; border-radius: var(--rl); font-size: .85rem; font-weight: 600; z-index: 1001; box-shadow: var(--shadowlg); border: 1px solid var(--border); display: flex; flex-direction: column; gap: .4rem; max-width: 420px; animation: slideInRight .25s ease-out; }
+.undo-toast .undo-toast-msg { font-size: .82rem; line-height: 1.3; }
+.undo-toast .undo-toast-link { font-size: .75rem; color: var(--abright); cursor: pointer; text-decoration: underline; font-weight: 600; }
+.undo-toast .undo-toast-link:hover { color: #6dd49e; }
 @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 /* Allocation cells edit affordance (BUG-48) */
@@ -1577,6 +1577,8 @@ async function addTransactionSidebar() {
   }).select().single();
 
   if (error) { toast('Error saving — try again'); btn.disabled = false; btn.textContent = 'Save →'; _savingInProgress = false; return; }
+
+  pushUndo({ type: 'insert', table: 'transactions', id: txData.id, field: null, oldVal: null, newVal: null, label: 'add ' + (cat||'') + ' ' + (store||item||'') + ' ₪' + amount, monthId: state.currentMonthId, extra: { row: txData, tabName: 'budget' } });
 
   document.getElementById('sb-store').value = '';
   document.getElementById('sb-item').value = '';
@@ -4464,6 +4466,9 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) { e.preventDefault(); doUndo(); }
   if ((e.ctrlKey||e.metaKey) && (e.key==='y' || (e.key==='z'&&e.shiftKey))) { e.preventDefault(); doRedo(); }
 });
+// Set default date on sidebar
+const _sbDate = document.getElementById('sb-date');
+if (_sbDate && !_sbDate.value) _sbDate.value = today();
 init();
 </script>
 </body>
