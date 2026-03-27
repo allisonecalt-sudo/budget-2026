@@ -3151,6 +3151,9 @@ function renderCharityTab() {
   const gapTextC = gap > 0 ? '(−'+fmtA(gap)+' gap)' : '✓';
   const allocTotalColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
   const monthSelectHtml = MONTH_NAMES.map((mn,i) => '<option value="'+(i+1)+'"'+(i+1===currentMonthNum?' selected':'')+'>'+mn+'</option>').join('');
+  const annualIncome = state.months.reduce((sum, m) => sum + (Number(m.income_petachya)||0) + (Number(m.income_clalit)||0) + (Number(m.income_private)||0), 0);
+  const pctOfIncome = annualIncome > 0 ? (totalSpent / annualIncome * 100).toFixed(1) : '—';
+  const pctAllocOfIncome = annualIncome > 0 ? (totalAlloc / annualIncome * 100).toFixed(1) : '—';
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
@@ -3159,12 +3162,12 @@ function renderCharityTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${pctAllocOfIncome}% of annual income</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Given</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far (incl. estimates)</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${pctOfIncome}% of annual income</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining to Give</div>
