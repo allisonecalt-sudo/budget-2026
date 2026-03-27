@@ -3535,6 +3535,17 @@ async function saveAdminItem(id, field, value) {
   const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : String(value);
   await sb.from('admin_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  // When marking a parent item as paid with no child sub-items,
+  // auto-create a paid sub-item so the amount flows into month spend totals
+  if (field === 'is_logged' && val === true) {
+    const existingSubs = (state.admin.subItems || []).filter(s => s.item_id === id);
+    if (existingSubs.length === 0 && item.projected_amount > 0) {
+      const cm = state.months.find(m => m.id === state.currentMonthId);
+      const curMonth = cm ? cm.month_num : new Date().getMonth() + 1;
+      const { data } = await sb.from('admin_sub_items').insert({ item_id: id, label: item.label || '', amount: item.projected_amount, month_num: curMonth, is_paid: true }).select().single();
+      if (data) state.admin.subItems.push(data);
+    }
+  }
   pushUndo({ type: 'update', table: 'admin_items', id, field, oldVal, newVal: val, label: 'edit admin ' + field + ' ' + String(oldVal||'') + ' \u2192 ' + String(val||''), monthId: state.currentMonthId, extra: { tabName: 'admin' } });
   renderApp();
 }
