@@ -3039,6 +3039,7 @@ function renderAdminTab() {
           + '<button onclick="deleteAdminSub(\''+s.id+'\')" title="Delete" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;padding:0;line-height:1;opacity:.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">×</button>'
           + '</div>';
       }).join('');
+      const catOptions = ADMIN_CATEGORIES.map(c => '<option value="'+c+'"'+(c===(item.category||'Other')?' selected':'')+'>'+( catEmoji[c]||'')+ ' '+c+'</option>').join('');
       const projAmt = Number(item.projected_amount||0);
       const pctPaid = projAmt > 0 ? Math.min(100, Math.round(paidTotal / projAmt * 100)) : 0;
       const progressBar = projAmt > 0 ? '<div style="margin-top:.4rem;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.2rem;"><span style="font-size:.65rem;color:var(--muted);">'+fmtA(paidTotal)+' of '+fmtA(projAmt)+' paid</span><span style="font-size:.65rem;color:var(--accent);font-weight:600;">'+pctPaid+'%</span></div><div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;"><div style="height:100%;background:var(--accent);border-radius:2px;width:'+pctPaid+'%;transition:width .3s ease;"></div></div></div>' : '';
@@ -3052,7 +3053,6 @@ function renderAdminTab() {
         + progressBar
         + '</div>';
     }
-    const catOptions = ADMIN_CATEGORIES.map(c => '<option value="'+c+'"'+(c===(item.category||'Other')?' selected':'')+'>'+( catEmoji[c]||'')+ ' '+c+'</option>').join('');
     return '<div style="border-bottom:1px solid var(--border);">'
       + '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;'+rowOpacity+'">'
       + '<button onclick="var k=\'sn-adm-'+item.id+'\';localStorage.setItem(k,localStorage.getItem(k)===\'1\'?\'0\':\'1\');renderApp()" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;" title="Show/hide sub-payments">'+(isOpen?'▾':'▸')+'</button>'
