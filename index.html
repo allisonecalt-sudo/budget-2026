@@ -1933,6 +1933,7 @@ async function saveSavingsField(field, value) {
   const old = Number(month[field]) || 0;
   await sb.from('months').update({ [field]: num }).eq('id', state.currentMonthId);
   if (month) month[field] = num;
+  logChange('edit', 'savings', state.currentMonthId, `Savings changed: ${field} ₪${old} → ₪${num}`, {[field]:old}, {[field]:num}, state.currentMonthId);
   pushUndo({ label: 'savings '+field, undo: async()=>{ await sb.from('months').update({[field]:old}).eq('id',state.currentMonthId); if(month)month[field]=old; }, redo: async()=>{ await sb.from('months').update({[field]:num}).eq('id',state.currentMonthId); if(month)month[field]=num; } });
   renderApp();
   toast('Saved ✓');
@@ -2042,6 +2043,7 @@ async function saveIncomeField(field, value) {
   const { error } = await sb.from('months').update({ [field]: num }).eq('id', state.currentMonthId);
   if (error) { toast('Error saving'); return; }
   if (month) month[field] = num;
+  logChange('edit', 'income_field', state.currentMonthId, `Income changed: ${field} ₪${oldVal} → ₪${num}`, {[field]:oldVal}, {[field]:num}, state.currentMonthId);
   pushUndo({ label: field.replace('income_',''), undo: async()=>{ await sb.from('months').update({[field]:oldVal}).eq('id',state.currentMonthId); if(month)month[field]=oldVal; }, redo: async()=>{ await sb.from('months').update({[field]:num}).eq('id',state.currentMonthId); if(month)month[field]=num; } });
   renderApp();
   toast('Saved ✓');
@@ -2061,6 +2063,7 @@ async function saveIncomeItemLabel(id, value) {
   const old = item ? item.label : '';
   await sb.from('income_items').update({ label: value }).eq('id', id);
   if (item) item.label = value;
+  logChange('edit', 'income_item', id, `Renamed income: ${old} → ${value}`, {label:old}, {label:value});
   pushUndo({ label: 'rename income', undo: async()=>{ await sb.from('income_items').update({label:old}).eq('id',id); if(item)item.label=old; }, redo: async()=>{ await sb.from('income_items').update({label:value}).eq('id',id); if(item)item.label=value; } });
   renderApp();
   toast('Saved ✓');
@@ -2072,6 +2075,7 @@ async function saveIncomeItemAmount(id, value) {
   const old = item ? item.amount : 0;
   await sb.from('income_items').update({ amount: num }).eq('id', id);
   if (item) item.amount = num;
+  logChange('edit', 'income_item', id, `Income amount changed: ${item?item.label:'?'} ₪${old} → ₪${num}`, {amount:old}, {amount:num});
   pushUndo({ label: 'income amount', undo: async()=>{ await sb.from('income_items').update({amount:old}).eq('id',id); if(item)item.amount=old; }, redo: async()=>{ await sb.from('income_items').update({amount:num}).eq('id',id); if(item)item.amount=num; } });
   renderApp();
   toast('Saved ✓');
@@ -2263,6 +2267,7 @@ async function saveCharityItem(id, field, value) {
   const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
   await sb.from('charity_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  logChange('edit', 'charity_item', id, `Charity item changed: ${item.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit ' + field,
     undo: async () => { await sb.from('charity_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
@@ -2322,6 +2327,7 @@ async function saveCharityAllocation(monthNum, value) {
     state.charity.allocations[monthNum] = { month_id: month.id, amount: num };
   }
   state.budgets['charity'] = num;
+  logChange('edit', 'charity_allocation', null, `Charity allocation month ${monthNum}: ₪${oldNum} → ₪${num}`, {amount:oldNum}, {amount:num});
   pushUndo({
     label: 'edit charity allocation',
     undo: async () => { const ex = state.charity.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: oldNum }).eq('month_id', ex.month_id).eq('category','charity'); ex.amount = oldNum; } renderApp(); },
@@ -2351,6 +2357,7 @@ async function deleteCharityPayment(id) {
   const snap = {...state.charity.payments.find(p => p.id === id)};
   await sb.from('charity_payments').delete().eq('id', id);
   state.charity.payments = state.charity.payments.filter(p => p.id !== id);
+  logChange('delete', 'charity_payment', id, `Deleted charity payment: ${snap.label} ₪${snap.amount}`, snap, null);
   pushUndo({
     label: 'delete charity payment',
     undo: async () => { const { data } = await sb.from('charity_payments').insert(snap).select().single(); if (data) { state.charity.payments.push(data); state.charity.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
@@ -2366,6 +2373,7 @@ async function updateCharityPayment(id, field, value) {
   const val = field === 'amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'has_receipt' || field === 'is_given') ? Boolean(value) : value;
   await sb.from('charity_payments').update({ [field]: val }).eq('id', id);
   p[field] = val;
+  logChange('edit', 'charity_payment', id, `Charity payment changed: ${p.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit charity payment',
     undo: async () => { await sb.from('charity_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
@@ -2390,6 +2398,7 @@ async function saveTravelItem(id, field, value) {
   const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : value;
   await sb.from('travel_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  logChange('edit', 'travel_item', id, `Travel item changed: ${item.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit ' + field,
     undo: async () => { await sb.from('travel_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
@@ -2449,6 +2458,7 @@ async function saveTravelAllocation(monthNum, value) {
     state.travel.allocations[monthNum] = { month_id: month.id, amount: num };
   }
   state.budgets['travel'] = num;
+  logChange('edit', 'travel_allocation', null, `Travel allocation month ${monthNum}: ₪${oldNum} → ₪${num}`, {amount:oldNum}, {amount:num});
   pushUndo({
     label: 'edit travel allocation',
     undo: async () => { const ex = state.travel.allocations[monthNum]; if (ex) { await sb.from('budgets').update({ amount: oldNum }).eq('month_id', ex.month_id).eq('category','travel'); ex.amount = oldNum; } renderApp(); },
@@ -2478,6 +2488,7 @@ async function deleteTravelPayment(id) {
   const snap = {...state.travel.payments.find(p => p.id === id)};
   await sb.from('travel_payments').delete().eq('id', id);
   state.travel.payments = state.travel.payments.filter(p => p.id !== id);
+  logChange('delete', 'travel_payment', id, `Deleted travel payment: ${snap.label} ₪${snap.amount}`, snap, null);
   pushUndo({
     label: 'delete travel payment',
     undo: async () => { const { data } = await sb.from('travel_payments').insert(snap).select().single(); if (data) { state.travel.payments.push(data); state.travel.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
@@ -2493,6 +2504,7 @@ async function updateTravelPayment(id, field, value) {
   const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_estimate' ? Boolean(value) : value;
   await sb.from('travel_payments').update({ [field]: val }).eq('id', id);
   p[field] = val;
+  logChange('edit', 'travel_payment', id, `Travel payment changed: ${p.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit travel payment',
     undo: async () => { await sb.from('travel_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
@@ -3263,6 +3275,7 @@ async function saveAdminItem(id, field, value) {
   const val = field === 'projected_amount' ? (parseFloat(value) || 0) : (field === 'is_estimate' || field === 'is_logged') ? Boolean(value) : String(value);
   await sb.from('admin_items').update({ [field]: val }).eq('id', id);
   item[field] = val;
+  logChange('edit', 'admin_item', id, `Admin item changed: ${item.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit ' + field,
     undo: async () => { await sb.from('admin_items').update({ [field]: oldVal }).eq('id', id); item[field] = oldVal; renderApp(); },
@@ -3325,6 +3338,7 @@ async function saveAdminAllocation(monthNum, value) {
     await sb.from('budgets').upsert({ month_id: month.id, category: 'admin', amount: num }, { onConflict: 'month_id,category' });
     state.budgets['admin'] = num;
   }
+  logChange('edit', 'admin_allocation', null, `Admin allocation month ${monthNum}: ₪${oldNum} → ₪${num}`, {amount:oldNum}, {amount:num});
   pushUndo({
     label: 'edit allocation',
     undo: async () => { const ex = state.admin.allocations[monthNum]; if (ex) { await sb.from('admin_allocations').update({ amount: oldNum }).eq('id', ex.id); ex.amount = oldNum; } renderApp(); },
@@ -3352,6 +3366,7 @@ async function deleteAdminPayment(id) {
   const snap = {...state.admin.payments.find(p => p.id === id)};
   await sb.from('admin_payments').delete().eq('id', id);
   state.admin.payments = state.admin.payments.filter(p => p.id !== id);
+  logChange('delete', 'admin_payment', id, `Deleted admin payment: ${snap.label} ₪${snap.amount}`, snap, null);
   pushUndo({
     label: 'delete payment',
     undo: async () => { const { data } = await sb.from('admin_payments').insert(snap).select().single(); if (data) { state.admin.payments.push(data); state.admin.payments.sort((a,b)=>a.month_num-b.month_num); } renderApp(); },
@@ -3367,6 +3382,7 @@ async function updateAdminPayment(id, field, value) {
   const val = field === 'amount' ? (parseFloat(value) || 0) : field === 'is_estimate' ? Boolean(value) : value;
   await sb.from('admin_payments').update({ [field]: val }).eq('id', id);
   p[field] = val;
+  logChange('edit', 'admin_payment', id, `Admin payment changed: ${p.label} ${field} ${oldVal} → ${val}`, {[field]:oldVal}, {[field]:val});
   pushUndo({
     label: 'edit payment',
     undo: async () => { await sb.from('admin_payments').update({ [field]: oldVal }).eq('id', id); p[field] = oldVal; renderApp(); },
@@ -3497,6 +3513,7 @@ async function saveBizField(field, value) {
   const { error } = await sb.from('biz_months').update({ [field]: num }).eq('id', state.biz.id);
   if (error) { toast('Error saving'); return; }
   state.biz[field] = num;
+  logChange('edit', 'biz_field', state.biz.id, `Biz changed: ${field} ₪${oldVal} → ₪${num}`, {[field]:oldVal}, {[field]:num});
   pushUndo({ label: 'biz '+field, undo: async()=>{ await sb.from('biz_months').update({[field]:oldVal}).eq('id',state.biz.id); state.biz[field]=oldVal; }, redo: async()=>{ await sb.from('biz_months').update({[field]:num}).eq('id',state.biz.id); state.biz[field]=num; } });
 
   // If confirmed_amount changes, also update income_private in main months table
