@@ -1261,6 +1261,7 @@ async function addTransactionSidebar() {
 
   if (error) { toast('Error saving — try again'); btn.disabled = false; btn.textContent = 'Save →'; return; }
   logChange('add', 'transaction', txData.id, `Added ${store||item||cat} ₪${amount} • ${cat}`, null, txData, state.currentMonthId);
+  pushUndo({ label: 'add transaction', undo: async()=>{ await sb.from('transactions').delete().eq('id',txData.id); await loadTransactions(state.currentMonthId); }, redo: async()=>{ await sb.from('transactions').insert(txData); await loadTransactions(state.currentMonthId); } });
 
   document.getElementById('sb-store').value = '';
   document.getElementById('sb-item').value = '';

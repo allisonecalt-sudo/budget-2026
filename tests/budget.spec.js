@@ -247,6 +247,63 @@ test('history panel shows loading or content after opening', async ({ page }) =>
   expect(text.length).toBeGreaterThan(0);
 });
 
+// ─── Undo/Redo: Add Transaction via Sidebar ───
+test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#sb-cat', { timeout: 10000 });
+  await page.waitForSelector('.cat-row', { timeout: 10000 });
+
+  // Capture the current grocery spent amount
+  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
+  const getSpent = async () => {
+    const text = await groceryRow.textContent();
+    const match = text.match(/₪([\d,.]+)/);
+    return match ? parseFloat(match[1].replace(',', '')) : 0;
+  };
+  const spentBefore = await getSpent();
+
+  // Fill sidebar form with a test transaction
+  await page.selectOption('#sb-cat', 'groceries');
+  await page.fill('#sb-store', 'PlaywrightTestStore');
+  await page.fill('#sb-amount', '0.01');
+  await page.click('#sb-btn');
+
+  // Wait for save confirmation toast
+  await page.waitForFunction(() => {
+    const toast = document.getElementById('toast');
+    return toast && toast.textContent.includes('saved');
+  }, { timeout: 10000 });
+
+  // Verify undo button is now enabled
+  await expect(page.locator('#undo-btn')).toBeEnabled();
+
+  // Spent should have increased
+  const spentAfterAdd = await getSpent();
+  expect(spentAfterAdd).toBeGreaterThan(spentBefore);
+
+  // Click undo
+  await page.click('#undo-btn');
+  await page.waitForTimeout(3000);
+
+  // Spent should be back to original
+  const spentAfterUndo = await getSpent();
+  expect(spentAfterUndo).toBeCloseTo(spentBefore, 1);
+
+  // Redo button should be enabled
+  await expect(page.locator('#redo-btn')).toBeEnabled();
+
+  // Click redo — transaction comes back
+  await page.click('#redo-btn');
+  await page.waitForTimeout(3000);
+
+  const spentAfterRedo = await getSpent();
+  expect(spentAfterRedo).toBeGreaterThan(spentBefore);
+
+  // Clean up: undo again to remove the test transaction from Supabase
+  await page.click('#undo-btn');
+  await page.waitForTimeout(2000);
+});
+
 // ─── Responsive / Style ───
 test('body has correct font family', async ({ page }) => {
   await page.goto('/');
