@@ -214,6 +214,39 @@ test('history button exists', async ({ page }) => {
   await expect(historyBtn).toBeVisible();
 });
 
+// ─── History Log Panel ───
+test('clicking history button opens the history panel', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  const historyBtn = page.locator('.mtab', { hasText: '🕐' });
+  await historyBtn.click();
+  const panel = page.locator('#history-panel');
+  await expect(panel).toBeVisible({ timeout: 5000 });
+  await expect(panel.locator('text=History Log')).toBeVisible();
+});
+
+test('history panel has a close button that removes it', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.locator('.mtab', { hasText: '🕐' }).click();
+  await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
+  // Click the close button
+  await page.locator('#history-panel button:has-text("✕")').click();
+  await expect(page.locator('#history-panel')).not.toBeAttached();
+});
+
+test('history panel shows loading or content after opening', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.locator('.mtab', { hasText: '🕐' }).click();
+  const list = page.locator('#history-list');
+  await expect(list).toBeVisible({ timeout: 5000 });
+  // Should show either loading, entries, empty message, or error (all valid states)
+  await page.waitForTimeout(2000);
+  const text = await list.textContent();
+  expect(text.length).toBeGreaterThan(0);
+});
+
 // ─── Responsive / Style ───
 test('body has correct font family', async ({ page }) => {
   await page.goto('/');

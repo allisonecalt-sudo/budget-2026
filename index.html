@@ -454,7 +454,7 @@ function logChange(action, entityType, entityId, description, oldValue, newValue
     old_value: oldValue ? JSON.stringify(oldValue) : null,
     new_value: newValue ? JSON.stringify(newValue) : null,
     month_id: monthId || state.currentMonthId || null
-  }).then(() => {}).catch(() => {});
+  }).then(({error}) => { if(error) console.warn('change_log insert failed:', error); }).catch(e => console.warn('change_log insert error:', e));
 }
 function pushUndo(action) { undoStack.push(action); if (undoStack.length > 30) undoStack.shift(); redoStack.length = 0; updateUndoButtons(); }
 function updateUndoButtons() { const u=document.getElementById('undo-btn'),r=document.getElementById('redo-btn'); if(u)u.disabled=undoStack.length===0; if(r)r.disabled=redoStack.length===0; }
