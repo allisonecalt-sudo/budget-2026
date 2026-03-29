@@ -454,7 +454,7 @@ function logChange(action, entityType, entityId, description, oldValue, newValue
     old_value: oldValue ? JSON.stringify(oldValue) : null,
     new_value: newValue ? JSON.stringify(newValue) : null,
     month_id: monthId || state.currentMonthId || null
-  }).then(({error}) => { if(error) console.warn('change_log insert failed:', error); }).catch(e => console.warn('change_log insert error:', e));
+  }).then(({error}) => { if(error) console.warn('change_log insert failed:', error); else if(typeof refreshHistoryIfOpen==='function') refreshHistoryIfOpen(); }).catch(e => console.warn('change_log insert error:', e));
 }
 function pushUndo(action) { undoStack.push(action); if (undoStack.length > 30) undoStack.shift(); redoStack.length = 0; updateUndoButtons(); }
 function updateUndoButtons() { const u=document.getElementById('undo-btn'),r=document.getElementById('redo-btn'); if(u)u.disabled=undoStack.length===0; if(r)r.disabled=redoStack.length===0; }
@@ -1838,7 +1838,7 @@ function renderApp() {
                         const fmtDate = d => { if(!d) return '—'; const dt=new Date(d+'T12:00:00'); return dt.getDate()+' '+MONS[dt.getMonth()]; };
                         const esc = s => (s||'').replace(/"/g,'&quot;').replace(/&/g,'&amp;');
                         const renderTxRow = tx => `
-                          <div class="tx-item">
+                          <div class="tx-item" data-tx-id="${tx.id}">
                             <div class="tx-date-wrap" onclick="event.stopPropagation()">
                               <span class="tx-date-display">${fmtDate(tx.date)}</span>
                               <input class="tx-edit-date" type="date" value="${tx.date||''}" onchange="updateTx('${tx.id}','date',this.value)">
@@ -4262,14 +4262,68 @@ async function openHistoryPanel() {
     return d.toLocaleDateString('en-IL', { weekday:'short', day:'numeric', month:'short' }) + ', ' +
       d.toLocaleTimeString('en-IL', { hour:'2-digit', minute:'2-digit' });
   };
-  list.innerHTML = data.map(r => `
-    <div style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;">
+  list.innerHTML = data.map(r => {
+    const isTransaction = r.entity_type === 'transaction' && r.action !== 'delete' && r.entity_id;
+    const clickAttr = isTransaction ? `onclick="jumpToTransaction('${r.entity_id}')" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"` : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
+    return `<div ${clickAttr}>
       <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action]||'#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
-        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}</div>
+        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${isTransaction ? ' ↗' : ''}</div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+// Auto-refresh history if panel is open
+async function refreshHistoryIfOpen() {
+  const panel = document.getElementById('history-panel');
+  if (panel && panel.style.display !== 'none') {
+    const list = document.getElementById('history-list');
+    if (!list) return;
+    const { data } = await sb.from('change_log').select('*').order('created_at', { ascending: false }).limit(200);
+    if (!data) return;
+    const colors = { add: '#22c55e', delete: '#ef4444', edit: '#f59e0b' };
+    const fmtDate = iso => {
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-IL', { weekday:'short', day:'numeric', month:'short' }) + ', ' +
+        d.toLocaleTimeString('en-IL', { hour:'2-digit', minute:'2-digit' });
+    };
+    list.innerHTML = data.map(r => {
+      const isTransaction = r.entity_type === 'transaction' && r.action !== 'delete' && r.entity_id;
+      const clickAttr = isTransaction ? `onclick="jumpToTransaction('${r.entity_id}')" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"` : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
+      return `<div ${clickAttr}>
+        <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action]||'#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
+        <div style="min-width:0;">
+          <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${isTransaction ? ' ↗' : ''}</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// Jump to transaction from history
+function jumpToTransaction(txId) {
+  const tx = state.transactions.find(t => t.id === txId);
+  if (!tx) { toast('Transaction not found in current month'); return; }
+  // Open the category
+  if (!state.openCats.has(tx.category)) {
+    state.openCats.add(tx.category);
+    localStorage.setItem('openCats', JSON.stringify([...state.openCats]));
+    renderApp();
+  }
+  // Scroll to and highlight the transaction row
+  setTimeout(() => {
+    const el = document.querySelector(`[data-tx-id="${txId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.background = 'var(--accent)';
+      el.style.color = '#fff';
+      el.style.borderRadius = '6px';
+      setTimeout(() => { el.style.background = ''; el.style.color = ''; el.style.borderRadius = ''; }, 2000);
+    }
+  }, 100);
 }
 </script>
 </body>
