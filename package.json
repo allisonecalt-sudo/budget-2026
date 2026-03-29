@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint app.js",
+    "lint:fix": "eslint app.js --fix",
+    "format": "prettier --write app.js styles.css index.html",
+    "format:check": "prettier --check app.js styles.css index.html"
   },
   "repository": {
     "type": "git",
@@ -20,6 +24,9 @@
   "homepage": "https://github.com/allisonecalt-sudo/budget-2026#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.8.1",
     "serve": "^14.2.6"
   }
 }
