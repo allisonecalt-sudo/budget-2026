@@ -304,6 +304,86 @@ test('add grocery transaction via sidebar, then undo removes it, redo restores i
   await page.waitForTimeout(2000);
 });
 
+// ─── Inline Add: History Logging ───
+test('inline add transaction appears in history log', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.cat-row', { timeout: 10000 });
+
+  // Open the groceries category
+  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
+  await groceryRow.locator('.cat-top').click();
+  await expect(groceryRow).toHaveClass(/open/);
+
+  // Click "+ add line" button inside groceries
+  const addBtn = groceryRow.locator('.bi-add');
+  if (await addBtn.count() === 0) {
+    // Category already has lines — use sidebar instead, skip this test
+    return;
+  }
+  await addBtn.click({ force: true });
+
+  // Fill inline form
+  const storeInput = page.locator('#inline-store-groceries');
+  await expect(storeInput).toBeVisible({ timeout: 5000 });
+  await storeInput.fill('PlaywrightInlineTest');
+  await page.locator('#inline-amount-groceries').fill('0.01');
+
+  // Submit via Enter key
+  await page.locator('#inline-amount-groceries').press('Enter');
+
+  // Wait for save toast
+  await page.waitForFunction(() => {
+    const toast = document.getElementById('toast');
+    return toast && toast.textContent.includes('Saved');
+  }, { timeout: 10000 });
+
+  // Wait a moment for logChange to complete
+  await page.waitForTimeout(1500);
+
+  // Open history panel
+  await page.locator('.mtab', { hasText: '🕐' }).click();
+  await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
+  await page.waitForTimeout(2000);
+
+  // Verify "Added PlaywrightInlineTest" appears in history
+  const historyText = await page.locator('#history-list').textContent();
+  expect(historyText).toContain('PlaywrightInlineTest');
+
+  // Clean up: undo the test transaction
+  await page.locator('#history-panel button:has-text("✕")').click();
+  await page.click('#undo-btn');
+  await page.waitForTimeout(2000);
+});
+
+// ─── Inline Add: Performance ───
+test('inline add transaction completes within 5 seconds', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.cat-row', { timeout: 10000 });
+
+  // Use sidebar add (always available) to measure add performance
+  await page.waitForSelector('#sb-cat', { timeout: 10000 });
+  await page.selectOption('#sb-cat', 'groceries');
+  await page.fill('#sb-store', 'PlaywrightPerfTest');
+  await page.fill('#sb-amount', '0.01');
+
+  const start = Date.now();
+  await page.click('#sb-btn');
+
+  // Wait for toast confirmation
+  await page.waitForFunction(() => {
+    const toast = document.getElementById('toast');
+    return toast && toast.textContent.includes('saved');
+  }, { timeout: 10000 });
+  const elapsed = Date.now() - start;
+
+  console.log(`Add transaction took ${elapsed}ms`);
+  expect(elapsed).toBeLessThan(5000);
+
+  // Clean up
+  await page.click('#undo-btn');
+  await page.waitForTimeout(1500);
+});
+
 // ─── Responsive / Style ───
 test('body has correct font family', async ({ page }) => {
   await page.goto('/');

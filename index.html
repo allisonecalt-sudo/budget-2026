@@ -2011,17 +2011,22 @@ function quickAddFor(catKey) {
 }
 
 async function saveInlineAdd(catKey) {
+  if (saveInlineAdd._saving) return;
+  saveInlineAdd._saving = true;
   const store = (document.getElementById('inline-store-' + catKey) || {}).value?.trim() || null;
   const item = (document.getElementById('inline-item-' + catKey) || {}).value?.trim() || null;
   const amount = parseFloat((document.getElementById('inline-amount-' + catKey) || {}).value);
   const date = (document.getElementById('inline-date-' + catKey) || {}).value || null;
-  if (!amount || isNaN(amount)) { toast('Enter an amount'); return; }
+  if (!amount || isNaN(amount)) { toast('Enter an amount'); saveInlineAdd._saving = false; return; }
   const { data: txData, error } = await sb.from('transactions').insert({
     month_id: state.currentMonthId, category: catKey, store, item, amount, date
   }).select().single();
-  if (error) { toast('Error saving'); return; }
+  if (error) { toast('Error saving'); saveInlineAdd._saving = false; return; }
+  logChange('add', 'transaction', txData.id, `Added ${store||item||catKey} ₪${amount} • ${catKey}`, null, txData, state.currentMonthId);
+  pushUndo({ label: 'add transaction', undo: async()=>{ await sb.from('transactions').delete().eq('id',txData.id); await loadTransactions(state.currentMonthId); }, redo: async()=>{ await sb.from('transactions').insert(txData); await loadTransactions(state.currentMonthId); } });
   state.inlineAddCat = null;
   await loadTransactions(state.currentMonthId);
+  saveInlineAdd._saving = false;
   renderApp();
   toast('Saved ✓');
 }
