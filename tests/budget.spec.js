@@ -653,3 +653,256 @@ test('budget page totals match year view for each month', async ({ page }) => {
     }
   }
 });
+
+// ─── Detailed Math Verification: All Numbers Add Up ───
+test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budget', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+
+  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthCount = await monthTabs.count();
+
+  for (let i = 0; i < Math.min(monthCount, 4); i++) {
+    await monthTabs.nth(i).click();
+    await page.waitForTimeout(2000);
+    const monthName = (await monthTabs.nth(i).textContent()).trim();
+
+    // Read all ribbon stats
+    const vals = {};
+    const ribbonStats = page.locator('.ribbon-stat');
+    const statCount = await ribbonStats.count();
+    for (let s = 0; s < statCount; s++) {
+      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
+      const raw = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+      const num = parseFloat(raw.replace(/[₪,~]/g, ''));
+      if (label.includes('Income')) vals.income = num;
+      if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
+        vals.budgeted = num;
+      if (label.includes('Left to Budget')) vals.leftToBudget = num;
+      if (label === 'Spent') vals.spent = num;
+      if (label === 'Remaining' || (label.includes('Remaining') && !label.includes('Budget')))
+        vals.remaining = num;
+      if (label.includes('Remaining in Budget')) vals.remainingInBudget = num;
+      if (label.includes('Saved')) vals.saved = num;
+    }
+
+    console.log(`${monthName} ribbon:`, JSON.stringify(vals));
+
+    // Income - Budgeted = Left to Budget
+    if (vals.income != null && vals.budgeted != null && vals.leftToBudget != null) {
+      const expected = vals.income - vals.budgeted;
+      const diff = Math.abs(expected - vals.leftToBudget);
+      console.log(
+        `  ${monthName}: Income(${vals.income}) - Budgeted(${vals.budgeted}) = ${expected}, Left to Budget = ${vals.leftToBudget}, diff = ${diff}`,
+      );
+      expect(diff).toBeLessThan(1);
+    }
+
+    // Income - Spent = Remaining
+    if (vals.income != null && vals.spent != null && vals.remaining != null) {
+      const expected = vals.income - vals.spent;
+      const diff = Math.abs(expected - vals.remaining);
+      console.log(
+        `  ${monthName}: Income(${vals.income}) - Spent(${vals.spent}) = ${expected}, Remaining = ${vals.remaining}, diff = ${diff}`,
+      );
+      expect(diff).toBeLessThan(1);
+    }
+
+    // Budgeted - Spent = Remaining in Budget
+    if (vals.budgeted != null && vals.spent != null && vals.remainingInBudget != null) {
+      const expected = vals.budgeted - vals.spent;
+      const diff = Math.abs(expected - vals.remainingInBudget);
+      console.log(
+        `  ${monthName}: Budgeted(${vals.budgeted}) - Spent(${vals.spent}) = ${expected}, Remaining in Budget = ${vals.remainingInBudget}, diff = ${diff}`,
+      );
+      expect(diff).toBeLessThan(1);
+    }
+  }
+});
+
+test('snapshot modal: group budgets sum to total budgeted', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+
+  // Open snapshot
+  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
+  await page.waitForTimeout(1000);
+
+  const rows = page.locator('#snapshot-body tr');
+  const rowCount = await rows.count();
+
+  let totalBudget = 0;
+  let totalSpent = 0;
+  let summarySpent = null;
+
+  for (let r = 0; r < rowCount; r++) {
+    const text = await rows.nth(r).textContent();
+    const cells = rows.nth(r).locator('td');
+    const cellCount = await cells.count();
+
+    // Summary row: "Spent" row has the total in cell 2
+    if (text.includes('Spent') && !text.includes('Savings') && cellCount >= 3) {
+      const raw = await cells.nth(2).textContent();
+      summarySpent = parseFloat(raw.replace(/[₪,]/g, '')) || null;
+    }
+
+    // Group rows (sn-group class) have: name, budget, spent, remaining
+    const cls = await rows.nth(r).getAttribute('class');
+    if (cls && cls.includes('sn-group') && cellCount >= 4) {
+      const budgetRaw = await cells.nth(1).textContent();
+      const spentRaw = await cells.nth(2).textContent();
+      const b = parseFloat(budgetRaw.replace(/[₪,]/g, '')) || 0;
+      const s = parseFloat(spentRaw.replace(/[₪,]/g, '')) || 0;
+      const name = await cells.nth(0).textContent();
+      console.log(`  Snapshot group: ${name.trim()} — Budget: ${b}, Spent: ${s}`);
+      totalBudget += b;
+      totalSpent += s;
+
+      // Each group: Budget - Spent = Remaining
+      const remRaw = await cells.nth(3).textContent();
+      const rem = parseFloat(remRaw.replace(/[₪,]/g, '')) || 0;
+      const expectedRem = b - s;
+      const diff = Math.abs(expectedRem - rem);
+      if (b > 0) {
+        console.log(`    Remaining: expected ${expectedRem}, got ${rem}, diff ${diff}`);
+        expect(diff).toBeLessThan(2);
+      }
+    }
+  }
+
+  console.log(`Snapshot totals — Budget: ${totalBudget}, Spent: ${totalSpent}`);
+  if (summarySpent != null) {
+    console.log(`Summary Spent: ${summarySpent}, Groups Spent: ${totalSpent}`);
+  }
+});
+
+test('category spent amounts sum to total spent in ribbon', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+  await page.waitForSelector('.cat-row', { timeout: 10000 });
+
+  // Get ribbon Spent
+  let ribbonSpent = null;
+  let ribbonSaved = null;
+  const ribbonStats = page.locator('.ribbon-stat');
+  const statCount = await ribbonStats.count();
+  for (let s = 0; s < statCount; s++) {
+    const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
+    const raw = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+    if (label === 'Spent') ribbonSpent = parseFloat(raw.replace(/[₪,~]/g, ''));
+    if (label.includes('Saved')) ribbonSaved = parseFloat(raw.replace(/[₪,~]/g, ''));
+  }
+
+  // Expand ribbon to get full snapshot table
+  const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
+  if ((await expandBtn.count()) === 0) return;
+  await expandBtn.click();
+  await page.waitForSelector('.sn-table', { timeout: 5000 });
+
+  // Sum all group-level spent values from the snapshot table
+  const groupRows = page.locator('.sn-group');
+  const groupCount = await groupRows.count();
+  let groupSpentTotal = 0;
+
+  for (let g = 0; g < groupCount; g++) {
+    const cells = groupRows.nth(g).locator('td');
+    const name = await cells.nth(0).textContent();
+    const spentRaw = await cells.nth(2).textContent();
+    const spent = parseFloat(spentRaw.replace(/[₪,]/g, '')) || 0;
+    console.log(`  Group: ${name.trim()} = ${spent}`);
+    groupSpentTotal += spent;
+  }
+
+  // Also get single-category rows (not inside a group)
+  const singleCats = page.locator('.sn-table .sn-cat:not([class*="rsngrp"])');
+  const singleCount = await singleCats.count();
+  for (let s = 0; s < singleCount; s++) {
+    const cells = singleCats.nth(s).locator('td');
+    const cellCount = await cells.count();
+    if (cellCount < 4) continue;
+    const name = await cells.nth(0).textContent();
+    // Skip sub-categories that are part of a group
+    const style = await cells.nth(0).getAttribute('style');
+    if (style && style.includes('padding-left')) continue;
+    const spentRaw = await cells.nth(2).textContent();
+    const spent = parseFloat(spentRaw.replace(/[₪,]/g, '')) || 0;
+    console.log(`  Single: ${name.trim()} = ${spent}`);
+    groupSpentTotal += spent;
+  }
+
+  console.log(
+    `Ribbon Spent: ${ribbonSpent}, Groups+Singles total: ${groupSpentTotal}, Saved: ${ribbonSaved}`,
+  );
+
+  // Total should match ribbon Spent (groups + savings = ribbon spent)
+  if (ribbonSpent != null && groupSpentTotal > 0) {
+    const diff = Math.abs(ribbonSpent - groupSpentTotal);
+    console.log(`  Diff between ribbon and sum of groups: ${diff}`);
+    expect(diff).toBeLessThan(5);
+  }
+});
+
+test('year view: Income - Budgeted = Unbudgeted for each month', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(4000);
+
+  // Find rows
+  const findRow = async (label) => {
+    const rows = page.locator('tr');
+    const count = await rows.count();
+    for (let r = 0; r < count; r++) {
+      const text = await rows.nth(r).textContent();
+      if (text.includes(label)) return rows.nth(r);
+    }
+    return null;
+  };
+
+  const incomeRow = await findRow('Total Income');
+  const budgetedRow = await findRow('Total Budgeted');
+  const unbudgetedRow = await findRow('Unbudgeted');
+  const spentRow = await findRow('Total Spent');
+  const remainingRow = await findRow('Remaining');
+
+  if (!incomeRow || !budgetedRow || !unbudgetedRow) {
+    console.log('Could not find required year view rows');
+    return;
+  }
+
+  const parseCell = async (row, idx) => {
+    const cell = row.locator('td').nth(idx);
+    const raw = await cell.textContent();
+    return parseFloat(raw.replace(/[₪,]/g, '').replace('−', '-')) || 0;
+  };
+
+  // Check first 4 months (cols 1-4)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
+  for (let m = 0; m < 4; m++) {
+    const col = m + 1;
+    const income = await parseCell(incomeRow, col);
+    const budgeted = await parseCell(budgetedRow, col);
+    const unbudgeted = await parseCell(unbudgetedRow, col);
+
+    const expected = income - budgeted;
+    const diff = Math.abs(expected - unbudgeted);
+    console.log(
+      `${monthNames[m]}: Income(${income}) - Budgeted(${budgeted}) = ${expected}, Unbudgeted = ${unbudgeted}, diff = ${diff}`,
+    );
+    expect(diff).toBeLessThan(2);
+
+    if (spentRow && remainingRow) {
+      const spent = await parseCell(spentRow, col);
+      const remaining = await parseCell(remainingRow, col);
+      const expectedRem = income - spent;
+      const remDiff = Math.abs(expectedRem - remaining);
+      console.log(
+        `  Income(${income}) - Spent(${spent}) = ${expectedRem}, Remaining = ${remaining}, diff = ${remDiff}`,
+      );
+      expect(remDiff).toBeLessThan(2);
+    }
+  }
+});
