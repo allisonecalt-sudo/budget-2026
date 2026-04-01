@@ -1791,11 +1791,12 @@ function renderApp() {
       // Snapshot table rows for expanded view
       const groupRows = CATEGORY_GROUPS.map((group) => {
         const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-        const gs = cats.reduce(
+        const nonLinked = cats.filter((c) => !c.linkedLine);
+        const gs = nonLinked.reduce(
           (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
           0,
         );
-        const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
+        const gb = nonLinked.reduce((sum, c) => sum + catBudget(c.key), 0);
         const gr = gb - gs;
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
         const catRows = cats
@@ -6578,11 +6579,12 @@ function openSnapshot() {
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
     const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-    const gs = cats.reduce(
+    const nonLinked = cats.filter((c) => !c.linkedLine);
+    const gs = nonLinked.reduce(
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     );
-    const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
+    const gb = nonLinked.reduce((sum, c) => sum + catBudget(c.key), 0);
     const gr = gb - gs;
     const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
     const catRows = cats
