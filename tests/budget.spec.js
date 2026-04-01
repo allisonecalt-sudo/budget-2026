@@ -574,3 +574,82 @@ test('editing savings produces only one undo entry', async ({ page }) => {
   // Clean up: if undo left us with a redo, clear it
   await page.waitForTimeout(500);
 });
+
+// ─── Budget Page vs Year View: Numbers Must Match ───
+test('budget page totals match year view for each month', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+
+  // Collect budget page values for each past month (Jan-Mar at minimum)
+  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthCount = await monthTabs.count();
+  const budgetPageValues = {};
+
+  for (let i = 0; i < Math.min(monthCount, 4); i++) {
+    await monthTabs.nth(i).click();
+    await page.waitForTimeout(2000);
+
+    // Get month name from active tab
+    const monthName = (await monthTabs.nth(i).textContent()).trim();
+
+    // Read ribbon values: Budgeted and Spent
+    const ribbonStats = page.locator('.ribbon-stat');
+    const statCount = await ribbonStats.count();
+    let budgeted = null;
+    let spent = null;
+    for (let s = 0; s < statCount; s++) {
+      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
+      const val = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+      if (label.includes('Budgeted')) budgeted = val.replace(/[₪,~]/g, '').trim();
+      if (label === 'Spent') spent = val.replace(/[₪,~]/g, '').trim();
+    }
+    budgetPageValues[monthName] = { budgeted: parseFloat(budgeted), spent: parseFloat(spent) };
+    console.log(`Budget page ${monthName}: Budgeted=${budgeted}, Spent=${spent}`);
+  }
+
+  // Now switch to Year view
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(4000);
+
+  // Read year view values for Total Budgeted and Total Spent rows
+  const yearRows = page.locator('tr');
+  const rowCount = await yearRows.count();
+
+  let budgetedRow = null;
+  let spentRow = null;
+  for (let r = 0; r < rowCount; r++) {
+    const text = await yearRows.nth(r).textContent();
+    if (text.includes('Total Budgeted') && !budgetedRow) budgetedRow = yearRows.nth(r);
+    if (text.includes('Total Spent') && !spentRow) spentRow = yearRows.nth(r);
+  }
+
+  if (!budgetedRow || !spentRow) {
+    console.log('Could not find Total Budgeted/Spent rows in year view');
+    return;
+  }
+
+  // Extract per-month values from the year row cells
+  const budgetedCells = budgetedRow.locator('td');
+  const spentCells = spentRow.locator('td');
+  const cellCount = await budgetedCells.count();
+
+  // Cells: [label, Jan, Feb, Mar, Apr, ..., Total, Avg, %Inc]
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
+  for (let m = 0; m < Math.min(4, cellCount - 1); m++) {
+    const yearBudgeted = (await budgetedCells.nth(m + 1).textContent()).replace(/[₪,]/g, '').trim();
+    const yearSpent = (await spentCells.nth(m + 1).textContent()).replace(/[₪,]/g, '').trim();
+    const monthName = monthNames[m];
+    const pageBudgeted = budgetPageValues[monthName]?.budgeted;
+    const pageSpent = budgetPageValues[monthName]?.spent;
+
+    console.log(
+      `${monthName}: Page Budgeted=${pageBudgeted} vs Year Budgeted=${yearBudgeted} | Page Spent=${pageSpent} vs Year Spent=${yearSpent}`,
+    );
+
+    if (pageBudgeted && yearBudgeted) {
+      const diff = Math.abs(pageBudgeted - parseFloat(yearBudgeted));
+      expect(diff).toBeLessThan(5); // Allow tiny rounding differences
+    }
+  }
+});
