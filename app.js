@@ -2545,42 +2545,15 @@ function renderApp() {
 }
 
 async function saveSavingsField(field, value) {
+  // Mirror budget value to months table for backwards compatibility.
+  // No undo/render/toast here — saveBudget() handles all of that.
   const num = parseFloat(value) || 0;
   const month = state.months.find((m) => m.id === state.currentMonthId);
-  const old = Number(month[field]) || 0;
   await sb
     .from('months')
     .update({ [field]: num })
     .eq('id', state.currentMonthId);
   if (month) month[field] = num;
-  logChange(
-    'edit',
-    'savings',
-    state.currentMonthId,
-    `Savings changed: ${field} ₪${old} → ₪${num}`,
-    { [field]: old },
-    { [field]: num },
-    state.currentMonthId,
-  );
-  pushUndo({
-    label: 'savings ' + field,
-    undo: async () => {
-      await sb
-        .from('months')
-        .update({ [field]: old })
-        .eq('id', state.currentMonthId);
-      if (month) month[field] = old;
-    },
-    redo: async () => {
-      await sb
-        .from('months')
-        .update({ [field]: num })
-        .eq('id', state.currentMonthId);
-      if (month) month[field] = num;
-    },
-  });
-  renderApp();
-  toast('Saved ✓');
 }
 
 async function saveBudget(catKey, amount) {
@@ -2641,9 +2614,13 @@ async function saveBudget(catKey, amount) {
     label: 'budget ' + catKey,
     undo: async () => {
       await saveBudget(catKey, old);
+      if (catKey === 'savings_bank' || catKey === 'savings_invested')
+        await saveSavingsField(catKey, old);
     },
     redo: async () => {
       await saveBudget(catKey, num);
+      if (catKey === 'savings_bank' || catKey === 'savings_invested')
+        await saveSavingsField(catKey, num);
     },
   });
   renderApp();

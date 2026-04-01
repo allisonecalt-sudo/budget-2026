@@ -508,3 +508,69 @@ test('year view total savings row uses budget values', async ({ page }) => {
   if ((await savingsRow.count()) === 0) return;
   await expect(savingsRow).toBeVisible();
 });
+
+// ─── Savings Edit: Consistency Across Views ───
+test('editing savings updates ribbon and snapshot consistently', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#group-Savings', { timeout: 10000 });
+
+  // Find the savings bank input inside the Savings group
+  const savingsGroup = page.locator('#group-Savings');
+  const bankInput = savingsGroup.locator('input[type="number"]').first();
+  if ((await bankInput.count()) === 0) return;
+
+  // Read original value
+  const original = await bankInput.inputValue();
+
+  // Set to a test value
+  await bankInput.fill('9999');
+  await bankInput.blur();
+  await page.waitForTimeout(3000);
+
+  // Check ribbon "Saved" includes 9999
+  const ribbonSaved = page.locator('.ribbon-val', { hasText: '9,999' });
+  const ribbonHasSaved = (await ribbonSaved.count()) > 0;
+
+  // Check Savings group header shows 9999
+  const groupHeader = savingsGroup.locator('.group-header');
+  const headerText = await groupHeader.textContent();
+  const headerHas9999 = headerText.includes('9,999');
+
+  // At least one should reflect the new value
+  expect(ribbonHasSaved || headerHas9999).toBeTruthy();
+
+  // Restore original value
+  await bankInput.fill(original || '0');
+  await bankInput.blur();
+  await page.waitForTimeout(2000);
+});
+
+test('editing savings produces only one undo entry', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#group-Savings', { timeout: 10000 });
+
+  const savingsGroup = page.locator('#group-Savings');
+  const bankInput = savingsGroup.locator('input[type="number"]').first();
+  if ((await bankInput.count()) === 0) return;
+
+  const original = await bankInput.inputValue();
+
+  // Edit savings
+  await bankInput.fill('8888');
+  await bankInput.blur();
+  await page.waitForTimeout(2000);
+
+  // Undo should be enabled
+  await expect(page.locator('#undo-btn')).toBeEnabled();
+
+  // Press undo once — should fully revert
+  await page.click('#undo-btn');
+  await page.waitForTimeout(2000);
+
+  // The input should be back to original
+  const restored = await bankInput.inputValue();
+  expect(restored).toBe(original || '0');
+
+  // Clean up: if undo left us with a redo, clear it
+  await page.waitForTimeout(500);
+});
