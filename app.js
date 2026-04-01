@@ -6161,7 +6161,9 @@ function renderYearSnapshot() {
       bold: true,
       label: 'Total Savings',
       valFn: (m, f) =>
-        !showProjected && f ? 0 : (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
+        !showProjected && f
+          ? 0
+          : (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
       sectionGroup: 'savings',
       stickyInSection: true,
     },
