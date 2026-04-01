@@ -906,3 +906,129 @@ test('year view: Income - Budgeted = Unbudgeted for each month', async ({ page }
     }
   }
 });
+
+// ─── Per-Category Breakdown: Jan & Feb ───
+test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+
+  const monthTabs = page.locator('.hdr-months .mtab');
+
+  for (let mi = 0; mi < 2; mi++) {
+    await monthTabs.nth(mi).click();
+    await page.waitForTimeout(2000);
+    const monthName = (await monthTabs.nth(mi).textContent()).trim();
+
+    // Expand ribbon snapshot
+    const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
+    if ((await expandBtn.count()) > 0) await expandBtn.click();
+    await page.waitForTimeout(1000);
+
+    // Expand all collapsed groups so sub-rows are visible
+    const groupHeaders = page.locator('.sn-group');
+    const groupCount = await groupHeaders.count();
+    for (let g = 0; g < groupCount; g++) {
+      await groupHeaders.nth(g).click();
+      await page.waitForTimeout(300);
+    }
+
+    // Read every row from the snapshot table
+    const allRows = page.locator('.sn-table tr');
+    const rowCount = await allRows.count();
+    let totalBudget = 0;
+    let totalSpent = 0;
+    const gaps = [];
+
+    for (let r = 0; r < rowCount; r++) {
+      const cells = allRows.nth(r).locator('td');
+      const cellCount = await cells.count();
+      if (cellCount < 4) continue;
+
+      const name = (await cells.nth(0).textContent()).trim();
+      const budgetRaw = (await cells.nth(1).textContent()).replace(/[₪,]/g, '').trim();
+      const spentRaw = (await cells.nth(2).textContent()).replace(/[₪,]/g, '').trim();
+      const remRaw = (await cells.nth(3).textContent()).replace(/[₪,]/g, '').trim();
+
+      const b = parseFloat(budgetRaw) || 0;
+      const s = parseFloat(spentRaw) || 0;
+      const rem = parseFloat(remRaw) || 0;
+
+      const cls = (await allRows.nth(r).getAttribute('class')) || '';
+      // Only count leaf categories (sn-cat), not group headers
+      if (cls.includes('sn-cat') && b > 0) {
+        totalBudget += b;
+        totalSpent += s;
+        const gap = b - s;
+        if (Math.abs(gap) > 0.5) {
+          gaps.push({ name, budget: b, spent: s, gap: gap.toFixed(2) });
+        }
+        console.log(
+          `  ${monthName} | ${name}: Budget=${b}, Spent=${s}, Remaining=${rem}, Gap=${gap.toFixed(2)}`,
+        );
+      }
+    }
+
+    console.log(
+      `${monthName} TOTAL — Budget: ${totalBudget.toFixed(2)}, Spent: ${totalSpent.toFixed(2)}, Gap: ${(totalBudget - totalSpent).toFixed(2)}`,
+    );
+    if (gaps.length) {
+      console.log(`${monthName} categories with gaps > ₪0.50:`);
+      gaps.forEach((g) =>
+        console.log(`  ${g.name}: Budget ${g.budget} vs Spent ${g.spent} = gap ${g.gap}`),
+      );
+    }
+  }
+});
+
+// ─── Mobile Snapshot Check ───
+test('snapshot renders correctly at mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+
+  // Open snapshot modal
+  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
+  await page.waitForTimeout(1000);
+
+  // Modal should be visible
+  await expect(page.locator('#snapshot-modal')).toBeVisible();
+
+  // Read group rows and verify math
+  const rows = page.locator('#snapshot-body tr');
+  const rowCount = await rows.count();
+  expect(rowCount).toBeGreaterThan(0);
+
+  let groupCount = 0;
+  for (let r = 0; r < rowCount; r++) {
+    const cls = (await rows.nth(r).getAttribute('class')) || '';
+    if (!cls.includes('sn-group') && !cls.includes('sn-cat')) continue;
+
+    const cells = rows.nth(r).locator('td');
+    const cellCount = await cells.count();
+    if (cellCount < 4) continue;
+
+    const name = (await cells.nth(0).textContent()).trim();
+    const budgetRaw = (await cells.nth(1).textContent()).replace(/[₪,]/g, '').trim();
+    const spentRaw = (await cells.nth(2).textContent()).replace(/[₪,]/g, '').trim();
+    const remRaw = (await cells.nth(3).textContent()).replace(/[₪,]/g, '').trim();
+
+    const b = parseFloat(budgetRaw) || 0;
+    const s = parseFloat(spentRaw) || 0;
+    const rem = parseFloat(remRaw) || 0;
+
+    if (b > 0) {
+      const expectedRem = b - s;
+      const diff = Math.abs(expectedRem - rem);
+      console.log(
+        `  Mobile snapshot | ${name}: B=${b}, S=${s}, R=${rem}, expected R=${expectedRem.toFixed(2)}, diff=${diff.toFixed(2)}`,
+      );
+      expect(diff).toBeLessThan(2);
+      groupCount++;
+    }
+  }
+
+  console.log(`Mobile snapshot: ${groupCount} rows with budget verified`);
+  expect(groupCount).toBeGreaterThan(0);
+});
