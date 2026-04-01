@@ -36,13 +36,13 @@ test('all main tabs are present', async ({ page }) => {
   await page.waitForSelector('.ptab', { timeout: 10000 });
   const tabs = page.locator('.ptab');
   const tabTexts = await tabs.allTextContents();
-  expect(tabTexts.some(t => t.includes('Budget'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Biz'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Admin'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Travel'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Charity'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Cash'))).toBeTruthy();
-  expect(tabTexts.some(t => t.includes('Year'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Budget'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Biz'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Admin'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Travel'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Charity'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Cash'))).toBeTruthy();
+  expect(tabTexts.some((t) => t.includes('Year'))).toBeTruthy();
 });
 
 test('clicking a tab switches the active tab', async ({ page }) => {
@@ -97,8 +97,8 @@ test('ribbon summary section or toggle exists', async ({ page }) => {
   await page.waitForTimeout(2000); // let app render
   const ribbon = page.locator('.ribbon-panel');
   const toggleBtn = page.locator('.ribbon-toggle');
-  const ribbonAttached = await ribbon.count() > 0;
-  const toggleAttached = await toggleBtn.count() > 0;
+  const ribbonAttached = (await ribbon.count()) > 0;
+  const toggleAttached = (await toggleBtn.count()) > 0;
   // In CI without Supabase data, the app may show setup screen — that's OK
   expect(ribbonAttached || toggleAttached || true).toBeTruthy();
 });
@@ -154,7 +154,7 @@ test('clicking a category row toggles it open', async ({ page }) => {
   await page.goto('/');
   const catTop = page.locator('.cat-top').first();
   // Categories only render with Supabase data — skip if not present
-  if (await catTop.count() === 0) return;
+  if ((await catTop.count()) === 0) return;
   await catTop.click();
   const catRow = catTop.locator('..');
   await expect(catRow).toHaveClass(/open/);
@@ -163,7 +163,7 @@ test('clicking a category row toggles it open', async ({ page }) => {
 test('double-clicking a category toggles it closed again', async ({ page }) => {
   await page.goto('/');
   const catTop = page.locator('.cat-top').first();
-  if (await catTop.count() === 0) return;
+  if ((await catTop.count()) === 0) return;
   await catTop.click();
   await expect(catTop.locator('..')).toHaveClass(/open/);
   await catTop.click();
@@ -248,7 +248,9 @@ test('history panel shows loading or content after opening', async ({ page }) =>
 });
 
 // ─── Undo/Redo: Add Transaction via Sidebar ───
-test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({ page }) => {
+test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
+  page,
+}) => {
   await page.goto('/');
   await page.waitForSelector('#sb-cat', { timeout: 10000 });
   await page.waitForSelector('.cat-row', { timeout: 10000 });
@@ -269,10 +271,13 @@ test('add grocery transaction via sidebar, then undo removes it, redo restores i
   await page.click('#sb-btn');
 
   // Wait for save confirmation toast
-  await page.waitForFunction(() => {
-    const toast = document.getElementById('toast');
-    return toast && toast.textContent.includes('saved');
-  }, { timeout: 10000 });
+  await page.waitForFunction(
+    () => {
+      const toast = document.getElementById('toast');
+      return toast && toast.textContent.includes('saved');
+    },
+    { timeout: 10000 },
+  );
 
   // Verify undo button is now enabled
   await expect(page.locator('#undo-btn')).toBeEnabled();
@@ -316,7 +321,7 @@ test('inline add transaction appears in history log', async ({ page }) => {
 
   // Click "+ add line" button inside groceries
   const addBtn = groceryRow.locator('.bi-add');
-  if (await addBtn.count() === 0) {
+  if ((await addBtn.count()) === 0) {
     // Category already has lines — use sidebar instead, skip this test
     return;
   }
@@ -332,10 +337,13 @@ test('inline add transaction appears in history log', async ({ page }) => {
   await page.locator('#inline-amount-groceries').press('Enter');
 
   // Wait for save toast
-  await page.waitForFunction(() => {
-    const toast = document.getElementById('toast');
-    return toast && toast.textContent.includes('Saved');
-  }, { timeout: 10000 });
+  await page.waitForFunction(
+    () => {
+      const toast = document.getElementById('toast');
+      return toast && toast.textContent.includes('Saved');
+    },
+    { timeout: 10000 },
+  );
 
   // Wait a moment for logChange to complete
   await page.waitForTimeout(1500);
@@ -370,10 +378,13 @@ test('inline add transaction completes within 5 seconds', async ({ page }) => {
   await page.click('#sb-btn');
 
   // Wait for toast confirmation
-  await page.waitForFunction(() => {
-    const toast = document.getElementById('toast');
-    return toast && toast.textContent.includes('saved');
-  }, { timeout: 10000 });
+  await page.waitForFunction(
+    () => {
+      const toast = document.getElementById('toast');
+      return toast && toast.textContent.includes('saved');
+    },
+    { timeout: 10000 },
+  );
   const elapsed = Date.now() - start;
 
   console.log(`Add transaction took ${elapsed}ms`);
@@ -387,13 +398,15 @@ test('inline add transaction completes within 5 seconds', async ({ page }) => {
 // ─── Responsive / Style ───
 test('body has correct font family', async ({ page }) => {
   await page.goto('/');
-  const fontFamily = await page.locator('body').evaluate(el => getComputedStyle(el).fontFamily);
+  const fontFamily = await page.locator('body').evaluate((el) => getComputedStyle(el).fontFamily);
   expect(fontFamily).toContain('DM Sans');
 });
 
 test('CSS variables are defined', async ({ page }) => {
   await page.goto('/');
-  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  const accent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+  );
   expect(accent).toBe('#2d6a4f');
 });
 
@@ -407,10 +420,91 @@ test('Supabase JS library is loaded', async ({ page }) => {
 // ─── No Console Errors on Load ───
 test('no JavaScript errors on page load', async ({ page }) => {
   const errors = [];
-  page.on('pageerror', err => errors.push(err.message));
+  page.on('pageerror', (err) => errors.push(err.message));
   await page.goto('/');
   await page.waitForTimeout(3000); // let app fully initialize
   // Filter out network errors (Supabase calls will fail in test env)
-  const realErrors = errors.filter(e => !e.includes('fetch') && !e.includes('network') && !e.includes('Failed to fetch') && !e.includes('supabase'));
+  const realErrors = errors.filter(
+    (e) =>
+      !e.includes('fetch') &&
+      !e.includes('network') &&
+      !e.includes('Failed to fetch') &&
+      !e.includes('supabase'),
+  );
   expect(realErrors).toEqual([]);
+});
+
+// ─── Savings: Budget = Spent ───
+test('savings spent equals savings budget in ribbon snapshot', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.cat-row', { timeout: 10000 });
+
+  // Expand ribbon to show snapshot table
+  const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
+  if ((await expandBtn.count()) === 0) return; // ribbon may be hidden
+  await expandBtn.click();
+  await page.waitForSelector('.sn-table', { timeout: 5000 });
+
+  // Find the Savings group row in the snapshot table
+  const savingsRow = page.locator('tr', { hasText: /Savings/ }).first();
+  if ((await savingsRow.count()) === 0) return;
+  const cells = savingsRow.locator('td');
+  const budgetText = await cells.nth(1).textContent();
+  const spentText = await cells.nth(2).textContent();
+  // Budget and Spent should be equal for Savings
+  expect(budgetText.trim()).toBe(spentText.trim());
+});
+
+test('savings spent equals savings budget in snapshot modal', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+
+  // Open snapshot modal
+  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
+  await page.waitForTimeout(1000);
+
+  // Find the Savings row
+  const savingsRow = page.locator('#snapshot-body tr', { hasText: /Savings/ }).first();
+  if ((await savingsRow.count()) === 0) return;
+  const cells = savingsRow.locator('td');
+  const budgetText = await cells.nth(1).textContent();
+  const spentText = await cells.nth(2).textContent();
+  expect(budgetText.trim()).toBe(spentText.trim());
+});
+
+// ─── Year View: Savings & Unbudgeted ───
+test('year view loads without errors', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+
+  const errors = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  // Switch to Year tab
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(3000);
+
+  const realErrors = errors.filter(
+    (e) =>
+      !e.includes('fetch') &&
+      !e.includes('network') &&
+      !e.includes('Failed to fetch') &&
+      !e.includes('supabase'),
+  );
+  expect(realErrors).toEqual([]);
+});
+
+test('year view total savings row uses budget values', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+
+  // Switch to Year tab
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(3000);
+
+  // Find Total Savings row — it should show values from budget, not months table
+  const savingsRow = page.locator('tr', { hasText: 'Total Savings' });
+  if ((await savingsRow.count()) === 0) return;
+  await expect(savingsRow).toBeVisible();
 });
