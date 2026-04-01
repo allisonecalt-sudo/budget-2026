@@ -1728,8 +1728,8 @@ function renderApp() {
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     ) +
-    (Number(current.savings_bank) || 0) +
-    (Number(current.savings_invested) || 0);
+    (state.budgets['savings_bank'] || 0) +
+    (state.budgets['savings_invested'] || 0);
   const remaining = income - totalSpent;
   const totalBudgeted =
     CATEGORIES.filter((c) => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0) +
@@ -1859,7 +1859,7 @@ function renderApp() {
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${income - totalSpent >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div></div>
-          <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((Number(current.savings_bank) || 0) + (Number(current.savings_invested) || 0))}</div></div>
+          <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</div></div>
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
             <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
@@ -1876,9 +1876,9 @@ function renderApp() {
                 <tbody>
                   ${(() => {
                     const bkB = state.budgets['savings_bank'] || 0,
-                      bkS = Number(current.savings_bank) || 0;
+                      bkS = bkB;
                     const invB = state.budgets['savings_invested'] || 0,
-                      invS = Number(current.savings_invested) || 0;
+                      invS = invB;
                     const gb = bkB + invB,
                       gs = bkS + invS,
                       gr = gb - gs;
@@ -2035,8 +2035,8 @@ function renderApp() {
         ${(() => {
           const bankBudget = state.budgets['savings_bank'] || 0;
           const investBudget = state.budgets['savings_invested'] || 0;
-          const bankSpent = Number(current.savings_bank) || 0;
-          const investSpent = Number(current.savings_invested) || 0;
+          const bankSpent = bankBudget;
+          const investSpent = investBudget;
           const groupBudget = bankBudget + investBudget;
           const groupSpent = bankSpent + investSpent;
           const groupSt = status(groupSpent, groupBudget);
@@ -6046,8 +6046,8 @@ function renderYearSnapshot() {
         }
         return sum + txSum(m.id, [c.key]); // actual transactions only
       }, 0) +
-      (Number(m.savings_bank) || 0) +
-      (Number(m.savings_invested) || 0)
+      (budgetMap[m.id]?.['savings_bank'] || 0) +
+      (budgetMap[m.id]?.['savings_invested'] || 0)
     );
   };
 
@@ -6161,20 +6161,20 @@ function renderYearSnapshot() {
       bold: true,
       label: 'Total Savings',
       valFn: (m, f) =>
-        !showProjected && f ? 0 : (Number(m.savings_bank) || 0) + (Number(m.savings_invested) || 0),
+        !showProjected && f ? 0 : (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
       sectionGroup: 'savings',
       stickyInSection: true,
     },
     {
       type: 'sub',
       label: '\u2937 Saved (Bank)',
-      valFn: (m, f) => (!showProjected && f ? 0 : Number(m.savings_bank) || 0),
+      valFn: (m, f) => (!showProjected && f ? 0 : budgetMap[m.id]?.['savings_bank'] || 0),
       sectionGroup: 'savings',
     },
     {
       type: 'sub',
       label: '\u2937 Invested',
-      valFn: (m, f) => (!showProjected && f ? 0 : Number(m.savings_invested) || 0),
+      valFn: (m, f) => (!showProjected && f ? 0 : budgetMap[m.id]?.['savings_invested'] || 0),
       sectionGroup: 'savings',
     },
     // 5. Charity Overview
@@ -6305,8 +6305,8 @@ function renderYearSnapshot() {
   const totalAnnInc = months.reduce((s, m) => s + incFor(m), 0);
   const pastMs = months.filter((m) => m.month_num <= todayMonth);
   const ytdIncome = pastMs.reduce((s, m) => s + incFor(m), 0);
-  const ytdSavings = pastMs.reduce((s, m) => s + (Number(m.savings_bank) || 0), 0);
-  const projSavings = months.reduce((s, m) => s + (Number(m.savings_bank) || 0), 0);
+  const ytdSavings = pastMs.reduce((s, m) => s + (budgetMap[m.id]?.['savings_bank'] || 0), 0);
+  const projSavings = months.reduce((s, m) => s + (budgetMap[m.id]?.['savings_bank'] || 0), 0);
 
   // Travel & Admin: projected budget from items, allocated from monthly allocations, gap = budget - allocated
   const totalTravelProjected = (state.travel.items || []).reduce(
@@ -6580,8 +6580,8 @@ function openSnapshot() {
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     ) +
-    (Number(current.savings_bank) || 0) +
-    (Number(current.savings_invested) || 0);
+    (state.budgets['savings_bank'] || 0) +
+    (state.budgets['savings_invested'] || 0);
   const totalBudgeted =
     CATEGORIES.filter((c) => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0) +
     (state.budgets['savings_bank'] || 0) +
@@ -6637,9 +6637,9 @@ function openSnapshot() {
         <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
         <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
         <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
-        <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td>${n((Number(current.savings_bank) || 0) + (Number(current.savings_invested) || 0))}</td><td class="${(state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0) - ((Number(current.savings_bank) || 0) + (Number(current.savings_invested) || 0)) >= 0 ? 'sn-ok' : 'sn-over'}">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0) - ((Number(current.savings_bank) || 0) + (Number(current.savings_invested) || 0)))}</td></tr>
-        <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank'] || 0)}</td><td>${n(Number(current.savings_bank) || 0)}</td><td>${n((state.budgets['savings_bank'] || 0) - (Number(current.savings_bank) || 0))}</td></tr>
-        <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested'] || 0)}</td><td>${n(Number(current.savings_invested) || 0)}</td><td>${n((state.budgets['savings_invested'] || 0) - (Number(current.savings_invested) || 0))}</td></tr>
+        <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td>${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td>0</td></tr>
+        <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank'] || 0)}</td><td>${n(state.budgets['savings_bank'] || 0)}</td><td>0</td></tr>
+        <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested'] || 0)}</td><td>${n(state.budgets['savings_invested'] || 0)}</td><td>0</td></tr>
         ${groupRows}
       </tbody>
     </table>`;
