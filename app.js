@@ -4863,13 +4863,16 @@ function renderAdminTab() {
       "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide sub-payments\">" +
       (isOpen ? '▾' : '▸') +
       '</button>' +
-      '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="' +
+      '<div style="display:flex;align-items:baseline;min-width:0;gap:.3rem;"><input type="text" value="' +
       esc(item.label) +
-      '" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;' +
+      '" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;flex:1;min-width:0;' +
       strikeLabel +
       '" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\'' +
       item.id +
       "','label',this.value)\">" +
+      '<span style="font-size:.55rem;padding:.1rem .3rem;border-radius:8px;background:var(--surface2, #f5f5f5);border:1px solid var(--border);color:var(--muted);white-space:nowrap;flex-shrink:0;cursor:default;" title="Category: ' + (item.category || 'Other') + '">' +
+      (catEmoji[item.category] || '📌') + ' ' + (item.category || 'Other') +
+      '</span>' +
       subBadge +
       '</div>' +
       '<input type="number" value="' +
