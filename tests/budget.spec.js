@@ -1032,3 +1032,66 @@ test('snapshot renders correctly at mobile viewport', async ({ page }) => {
   console.log(`Mobile snapshot: ${groupCount} rows with budget verified`);
   expect(groupCount).toBeGreaterThan(0);
 });
+
+// ─── Admin Page ───
+test('admin tab loads and shows category headers in grouped view', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+
+  // Click the Admin tab
+  const adminTab = page.locator('.ptab', { hasText: 'Admin' });
+  await adminTab.click();
+  await expect(adminTab).toHaveClass(/active/);
+
+  // Wait for admin content to render
+  await page.waitForTimeout(1000);
+
+  // Check that "Yearly Expenses" section header is visible
+  const yearlyHeader = page.locator('text=Yearly Expenses');
+  await expect(yearlyHeader).toBeVisible({ timeout: 5000 });
+
+  // Check the view mode button exists (Grouped or List)
+  const viewBtn = page.locator('button', { hasText: /Grouped|List/ });
+  await expect(viewBtn).toBeVisible();
+
+  // If in list mode, switch to grouped
+  const btnText = await viewBtn.textContent();
+  if (btnText.trim() === 'List') {
+    await viewBtn.click();
+    await page.waitForTimeout(500);
+  }
+
+  // Log what we see on the admin page
+  const adminContent = await page.locator('.tab-two-col').first().textContent();
+  console.log('Admin page content (first 500 chars):', adminContent?.substring(0, 500));
+
+  // Check that the "+ add item" button is visible
+  const addBtn = page.locator('button', { hasText: '+ add item' });
+  await expect(addBtn).toBeVisible();
+
+  // Check for category groups — only appear if items exist in that category
+  const expectedCategories = ['Apartment', 'Car', 'Furniture', 'Health', 'Professional', 'Admin', 'Other'];
+  const visibleCategories = [];
+  for (const cat of expectedCategories) {
+    const catHeader = page.locator(`text=${cat}`).first();
+    if (await catHeader.isVisible().catch(() => false)) {
+      visibleCategories.push(cat);
+    }
+  }
+  console.log('Visible admin categories:', visibleCategories);
+  console.log('Total admin items on page:', await page.locator('input[placeholder="Item name"]').count());
+});
+
+test('admin tab shows summary cards', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+  const adminTab = page.locator('.ptab', { hasText: 'Admin' });
+  await adminTab.click();
+  await page.waitForTimeout(1000);
+
+  // Check summary cards exist
+  await expect(page.locator('text=Budget').first()).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('text=Allocated').first()).toBeVisible();
+  await expect(page.locator('text=Spent').first()).toBeVisible();
+  await expect(page.locator('text=Remaining').first()).toBeVisible();
+});
