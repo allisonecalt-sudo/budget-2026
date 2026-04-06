@@ -6947,3 +6947,221 @@ async function jumpToHistoryEntry(entityType, entityId) {
 
   toast('Cannot navigate to this item');
 }
+
+// ── Search Panel ─────────────────────────────────────────────────────
+async function openSearchPanel() {
+  let panel = document.getElementById('search-panel');
+  if (panel) {
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    document.getElementById('root').style.marginRight =
+      panel.style.display === 'none' ? '' : '420px';
+    if (panel.style.display !== 'none') {
+      setTimeout(() => document.getElementById('search-input').focus(), 50);
+    }
+    return;
+  }
+  panel = document.createElement('div');
+  panel.id = 'search-panel';
+  panel.style.cssText =
+    'position:fixed;top:0;right:0;width:420px;max-width:100vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:700;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.2);';
+  document.getElementById('root').style.marginRight = '420px';
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-weight:700;font-size:.95rem;">\u{1F50D} Search Transactions</span>
+      <button onclick="document.getElementById('search-panel').style.display='none';document.getElementById('root').style.marginRight='';" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">\u2715</button>
+    </div>
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <input id="search-input" type="text" placeholder="Search store or item name\u2026" style="width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--r);font-size:.9rem;background:var(--surface2);color:var(--text);outline:none;font-family:inherit;" />
+      <div style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;">
+        <label style="font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:.25rem;">
+          <input type="checkbox" id="search-all-months" checked /> All months
+        </label>
+      </div>
+    </div>
+    <div id="search-results" style="flex:1;overflow-y:auto;padding:.75rem 1rem;">
+      <div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Type to search across all your transactions</div>
+    </div>`;
+  document.body.appendChild(panel);
+
+  let debounceTimer;
+  const input = document.getElementById('search-input');
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => runSearch(input.value.trim()), 300);
+  });
+  document.getElementById('search-all-months').addEventListener('change', () => {
+    if (input.value.trim()) runSearch(input.value.trim());
+  });
+  setTimeout(() => input.focus(), 50);
+}
+
+async function runSearch(query) {
+  const resultsDiv = document.getElementById('search-results');
+  if (!query || query.length < 2) {
+    resultsDiv.innerHTML =
+      '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Type at least 2 characters to search</div>';
+    return;
+  }
+  resultsDiv.innerHTML =
+    '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Searching\u2026</div>';
+
+  const allMonths = document.getElementById('search-all-months').checked;
+  let transactions;
+
+  if (allMonths) {
+    const { data, error } = await sb
+      .from('transactions')
+      .select('*, months!inner(month_name, month_num)')
+      .order('created_at', { ascending: false });
+    if (error) {
+      resultsDiv.innerHTML = `<div style="color:var(--red);font-size:.82rem;padding:1rem;">Error: ${error.message}</div>`;
+      return;
+    }
+    transactions = data || [];
+  } else {
+    transactions = state.transactions.map((t) => {
+      const m = state.months.find((mo) => mo.id === state.currentMonthId);
+      return { ...t, months: m ? { month_name: m.month_name, month_num: m.month_num } : null };
+    });
+  }
+
+  const q = query.toLowerCase();
+  const matches = transactions.filter(
+    (t) =>
+      (t.store && t.store.toLowerCase().includes(q)) ||
+      (t.item && t.item.toLowerCase().includes(q)) ||
+      (t.category && t.category.toLowerCase().includes(q)),
+  );
+
+  if (matches.length === 0) {
+    resultsDiv.innerHTML = `<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">No results for "${query}"</div>`;
+    return;
+  }
+
+  const total = matches.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const catLabel = (key) => {
+    const c = CATEGORIES.find((cat) => cat.key === key);
+    return c ? `${c.emoji} ${c.label}` : key;
+  };
+
+  // Group by month for trend
+  const byMonth = {};
+  matches.forEach((t) => {
+    const mName = t.months ? t.months.month_name : 'Unknown';
+    const mNum = t.months ? t.months.month_num : 0;
+    if (!byMonth[mName]) byMonth[mName] = { total: 0, count: 0, num: mNum };
+    byMonth[mName].total += t.amount || 0;
+    byMonth[mName].count++;
+  });
+  const sortedMonths = Object.entries(byMonth).sort((a, b) => a[1].num - b[1].num);
+
+  // Group by category for breakdown
+  const byCat = {};
+  matches.forEach((t) => {
+    if (!byCat[t.category]) byCat[t.category] = { total: 0, count: 0 };
+    byCat[t.category].total += t.amount || 0;
+    byCat[t.category].count++;
+  });
+
+  const n = (v) =>
+    Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+  let html = '';
+
+  // Summary
+  html += `<div class="search-summary">
+    <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:.25rem;">
+      "${query}" \u2014 ${matches.length} result${matches.length !== 1 ? 's' : ''}
+    </div>
+    <div style="font-size:1.3rem;font-weight:700;color:var(--accent);">\u20AA${n(total)}</div>
+    <div style="font-size:.75rem;color:var(--muted);margin-top:.15rem;">
+      across ${sortedMonths.length} month${sortedMonths.length !== 1 ? 's' : ''}
+    </div>
+  </div>`;
+
+  // Trend by month
+  if (sortedMonths.length > 1) {
+    const maxMonthTotal = Math.max(...sortedMonths.map(([, d]) => d.total));
+    html += `<div class="search-section">
+      <div class="search-section-title">Monthly Trend</div>
+      ${sortedMonths
+        .map(([month, d]) => {
+          const pct = maxMonthTotal ? (d.total / maxMonthTotal) * 100 : 0;
+          return `<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem;">
+          <span style="width:36px;font-size:.72rem;color:var(--muted);text-align:right;flex-shrink:0;">${month.slice(0, 3)}</span>
+          <div style="flex:1;height:18px;background:var(--surface2);border-radius:4px;overflow:hidden;position:relative;">
+            <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px;transition:width .3s;"></div>
+          </div>
+          <span style="width:70px;font-size:.78rem;font-weight:600;text-align:right;flex-shrink:0;">\u20AA${n(d.total)}</span>
+        </div>`;
+        })
+        .join('')}
+    </div>`;
+
+    // Detect price changes for recurring items (1 per month = likely subscription)
+    if (sortedMonths.every(([, d]) => d.count === 1)) {
+      const amounts = sortedMonths.map(([, d]) => d.total);
+      const unique = [...new Set(amounts)];
+      if (unique.length > 1) {
+        const changes = [];
+        for (let i = 1; i < sortedMonths.length; i++) {
+          const prev = sortedMonths[i - 1][1].total;
+          const curr = sortedMonths[i][1].total;
+          if (prev !== curr) {
+            const diff = curr - prev;
+            changes.push(
+              `${sortedMonths[i - 1][0].slice(0, 3)}\u2192${sortedMonths[i][0].slice(0, 3)}: ${diff > 0 ? '+' : ''}\u20AA${n(diff)}`,
+            );
+          }
+        }
+        if (changes.length > 0) {
+          html += `<div style="background:var(--ambersoft);border-radius:var(--r);padding:.5rem .75rem;margin-bottom:.75rem;font-size:.78rem;color:var(--amber);">
+            \u26A1 Price change: ${changes.join(', ')}
+          </div>`;
+        }
+      }
+    }
+  }
+
+  // Category breakdown (if more than one category)
+  if (Object.keys(byCat).length > 1) {
+    html += `<div class="search-section">
+      <div class="search-section-title">By Category</div>
+      ${Object.entries(byCat)
+        .sort((a, b) => b[1].total - a[1].total)
+        .map(
+          ([cat, d]) =>
+            `<div style="display:flex;justify-content:space-between;align-items:center;padding:.3rem 0;font-size:.82rem;">
+          <span>${catLabel(cat)}</span>
+          <span style="font-weight:600;">\u20AA${n(d.total)} <span style="color:var(--muted);font-weight:400;">(${d.count})</span></span>
+        </div>`,
+        )
+        .join('')}
+    </div>`;
+  }
+
+  // Transaction list
+  html += `<div class="search-section">
+    <div class="search-section-title">All Transactions</div>
+    ${matches
+      .map((t) => {
+        const monthLabel = t.months ? t.months.month_name.slice(0, 3) : '';
+        const dateStr = t.date || '';
+        const displayDate = dateStr
+          ? new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          : monthLabel;
+        return `<div class="search-tx-row">
+        <span class="search-tx-date">${displayDate}</span>
+        <span class="search-tx-cat">${catLabel(t.category)}</span>
+        <div class="search-tx-detail">
+          ${t.store ? `<span class="search-tx-store">${t.store}</span>` : ''}
+          ${t.item ? `<span class="search-tx-item">${t.item}</span>` : ''}
+        </div>
+        <span class="search-tx-amount">\u20AA${n(t.amount)}</span>
+      </div>`;
+      })
+      .join('')}
+  </div>`;
+
+  resultsDiv.innerHTML = html;
+}
