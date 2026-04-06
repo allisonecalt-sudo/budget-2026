@@ -1756,6 +1756,7 @@ function renderApp() {
         <button class="mtab" onclick="openSnapshot()" title="Snapshot">📊</button>
         <button class="mtab" onclick="collapseAll()" title="Collapse all">⊟</button>
         <button class="mtab" onclick="openHistoryPanel()" title="History log">🕐</button>
+        <button class="mtab" onclick="openSearchPanel()" title="Search transactions">🔍</button>
       </div>
       <div class="hdr-months">
         <div class="month-tabs">
@@ -2235,7 +2236,7 @@ function renderApp() {
                             const defaultCls =
                               'bi-default' + (item.is_default ? ' is-default' : '');
                             return (
-                              '<div class="budget-item-row">' +
+                              '<div class="budget-item-row" data-budget-item-id="' + item.id + '">' +
                               '<input type="text" class="bi-label" value="' +
                               (item.label || '').replace(/"/g, '&quot;') +
                               '" placeholder="Item name" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
@@ -4849,7 +4850,7 @@ function renderAdminTab() {
         '</div>';
     }
     return (
-      '<div style="border-bottom:1px solid var(--border);">' +
+      '<div data-admin-item-id="' + item.id + '" style="border-bottom:1px solid var(--border);">' +
       '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;' +
       rowOpacity +
       '">' +
@@ -5085,7 +5086,7 @@ function renderAdminTab() {
             ${sorted
               .map(
                 (p) => `
-            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;${p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
+            <div data-admin-payment-id="${p.id}" style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;${p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
               <span style="font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace;">${MONTH_NAMES[p.month_num - 1]}</span>
               <input type="text" value="${esc(p.label)}" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;width:100%;"
                 onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
@@ -6765,14 +6766,23 @@ async function openHistoryPanel() {
   };
   list.innerHTML = data
     .map((r) => {
-      const isTransaction = r.entity_type === 'transaction' && r.action !== 'delete' && r.entity_id;
-      const clickAttr = isTransaction
-        ? `onclick="jumpToTransaction('${r.entity_id}')" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
+      const canClick = r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
+      let clickHandler = '';
+      if (canClick) {
+        if (r.entity_type === 'budget_amount') {
+          const m = r.description.match(/Budget changed: (\S+)/);
+          if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+        } else {
+          clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+        }
+      }
+      const clickAttr = clickHandler
+        ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
         : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
       return `<div ${clickAttr}>
       <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
-        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${isTransaction ? ' ↗' : ''}</div>
+        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
       </div>
     </div>`;
@@ -6803,15 +6813,23 @@ async function refreshHistoryIfOpen() {
     };
     list.innerHTML = data
       .map((r) => {
-        const isTransaction =
-          r.entity_type === 'transaction' && r.action !== 'delete' && r.entity_id;
-        const clickAttr = isTransaction
-          ? `onclick="jumpToTransaction('${r.entity_id}')" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
+        const canClick = r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
+        let clickHandler = '';
+        if (canClick) {
+          if (r.entity_type === 'budget_amount') {
+            const m = r.description.match(/Budget changed: (\S+)/);
+            if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+          } else {
+            clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+          }
+        }
+        const clickAttr = clickHandler
+          ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
           : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
         return `<div ${clickAttr}>
         <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
-          <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${isTransaction ? ' ↗' : ''}</div>
+          <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
         </div>
       </div>`;
@@ -6848,4 +6866,84 @@ function jumpToTransaction(txId) {
       }, 2000);
     }
   }, 100);
+}
+
+// Jump to any entity from history log
+async function jumpToHistoryEntry(entityType, entityId) {
+  if (entityType === 'transaction') { jumpToTransaction(entityId); return; }
+
+  const highlight = (el, ms) => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.outline = '2px solid var(--accent)';
+    el.style.borderRadius = '6px';
+    setTimeout(() => { el.style.outline = ''; el.style.borderRadius = ''; }, ms || 2000);
+  };
+
+  if (entityType === 'budget_amount') {
+    if (state.activeTab !== 'budget') await switchTab('budget');
+    setTimeout(() => {
+      const el = document.getElementById('cat-' + entityId);
+      if (el) highlight(el);
+      else toast('Category not found on current view');
+    }, 200);
+    return;
+  }
+
+  if (entityType === 'budget_item') {
+    if (state.activeTab !== 'budget') await switchTab('budget');
+    setTimeout(() => {
+      const el = document.querySelector('[data-budget-item-id="' + entityId + '"]');
+      if (el) {
+        const catRow = el.closest('.cat-row');
+        if (catRow) {
+          const catKey = catRow.id.replace('cat-', '');
+          if (!state.openCats.has(catKey)) {
+            state.openCats.add(catKey);
+            localStorage.setItem('openCats', JSON.stringify([...state.openCats]));
+            renderApp();
+          }
+        }
+        setTimeout(() => {
+          const el2 = document.querySelector('[data-budget-item-id="' + entityId + '"]');
+          if (el2) { highlight(el2); el2.style.background = 'var(--accent)'; el2.style.color = '#fff';
+            setTimeout(() => { el2.style.background = ''; el2.style.color = ''; }, 2000); }
+        }, 150);
+      } else toast('Item not found — may have been deleted');
+    }, 200);
+    return;
+  }
+
+  if (entityType === 'admin_item') {
+    if (state.activeTab !== 'admin') await switchTab('admin');
+    setTimeout(() => {
+      const el = document.querySelector('[data-admin-item-id="' + entityId + '"]');
+      if (el) highlight(el);
+      else toast('Admin item not found — may have been deleted');
+    }, 300);
+    return;
+  }
+
+  if (entityType === 'admin_payment') {
+    if (state.activeTab !== 'admin') await switchTab('admin');
+    setTimeout(() => {
+      const el = document.querySelector('[data-admin-payment-id="' + entityId + '"]');
+      if (el) {
+        const parentItem = el.closest('[data-admin-item-id]');
+        if (parentItem) {
+          const itemId = parentItem.getAttribute('data-admin-item-id');
+          if (localStorage.getItem('sn-adm-' + itemId) !== '1') {
+            localStorage.setItem('sn-adm-' + itemId, '1');
+            renderApp();
+          }
+        }
+        setTimeout(() => {
+          const el2 = document.querySelector('[data-admin-payment-id="' + entityId + '"]');
+          if (el2) highlight(el2);
+        }, 200);
+      } else toast('Payment not found — may have been deleted');
+    }, 300);
+    return;
+  }
+
+  toast('Cannot navigate to this item');
 }
