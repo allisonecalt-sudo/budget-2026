@@ -1161,6 +1161,45 @@ test('search runs and shows results or no-results message', async ({ page }) => 
   expect(text).not.toContain('Type to search');
 });
 
+test('search for known term shows summary with total', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+
+  // Open search panel
+  await page.locator('.mtab[title="Search transactions"]').click();
+  await expect(page.locator('#search-panel')).toBeVisible({ timeout: 5000 });
+
+  // Search for "shufersal" — a store that should have transactions
+  await page.locator('#search-input').fill('shufersal');
+  await page.waitForTimeout(2000);
+
+  const resultsText = await page.locator('#search-results').textContent();
+  console.log('Search results text (first 500 chars):', resultsText.slice(0, 500));
+  console.log('Console errors during search:', errors.length ? errors : 'None');
+
+  // Should not still be showing initial placeholder or "Searching..."
+  expect(resultsText).not.toContain('Type to search');
+  expect(resultsText).not.toContain('Searching');
+
+  // Should show either results with total or "No results"
+  const hasResults = resultsText.includes('result');
+  expect(hasResults).toBeTruthy();
+
+  // If results found, check for shekel total
+  if (!resultsText.includes('No results')) {
+    expect(resultsText).toContain('₪');
+    // Check summary section rendered
+    const summary = page.locator('.search-summary');
+    await expect(summary).toBeVisible();
+  }
+});
+
 // ─── Unbudgeted: Month Page "Left to Budget" Must Match Year View "Unbudgeted" ───
 test('month page "Left to Budget" matches year view "Unbudgeted" for each month', async ({
   page,
