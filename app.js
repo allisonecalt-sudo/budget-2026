@@ -7043,21 +7043,50 @@ async function runSearch(query) {
 
   const allMonths = document.getElementById('search-all-months').checked;
   let transactions;
+  let budgetItemMatches = [];
 
   if (allMonths) {
-    const { data, error } = await sb
-      .from('transactions')
-      .select('*, months!inner(month_name, month_num)')
-      .order('created_at', { ascending: false });
-    if (error) {
-      resultsDiv.innerHTML = `<div style="color:var(--red);font-size:.82rem;padding:1rem;">Error: ${error.message}</div>`;
+    const [txRes, biRes] = await Promise.all([
+      sb
+        .from('transactions')
+        .select('*, months!inner(month_name, month_num)')
+        .order('created_at', { ascending: false }),
+      sb.from('budget_items').select('*, months!inner(month_name, month_num)').order('sort_order'),
+    ]);
+    if (txRes.error) {
+      resultsDiv.innerHTML = `<div style="color:var(--red);font-size:.82rem;padding:1rem;">Error: ${txRes.error.message}</div>`;
       return;
     }
-    transactions = data || [];
+    transactions = txRes.data || [];
+    const allBi = biRes.data || [];
+    const q = query.toLowerCase();
+    budgetItemMatches = allBi.filter(
+      (bi) =>
+        (bi.label && bi.label.toLowerCase().includes(q)) ||
+        (bi.category && bi.category.toLowerCase().includes(q)) ||
+        (bi.subcategory && bi.subcategory.toLowerCase().includes(q)),
+    );
   } else {
     transactions = state.transactions.map((t) => {
       const m = state.months.find((mo) => mo.id === state.currentMonthId);
       return { ...t, months: m ? { month_name: m.month_name, month_num: m.month_num } : null };
+    });
+    // Budget items for current month
+    const q = query.toLowerCase();
+    Object.entries(state.budgetItems).forEach(([cat, items]) => {
+      items.forEach((bi) => {
+        if (
+          (bi.label && bi.label.toLowerCase().includes(q)) ||
+          (cat && cat.toLowerCase().includes(q))
+        ) {
+          const m = state.months.find((mo) => mo.id === state.currentMonthId);
+          budgetItemMatches.push({
+            ...bi,
+            category: cat,
+            months: m ? { month_name: m.month_name, month_num: m.month_num } : null,
+          });
+        }
+      });
     });
   }
 
@@ -7069,12 +7098,13 @@ async function runSearch(query) {
       (t.category && t.category.toLowerCase().includes(q)),
   );
 
-  if (matches.length === 0) {
+  if (matches.length === 0 && budgetItemMatches.length === 0) {
     resultsDiv.innerHTML = `<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">No results for "${query}"</div>`;
     return;
   }
 
   const total = matches.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const biTotal = budgetItemMatches.reduce((sum, bi) => sum + (bi.amount || 0), 0);
   const catLabel = (key) => {
     const c = CATEGORIES.find((cat) => cat.key === key);
     return c ? `${c.emoji} ${c.label}` : key;
@@ -7105,14 +7135,20 @@ async function runSearch(query) {
   let html = '';
 
   // Summary
+  const totalResults = matches.length + budgetItemMatches.length;
   html += `<div class="search-summary">
     <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:.25rem;">
-      "${query}" \u2014 ${matches.length} result${matches.length !== 1 ? 's' : ''}
+      "${query}" \u2014 ${totalResults} result${totalResults !== 1 ? 's' : ''}
     </div>
-    <div style="font-size:1.3rem;font-weight:700;color:var(--accent);">\u20AA${n(total)}</div>
-    <div style="font-size:.75rem;color:var(--muted);margin-top:.15rem;">
+    ${matches.length > 0 ? `<div style="font-size:1.3rem;font-weight:700;color:var(--accent);">\u20AA${n(total)} <span style="font-size:.75rem;font-weight:400;color:var(--muted);">spent</span></div>` : ''}
+    ${budgetItemMatches.length > 0 ? `<div style="font-size:${matches.length > 0 ? '.85' : '1.3'}rem;font-weight:700;color:var(--accent);margin-top:.15rem;">\u20AA${n(biTotal)} <span style="font-size:.75rem;font-weight:400;color:var(--muted);">budgeted (${budgetItemMatches.length} line item${budgetItemMatches.length !== 1 ? 's' : ''})</span></div>` : ''}
+    ${
+      matches.length > 0
+        ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.15rem;">
       across ${sortedMonths.length} month${sortedMonths.length !== 1 ? 's' : ''}
-    </div>
+    </div>`
+        : ''
+    }
   </div>`;
 
   // Trend by month
@@ -7176,28 +7212,61 @@ async function runSearch(query) {
     </div>`;
   }
 
+  // Budget items section
+  if (budgetItemMatches.length > 0) {
+    // Group budget items by label to show trend
+    const biByLabel = {};
+    budgetItemMatches.forEach((bi) => {
+      const key = bi.label || 'Unknown';
+      if (!biByLabel[key]) biByLabel[key] = [];
+      biByLabel[key].push(bi);
+    });
+
+    html += `<div class="search-section">
+      <div class="search-section-title">Budget Line Items</div>
+      ${Object.entries(biByLabel)
+        .map(([label, items]) => {
+          const itemTotal = items.reduce((s, i) => s + (i.amount || 0), 0);
+          const monthNames = items
+            .filter((i) => i.months)
+            .sort((a, b) => a.months.month_num - b.months.month_num)
+            .map((i) => i.months.month_name.slice(0, 3));
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--surface2);">
+          <div style="min-width:0;">
+            <div style="font-size:.82rem;font-weight:600;color:var(--text);">${label}</div>
+            <div style="font-size:.7rem;color:var(--muted);">${catLabel(items[0].category)} \u2022 ${monthNames.join(', ')}</div>
+          </div>
+          <span style="font-size:.82rem;font-weight:600;white-space:nowrap;">\u20AA${n(itemTotal)}</span>
+        </div>`;
+        })
+        .join('')}
+    </div>`;
+  }
+
   // Transaction list
-  html += `<div class="search-section">
-    <div class="search-section-title">All Transactions</div>
-    ${matches
-      .map((t) => {
-        const monthLabel = t.months ? t.months.month_name.slice(0, 3) : '';
-        const dateStr = t.date || '';
-        const displayDate = dateStr
-          ? new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-          : monthLabel;
-        return `<div class="search-tx-row">
-        <span class="search-tx-date">${displayDate}</span>
-        <span class="search-tx-cat">${catLabel(t.category)}</span>
-        <div class="search-tx-detail">
-          ${t.store ? `<span class="search-tx-store">${t.store}</span>` : ''}
-          ${t.item ? `<span class="search-tx-item">${t.item}</span>` : ''}
-        </div>
-        <span class="search-tx-amount">\u20AA${n(t.amount)}</span>
-      </div>`;
-      })
-      .join('')}
-  </div>`;
+  if (matches.length > 0) {
+    html += `<div class="search-section">
+      <div class="search-section-title">Transactions</div>
+      ${matches
+        .map((t) => {
+          const monthLabel = t.months ? t.months.month_name.slice(0, 3) : '';
+          const dateStr = t.date || '';
+          const displayDate = dateStr
+            ? new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+            : monthLabel;
+          return `<div class="search-tx-row">
+          <span class="search-tx-date">${displayDate}</span>
+          <span class="search-tx-cat">${catLabel(t.category)}</span>
+          <div class="search-tx-detail">
+            ${t.store ? `<span class="search-tx-store">${t.store}</span>` : ''}
+            ${t.item ? `<span class="search-tx-item">${t.item}</span>` : ''}
+          </div>
+          <span class="search-tx-amount">\u20AA${n(t.amount)}</span>
+        </div>`;
+        })
+        .join('')}
+    </div>`;
+  }
 
   resultsDiv.innerHTML = html;
 }
