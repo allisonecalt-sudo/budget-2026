@@ -6008,6 +6008,15 @@ function renderYearSnapshot() {
       );
       if (linked) return Number(linked.amount) || 0;
     }
+    // Mirror month page charity % override (line 1721-1722 in renderApp)
+    if (catKey === 'charity') {
+      const chPct = parseFloat(localStorage.getItem('charityPct_' + mid));
+      const m = months.find((mo) => mo.id === mid);
+      if (chPct && m) {
+        const inc = incFor(m);
+        if (inc) return Math.round((inc * chPct) / 100);
+      }
+    }
     const fromItems = yearBiTotal(mid, catKey);
     return fromItems !== null ? fromItems : budgetMap[mid]?.[catKey] || 0;
   };
