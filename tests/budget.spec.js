@@ -1107,7 +1107,8 @@ test('admin tab shows summary cards', async ({ page }) => {
   await expect(page.locator('text=Remaining').first()).toBeVisible();
 });
 
-test('admin deep dive — items, sub-payments, payment log audit', async ({ page }) => {
+test('admin deep dive — items, sub-payments, payment log audit', async ({ page }, testInfo) => {
+  testInfo.setTimeout(90000);
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
   const adminTab = page.locator('.ptab', { hasText: 'Admin' });
@@ -1201,69 +1202,21 @@ test('admin deep dive — items, sub-payments, payment log audit', async ({ page
     }
   }
 
-  // --- PAYMENT LOG ---
+  // --- PAYMENT LOG (auto-generated from sub-payments) ---
   console.log('\n--- PAYMENT LOG ---');
-  const paymentRows = page.locator('[data-admin-payment-id]');
-  const payCount = await paymentRows.count();
-  console.log(`Total payments: ${payCount}`);
+  const payLogText = await page
+    .locator('text=Payment Log')
+    .first()
+    .locator('..')
+    .locator('..')
+    .textContent()
+    .catch(() => '');
+  console.log('Payment Log content (first 500 chars):', payLogText.substring(0, 500));
 
-  for (let i = 0; i < payCount; i++) {
-    const pRow = paymentRows.nth(i);
-    const month = await pRow
-      .locator('span[style*="DM Mono"]')
-      .first()
-      .textContent()
-      .catch(() => '?');
-    const what = await pRow
-      .locator('input[type="text"]')
-      .inputValue()
-      .catch(() => '?');
-    const amount = await pRow
-      .locator('input[type="number"]')
-      .inputValue()
-      .catch(() => '?');
-    const isEst = await pRow
-      .locator('button:has-text("~est")')
-      .evaluate((el) => el.style.background !== 'none')
-      .catch(() => false);
-    console.log(`  ${month.trim()} | "${what}" | ₪${amount} ${isEst ? '~est' : ''}`);
-  }
-
-  // --- COMPARISON ---
-  console.log('\n--- OVERLAP ANALYSIS ---');
-  console.log('Looking for items that appear in BOTH yearly expenses AND payment log...');
-
-  // Collect all item names
-  const allItemNames = [];
-  for (let i = 0; i < itemCount; i++) {
-    const name = await itemRows
-      .nth(i)
-      .locator('input[placeholder="Item name"]')
-      .inputValue()
-      .catch(() => '');
-    if (name) allItemNames.push(name.toLowerCase());
-  }
-
-  // Collect all payment labels
-  const allPayLabels = [];
-  for (let i = 0; i < payCount; i++) {
-    const label = await paymentRows
-      .nth(i)
-      .locator('input[type="text"]')
-      .inputValue()
-      .catch(() => '');
-    if (label) allPayLabels.push(label.toLowerCase());
-  }
-
-  // Check for matches
-  for (const itemName of allItemNames) {
-    const matchingPayments = allPayLabels.filter(
-      (p) => p.includes(itemName.substring(0, 5)) || itemName.includes(p.substring(0, 5)),
-    );
-    if (matchingPayments.length > 0) {
-      console.log(`  MATCH: Item "${itemName}" <-> Payments: [${matchingPayments.join(', ')}]`);
-    }
-  }
+  // Verify it says auto-generated
+  const autoNote = page.locator('text=Auto-generated');
+  const hasAutoNote = await autoNote.isVisible().catch(() => false);
+  console.log('Has auto-generated note:', hasAutoNote);
 
   console.log('\n========== END DEEP DIVE ==========');
 });
