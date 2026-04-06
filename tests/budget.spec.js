@@ -1070,7 +1070,15 @@ test('admin tab loads and shows category headers in grouped view', async ({ page
   await expect(addBtn).toBeVisible();
 
   // Check for category groups — only appear if items exist in that category
-  const expectedCategories = ['Apartment', 'Car', 'Furniture', 'Health', 'Professional', 'Admin', 'Other'];
+  const expectedCategories = [
+    'Apartment',
+    'Car',
+    'Furniture',
+    'Health',
+    'Professional',
+    'Admin',
+    'Other',
+  ];
   const visibleCategories = [];
   for (const cat of expectedCategories) {
     const catHeader = page.locator(`text=${cat}`).first();
@@ -1079,7 +1087,10 @@ test('admin tab loads and shows category headers in grouped view', async ({ page
     }
   }
   console.log('Visible admin categories:', visibleCategories);
-  console.log('Total admin items on page:', await page.locator('input[placeholder="Item name"]').count());
+  console.log(
+    'Total admin items on page:',
+    await page.locator('input[placeholder="Item name"]').count(),
+  );
 });
 
 test('admin tab shows summary cards', async ({ page }) => {
@@ -1094,4 +1105,58 @@ test('admin tab shows summary cards', async ({ page }) => {
   await expect(page.locator('text=Allocated').first()).toBeVisible();
   await expect(page.locator('text=Spent').first()).toBeVisible();
   await expect(page.locator('text=Remaining').first()).toBeVisible();
+});
+
+// ─── Search Panel ───
+test('search button exists in header', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  const searchBtn = page.locator('.mtab[title="Search transactions"]');
+  await expect(searchBtn).toBeVisible();
+});
+
+test('clicking search button opens search panel', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  const searchBtn = page.locator('.mtab[title="Search transactions"]');
+  await searchBtn.click();
+  await expect(page.locator('#search-panel')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#search-input')).toBeVisible();
+});
+
+test('search panel has all-months checkbox checked by default', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  await page.locator('.mtab[title="Search transactions"]').click();
+  await expect(page.locator('#search-all-months')).toBeChecked();
+});
+
+test('search panel close button works', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  await page.locator('.mtab[title="Search transactions"]').click();
+  await expect(page.locator('#search-panel')).toBeVisible({ timeout: 5000 });
+  await page.locator('#search-panel button:has-text("\u2715")').click();
+  await expect(page.locator('#search-panel')).toBeHidden();
+});
+
+test('search with short query shows minimum length message', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  await page.locator('.mtab[title="Search transactions"]').click();
+  await page.locator('#search-input').fill('a');
+  await page.waitForTimeout(500);
+  await expect(page.locator('#search-results')).toContainText('at least 2 characters');
+});
+
+test('search runs and shows results or no-results message', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.hdr-actions', { timeout: 10000 });
+  await page.locator('.mtab[title="Search transactions"]').click();
+  await page.locator('#search-input').fill('test');
+  await page.waitForTimeout(1000);
+  const results = page.locator('#search-results');
+  // Should show either results or "No results" — not the initial placeholder
+  const text = await results.textContent();
+  expect(text).not.toContain('Type to search');
 });

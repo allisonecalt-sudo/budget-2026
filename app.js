@@ -2236,7 +2236,9 @@ function renderApp() {
                             const defaultCls =
                               'bi-default' + (item.is_default ? ' is-default' : '');
                             return (
-                              '<div class="budget-item-row" data-budget-item-id="' + item.id + '">' +
+                              '<div class="budget-item-row" data-budget-item-id="' +
+                              item.id +
+                              '">' +
                               '<input type="text" class="bi-label" value="' +
                               (item.label || '').replace(/"/g, '&quot;') +
                               '" placeholder="Item name" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
@@ -4850,7 +4852,9 @@ function renderAdminTab() {
         '</div>';
     }
     return (
-      '<div data-admin-item-id="' + item.id + '" style="border-bottom:1px solid var(--border);">' +
+      '<div data-admin-item-id="' +
+      item.id +
+      '" style="border-bottom:1px solid var(--border);">' +
       '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;' +
       rowOpacity +
       '">' +
@@ -6813,7 +6817,8 @@ async function refreshHistoryIfOpen() {
     };
     list.innerHTML = data
       .map((r) => {
-        const canClick = r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
+        const canClick =
+          r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
         let clickHandler = '';
         if (canClick) {
           if (r.entity_type === 'budget_amount') {
@@ -6870,13 +6875,19 @@ function jumpToTransaction(txId) {
 
 // Jump to any entity from history log
 async function jumpToHistoryEntry(entityType, entityId) {
-  if (entityType === 'transaction') { jumpToTransaction(entityId); return; }
+  if (entityType === 'transaction') {
+    jumpToTransaction(entityId);
+    return;
+  }
 
   const highlight = (el, ms) => {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.style.outline = '2px solid var(--accent)';
     el.style.borderRadius = '6px';
-    setTimeout(() => { el.style.outline = ''; el.style.borderRadius = ''; }, ms || 2000);
+    setTimeout(() => {
+      el.style.outline = '';
+      el.style.borderRadius = '';
+    }, ms || 2000);
   };
 
   if (entityType === 'budget_amount') {
@@ -6905,8 +6916,15 @@ async function jumpToHistoryEntry(entityType, entityId) {
         }
         setTimeout(() => {
           const el2 = document.querySelector('[data-budget-item-id="' + entityId + '"]');
-          if (el2) { highlight(el2); el2.style.background = 'var(--accent)'; el2.style.color = '#fff';
-            setTimeout(() => { el2.style.background = ''; el2.style.color = ''; }, 2000); }
+          if (el2) {
+            highlight(el2);
+            el2.style.background = 'var(--accent)';
+            el2.style.color = '#fff';
+            setTimeout(() => {
+              el2.style.background = '';
+              el2.style.color = '';
+            }, 2000);
+          }
         }, 150);
       } else toast('Item not found — may have been deleted');
     }, 200);
