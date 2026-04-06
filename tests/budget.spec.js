@@ -1107,6 +1107,122 @@ test('admin tab shows summary cards', async ({ page }) => {
   await expect(page.locator('text=Remaining').first()).toBeVisible();
 });
 
+test('admin deep dive — items, sub-payments, payment log audit', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.ptab', { timeout: 10000 });
+  const adminTab = page.locator('.ptab', { hasText: 'Admin' });
+  await adminTab.click();
+  await page.waitForTimeout(1500);
+
+  // --- SUMMARY CARDS ---
+  const cards = await page.locator('.tab-two-col').first().locator('..').locator('div[style*="grid-template-columns:repeat"]').first();
+  const cardTexts = await cards.allInnerTexts();
+  console.log('\n========== ADMIN DEEP DIVE ==========');
+  console.log('\n--- SUMMARY CARDS ---');
+  console.log(cardTexts.join(' | '));
+
+  // --- YEARLY EXPENSE ITEMS (expand all to see sub-payments) ---
+  console.log('\n--- YEARLY EXPENSE ITEMS ---');
+  const itemRows = page.locator('[data-admin-item-id]');
+  const itemCount = await itemRows.count();
+  console.log(`Total items: ${itemCount}`);
+
+  for (let i = 0; i < itemCount; i++) {
+    const row = itemRows.nth(i);
+    const itemId = await row.getAttribute('data-admin-item-id');
+    const nameInput = row.locator('input[placeholder="Item name"]');
+    const name = await nameInput.inputValue().catch(() => '(no name)');
+    const amtInput = row.locator('input[type="number"]').first();
+    const projected = await amtInput.inputValue().catch(() => '0');
+
+    // Get category tag if visible
+    const catTag = row.locator('span[title^="Category:"]');
+    const category = await catTag.getAttribute('title').catch(() => 'unknown');
+
+    // Check for paid/left badges
+    const paidBadge = await row.locator('text=/paid/').first().textContent().catch(() => '');
+    const leftBadge = await row.locator('text=/left/').first().textContent().catch(() => '');
+
+    // Check if done (checkbox)
+    const isChecked = await row.locator('div[title="Mark as not done"]').count() > 0;
+
+    // Click expand arrow to see sub-payments
+    const expandBtn = row.locator('button[title="Show/hide sub-payments"]');
+    const isExpanded = await row.locator('text=Payments').isVisible().catch(() => false);
+    if (!isExpanded && await expandBtn.count() > 0) {
+      await expandBtn.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Read sub-payments
+    const subLabels = await row.locator('input[placeholder="What was this payment for?"]').allInputValues().catch(() => []);
+    const subAmounts = await row.locator('input[placeholder="₪ amount"]').allInputValues().catch(() => []);
+    const subPaidChecks = await row.locator('div[title="Mark unpaid"]').count();
+
+    // Get category from dropdown if expanded
+    const catSelect = row.locator('select[title="Category"]');
+    const catValue = await catSelect.inputValue().catch(() => 'N/A');
+
+    console.log(`\n  ITEM: "${name}" | Projected: ₪${projected} | Category: ${catValue} | Done: ${isChecked}`);
+    if (paidBadge) console.log(`    ${paidBadge} ${leftBadge}`);
+    if (subLabels.length > 0) {
+      console.log(`    Sub-payments (${subLabels.length}):`);
+      for (let j = 0; j < subLabels.length; j++) {
+        console.log(`      - "${subLabels[j]}" ₪${subAmounts[j] || '?'} ${j < subPaidChecks ? '✓ paid' : '○ unpaid'}`);
+      }
+    } else {
+      console.log('    No sub-payments');
+    }
+  }
+
+  // --- PAYMENT LOG ---
+  console.log('\n--- PAYMENT LOG ---');
+  const paymentRows = page.locator('[data-admin-payment-id]');
+  const payCount = await paymentRows.count();
+  console.log(`Total payments: ${payCount}`);
+
+  for (let i = 0; i < payCount; i++) {
+    const pRow = paymentRows.nth(i);
+    const month = await pRow.locator('span[style*="DM Mono"]').first().textContent().catch(() => '?');
+    const what = await pRow.locator('input[type="text"]').inputValue().catch(() => '?');
+    const amount = await pRow.locator('input[type="number"]').inputValue().catch(() => '?');
+    const isEst = await pRow.locator('button:has-text("~est")').evaluate(
+      el => el.style.background !== 'none'
+    ).catch(() => false);
+    console.log(`  ${month.trim()} | "${what}" | ₪${amount} ${isEst ? '~est' : ''}`);
+  }
+
+  // --- COMPARISON ---
+  console.log('\n--- OVERLAP ANALYSIS ---');
+  console.log('Looking for items that appear in BOTH yearly expenses AND payment log...');
+
+  // Collect all item names
+  const allItemNames = [];
+  for (let i = 0; i < itemCount; i++) {
+    const name = await itemRows.nth(i).locator('input[placeholder="Item name"]').inputValue().catch(() => '');
+    if (name) allItemNames.push(name.toLowerCase());
+  }
+
+  // Collect all payment labels
+  const allPayLabels = [];
+  for (let i = 0; i < payCount; i++) {
+    const label = await paymentRows.nth(i).locator('input[type="text"]').inputValue().catch(() => '');
+    if (label) allPayLabels.push(label.toLowerCase());
+  }
+
+  // Check for matches
+  for (const itemName of allItemNames) {
+    const matchingPayments = allPayLabels.filter(p =>
+      p.includes(itemName.substring(0, 5)) || itemName.includes(p.substring(0, 5))
+    );
+    if (matchingPayments.length > 0) {
+      console.log(`  MATCH: Item "${itemName}" <-> Payments: [${matchingPayments.join(', ')}]`);
+    }
+  }
+
+  console.log('\n========== END DEEP DIVE ==========');
+});
+
 // ─── Search Panel ───
 test('search button exists in header', async ({ page }) => {
   await page.goto('/');
