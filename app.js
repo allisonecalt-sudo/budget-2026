@@ -7234,31 +7234,24 @@ async function runSearch(query) {
     </div>`;
   }
 
-  // Budget items section
+  // Budget items section — one line per item
   if (budgetItemMatches.length > 0) {
-    // Group budget items by label to show trend
-    const biByLabel = {};
-    budgetItemMatches.forEach((bi) => {
-      const key = bi.label || 'Unknown';
-      if (!biByLabel[key]) biByLabel[key] = [];
-      biByLabel[key].push(bi);
-    });
-
+    const sortedBi = [...budgetItemMatches].sort((a, b) =>
+      a.months && b.months ? a.months.month_num - b.months.month_num : 0,
+    );
     html += `<div class="search-section">
       <div class="search-section-title">Budget Line Items</div>
-      ${Object.entries(biByLabel)
-        .map(([label, items]) => {
-          const itemTotal = items.reduce((s, i) => s + (i.amount || 0), 0);
-          const monthNames = items
-            .filter((i) => i.months)
-            .sort((a, b) => a.months.month_num - b.months.month_num)
-            .map((i) => i.months.month_name.slice(0, 3));
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--surface2);">
-          <div style="min-width:0;">
-            <div style="font-size:.82rem;font-weight:600;color:var(--text);">${label}</div>
-            <div style="font-size:.7rem;color:var(--muted);">${catLabel(items[0].category)} \u2022 ${monthNames.join(', ')}</div>
+      ${sortedBi
+        .map((bi) => {
+          const monthLabel = bi.months ? bi.months.month_name.slice(0, 3) : '';
+          return `<div class="search-tx-row">
+          <span class="search-tx-date">${monthLabel}</span>
+          <span class="search-tx-cat">${catLabel(bi.category)}</span>
+          <div class="search-tx-detail">
+            <span class="search-tx-store">${bi.label || ''}</span>
+            ${bi.subcategory ? `<span class="search-tx-item">${bi.subcategory}</span>` : ''}
           </div>
-          <span style="font-size:.82rem;font-weight:600;white-space:nowrap;">\u20AA${n(itemTotal)}</span>
+          <span class="search-tx-amount">\u20AA${n(bi.amount)}</span>
         </div>`;
         })
         .join('')}
@@ -7276,7 +7269,7 @@ async function runSearch(query) {
           const displayDate = dateStr
             ? new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
             : monthLabel;
-          return `<div class="search-tx-row">
+          return `<div class="search-tx-row search-tx-clickable" onclick="searchJumpToTx('${t.id}','${t.month_id}')">
           <span class="search-tx-date">${displayDate}</span>
           <span class="search-tx-cat">${catLabel(t.category)}</span>
           <div class="search-tx-detail">
@@ -7291,4 +7284,24 @@ async function runSearch(query) {
   }
 
   resultsDiv.innerHTML = html;
+}
+
+async function searchJumpToTx(txId, monthId) {
+  // Switch month if needed, then jump
+  if (monthId && monthId !== state.currentMonthId) {
+    await switchMonth(monthId);
+  }
+  // Close search panel
+  const panel = document.getElementById('search-panel');
+  if (panel) {
+    panel.style.display = 'none';
+    document.getElementById('root').style.marginRight = '';
+  }
+  // Make sure we're on the budget tab
+  if (state.activeTab !== 'budget') {
+    state.activeTab = 'budget';
+    localStorage.setItem('activeTab', 'budget');
+    renderApp();
+  }
+  jumpToTransaction(txId);
 }

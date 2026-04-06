@@ -1823,3 +1823,13 @@ tr.collapsed {
   text-align: right;
   white-space: nowrap;
 }
+.search-tx-clickable {
+  cursor: pointer;
+  border-radius: 6px;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+  transition: background 0.15s;
+}
+.search-tx-clickable:hover {
+  background: var(--surface2);
+}
