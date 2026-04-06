@@ -1160,3 +1160,66 @@ test('search runs and shows results or no-results message', async ({ page }) => 
   const text = await results.textContent();
   expect(text).not.toContain('Type to search');
 });
+
+// ─── Unbudgeted: Month Page "Left to Budget" Must Match Year View "Unbudgeted" ───
+test('month page "Left to Budget" matches year view "Unbudgeted" for each month', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+
+  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthCount = await monthTabs.count();
+  const pageValues = {};
+
+  // Collect "Left to Budget" from each month's ribbon
+  for (let i = 0; i < Math.min(monthCount, 4); i++) {
+    await monthTabs.nth(i).click();
+    await page.waitForTimeout(2000);
+    const monthName = (await monthTabs.nth(i).textContent()).trim();
+
+    const ribbonStats = page.locator('.ribbon-stat');
+    const statCount = await ribbonStats.count();
+    let leftToBudget = null;
+    for (let s = 0; s < statCount; s++) {
+      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
+      if (label.includes('Left to Budget')) {
+        const val = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+        leftToBudget = parseFloat(val.replace(/[₪,~]/g, '').trim());
+      }
+    }
+    pageValues[monthName] = leftToBudget;
+    console.log(`Month page ${monthName}: Left to Budget = ${leftToBudget}`);
+  }
+
+  // Switch to Year view and read "Unbudgeted" row
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(4000);
+
+  const yearRows = page.locator('tr');
+  const rowCount = await yearRows.count();
+  let unbudgetedRow = null;
+  for (let r = 0; r < rowCount; r++) {
+    const text = await yearRows.nth(r).textContent();
+    if (text.includes('Unbudgeted') && !unbudgetedRow) unbudgetedRow = yearRows.nth(r);
+  }
+
+  expect(unbudgetedRow).not.toBeNull();
+  const cells = unbudgetedRow.locator('td');
+  const cellCount = await cells.count();
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
+  for (let m = 0; m < Math.min(4, cellCount - 1); m++) {
+    const yearVal = parseFloat((await cells.nth(m + 1).textContent()).replace(/[₪,]/g, '').trim());
+    const monthName = monthNames[m];
+    const pageVal = pageValues[monthName];
+
+    console.log(`${monthName}: Page Left to Budget=${pageVal} vs Year Unbudgeted=${yearVal}`);
+
+    if (pageVal !== null && !isNaN(yearVal)) {
+      const diff = Math.abs(pageVal - yearVal);
+      expect(diff, `${monthName} mismatch: page=${pageVal}, year=${yearVal}`).toBeLessThan(5);
+    }
+  }
+});
