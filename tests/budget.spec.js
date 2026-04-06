@@ -1115,7 +1115,12 @@ test('admin deep dive — items, sub-payments, payment log audit', async ({ page
   await page.waitForTimeout(1500);
 
   // --- SUMMARY CARDS ---
-  const cards = await page.locator('.tab-two-col').first().locator('..').locator('div[style*="grid-template-columns:repeat"]').first();
+  const cards = await page
+    .locator('.tab-two-col')
+    .first()
+    .locator('..')
+    .locator('div[style*="grid-template-columns:repeat"]')
+    .first();
   const cardTexts = await cards.allInnerTexts();
   console.log('\n========== ADMIN DEEP DIVE ==========');
   console.log('\n--- SUMMARY CARDS ---');
@@ -1140,35 +1145,56 @@ test('admin deep dive — items, sub-payments, payment log audit', async ({ page
     const category = await catTag.getAttribute('title').catch(() => 'unknown');
 
     // Check for paid/left badges
-    const paidBadge = await row.locator('text=/paid/').first().textContent().catch(() => '');
-    const leftBadge = await row.locator('text=/left/').first().textContent().catch(() => '');
+    const paidBadge = await row
+      .locator('text=/paid/')
+      .first()
+      .textContent()
+      .catch(() => '');
+    const leftBadge = await row
+      .locator('text=/left/')
+      .first()
+      .textContent()
+      .catch(() => '');
 
     // Check if done (checkbox)
-    const isChecked = await row.locator('div[title="Mark as not done"]').count() > 0;
+    const isChecked = (await row.locator('div[title="Mark as not done"]').count()) > 0;
 
     // Click expand arrow to see sub-payments
     const expandBtn = row.locator('button[title="Show/hide sub-payments"]');
-    const isExpanded = await row.locator('text=Payments').isVisible().catch(() => false);
-    if (!isExpanded && await expandBtn.count() > 0) {
+    const isExpanded = await row
+      .locator('text=Payments')
+      .isVisible()
+      .catch(() => false);
+    if (!isExpanded && (await expandBtn.count()) > 0) {
       await expandBtn.click();
       await page.waitForTimeout(300);
     }
 
     // Read sub-payments
-    const subLabels = await row.locator('input[placeholder="What was this payment for?"]').allInputValues().catch(() => []);
-    const subAmounts = await row.locator('input[placeholder="₪ amount"]').allInputValues().catch(() => []);
+    const subLabels = await row
+      .locator('input[placeholder="What was this payment for?"]')
+      .allInputValues()
+      .catch(() => []);
+    const subAmounts = await row
+      .locator('input[placeholder="₪ amount"]')
+      .allInputValues()
+      .catch(() => []);
     const subPaidChecks = await row.locator('div[title="Mark unpaid"]').count();
 
     // Get category from dropdown if expanded
     const catSelect = row.locator('select[title="Category"]');
     const catValue = await catSelect.inputValue().catch(() => 'N/A');
 
-    console.log(`\n  ITEM: "${name}" | Projected: ₪${projected} | Category: ${catValue} | Done: ${isChecked}`);
+    console.log(
+      `\n  ITEM: "${name}" | Projected: ₪${projected} | Category: ${catValue} | Done: ${isChecked}`,
+    );
     if (paidBadge) console.log(`    ${paidBadge} ${leftBadge}`);
     if (subLabels.length > 0) {
       console.log(`    Sub-payments (${subLabels.length}):`);
       for (let j = 0; j < subLabels.length; j++) {
-        console.log(`      - "${subLabels[j]}" ₪${subAmounts[j] || '?'} ${j < subPaidChecks ? '✓ paid' : '○ unpaid'}`);
+        console.log(
+          `      - "${subLabels[j]}" ₪${subAmounts[j] || '?'} ${j < subPaidChecks ? '✓ paid' : '○ unpaid'}`,
+        );
       }
     } else {
       console.log('    No sub-payments');
@@ -1183,12 +1209,23 @@ test('admin deep dive — items, sub-payments, payment log audit', async ({ page
 
   for (let i = 0; i < payCount; i++) {
     const pRow = paymentRows.nth(i);
-    const month = await pRow.locator('span[style*="DM Mono"]').first().textContent().catch(() => '?');
-    const what = await pRow.locator('input[type="text"]').inputValue().catch(() => '?');
-    const amount = await pRow.locator('input[type="number"]').inputValue().catch(() => '?');
-    const isEst = await pRow.locator('button:has-text("~est")').evaluate(
-      el => el.style.background !== 'none'
-    ).catch(() => false);
+    const month = await pRow
+      .locator('span[style*="DM Mono"]')
+      .first()
+      .textContent()
+      .catch(() => '?');
+    const what = await pRow
+      .locator('input[type="text"]')
+      .inputValue()
+      .catch(() => '?');
+    const amount = await pRow
+      .locator('input[type="number"]')
+      .inputValue()
+      .catch(() => '?');
+    const isEst = await pRow
+      .locator('button:has-text("~est")')
+      .evaluate((el) => el.style.background !== 'none')
+      .catch(() => false);
     console.log(`  ${month.trim()} | "${what}" | ₪${amount} ${isEst ? '~est' : ''}`);
   }
 
@@ -1199,21 +1236,29 @@ test('admin deep dive — items, sub-payments, payment log audit', async ({ page
   // Collect all item names
   const allItemNames = [];
   for (let i = 0; i < itemCount; i++) {
-    const name = await itemRows.nth(i).locator('input[placeholder="Item name"]').inputValue().catch(() => '');
+    const name = await itemRows
+      .nth(i)
+      .locator('input[placeholder="Item name"]')
+      .inputValue()
+      .catch(() => '');
     if (name) allItemNames.push(name.toLowerCase());
   }
 
   // Collect all payment labels
   const allPayLabels = [];
   for (let i = 0; i < payCount; i++) {
-    const label = await paymentRows.nth(i).locator('input[type="text"]').inputValue().catch(() => '');
+    const label = await paymentRows
+      .nth(i)
+      .locator('input[type="text"]')
+      .inputValue()
+      .catch(() => '');
     if (label) allPayLabels.push(label.toLowerCase());
   }
 
   // Check for matches
   for (const itemName of allItemNames) {
-    const matchingPayments = allPayLabels.filter(p =>
-      p.includes(itemName.substring(0, 5)) || itemName.includes(p.substring(0, 5))
+    const matchingPayments = allPayLabels.filter(
+      (p) => p.includes(itemName.substring(0, 5)) || itemName.includes(p.substring(0, 5)),
     );
     if (matchingPayments.length > 0) {
       console.log(`  MATCH: Item "${itemName}" <-> Payments: [${matchingPayments.join(', ')}]`);
@@ -1379,4 +1424,346 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
       expect(diff, `${monthName} mismatch: page=${pageVal}, year=${yearVal}`).toBeLessThan(2);
     }
   }
+});
+
+// ─── COMPREHENSIVE MATH AUDIT: Every number must add up (Jan–Apr) ───
+test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('.mtab', { timeout: 10000 });
+  await page.waitForSelector('.ribbon-val', { timeout: 10000 });
+
+  // Helper: parse ₪ formatted number, handling unicode minus and commas
+  const parseAmount = (text) => {
+    if (!text) return 0;
+    const cleaned = text.replace(/[₪,~\u2212]/g, (m) => (m === '\u2212' ? '-' : '')).trim();
+    return parseFloat(cleaned) || 0;
+  };
+
+  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthCount = await monthTabs.count();
+  const allMonthData = {};
+  let errors = [];
+
+  for (let i = 0; i < Math.min(monthCount, 4); i++) {
+    await monthTabs.nth(i).click();
+    await page.waitForTimeout(2500);
+    const monthName = (await monthTabs.nth(i).textContent()).trim();
+    console.log(`\n===== ${monthName} AUDIT =====`);
+
+    // ── 1. Read all ribbon values ──
+    const ribbon = {};
+    const ribbonStats = page.locator('.ribbon-stat');
+    const statCount = await ribbonStats.count();
+    for (let s = 0; s < statCount; s++) {
+      const labelEl = ribbonStats.nth(s).locator('.ribbon-label');
+      const valEl = ribbonStats.nth(s).locator('.ribbon-val');
+      if ((await labelEl.count()) === 0 || (await valEl.count()) === 0) continue;
+      const label = (await labelEl.textContent()).replace(/~EST/g, '').trim();
+      const val = parseAmount(await valEl.textContent());
+      ribbon[label] = val;
+    }
+    console.log(`Ribbon: ${JSON.stringify(ribbon)}`);
+
+    // ── 2. Ribbon math checks ──
+    // Income - Budgeted = Left to Budget
+    if (ribbon['Income'] && ribbon['Budgeted'] && ribbon['Left to Budget'] !== undefined) {
+      const expected = ribbon['Income'] - ribbon['Budgeted'];
+      const diff = Math.abs(expected - ribbon['Left to Budget']);
+      console.log(
+        `  Income(${ribbon['Income']}) - Budgeted(${ribbon['Budgeted']}) = ${expected}, Left to Budget = ${ribbon['Left to Budget']}, diff = ${diff}`,
+      );
+      if (diff > 0.02)
+        errors.push(
+          `${monthName}: Income - Budgeted != Left to Budget (${expected} vs ${ribbon['Left to Budget']})`,
+        );
+    }
+
+    // Income - Spent = Remaining
+    if (ribbon['Income'] && ribbon['Spent'] && ribbon['Remaining'] !== undefined) {
+      const expected = ribbon['Income'] - ribbon['Spent'];
+      const diff = Math.abs(expected - ribbon['Remaining']);
+      console.log(
+        `  Income(${ribbon['Income']}) - Spent(${ribbon['Spent']}) = ${expected}, Remaining = ${ribbon['Remaining']}, diff = ${diff}`,
+      );
+      if (diff > 0.02)
+        errors.push(
+          `${monthName}: Income - Spent != Remaining (${expected} vs ${ribbon['Remaining']})`,
+        );
+    }
+
+    // Budgeted - Spent = Remaining in Budget
+    if (ribbon['Budgeted'] && ribbon['Spent'] && ribbon['Remaining in Budget'] !== undefined) {
+      const expected = ribbon['Budgeted'] - ribbon['Spent'];
+      const diff = Math.abs(expected - ribbon['Remaining in Budget']);
+      console.log(
+        `  Budgeted(${ribbon['Budgeted']}) - Spent(${ribbon['Spent']}) = ${expected}, Remaining in Budget = ${ribbon['Remaining in Budget']}, diff = ${diff}`,
+      );
+      if (diff > 0.02)
+        errors.push(
+          `${monthName}: Budgeted - Spent != Remaining in Budget (${expected} vs ${ribbon['Remaining in Budget']})`,
+        );
+    }
+
+    // ── 3. Read category rows: spent / budget from cat-amounts ──
+    const catRows = page.locator('.cat-row');
+    const catCount = await catRows.count();
+    let totalCatBudgets = 0;
+    let totalCatSpent = 0;
+    const catData = {};
+
+    for (let c = 0; c < catCount; c++) {
+      const catRow = catRows.nth(c);
+      const catId = await catRow.getAttribute('id');
+      if (!catId || !catId.startsWith('cat-')) continue;
+      const catKey = catId.replace('cat-', '');
+
+      // Get the cat-amounts container
+      const amountsEl = catRow.locator('.cat-amounts');
+      if ((await amountsEl.count()) === 0) continue;
+      const amountsText = await amountsEl.textContent();
+
+      // Parse spent and budget from the amounts text
+      // Format can be: "₪X / ₪Y" or "committed₪X" or just "₪X" (budget only)
+      let catSpent = 0;
+      let catBudget = 0;
+
+      // Check for "committed" format (housing/recurring with items)
+      if (amountsText.includes('committed')) {
+        const match = amountsText.match(/committed.*?(₪[\d,.]+)/);
+        if (match) {
+          catBudget = parseAmount(match[1]);
+          catSpent = catBudget; // committed = both spent and budget
+        }
+      } else {
+        // Regular format: "₪spent / ₪budget" or just budget input
+        const vals = amountsText.match(/₪[\d,.\u2212-]+/g);
+        if (vals && vals.length >= 2) {
+          catSpent = parseAmount(vals[0]);
+          catBudget = parseAmount(vals[1]);
+        } else if (vals && vals.length === 1) {
+          // Could be just a budget amount or just spent
+          catBudget = parseAmount(vals[0]);
+        }
+
+        // Also try reading the budget input value directly
+        const budgetInput = catRow.locator('.budget-inline[type="number"]');
+        if ((await budgetInput.count()) > 0) {
+          const inputVal = await budgetInput.first().inputValue();
+          if (inputVal) catBudget = parseFloat(inputVal) || 0;
+        }
+      }
+
+      catData[catKey] = { spent: catSpent, budget: catBudget };
+    }
+
+    console.log(`  Categories: ${JSON.stringify(catData)}`);
+
+    // ── 4. Read budget items (line items within categories) ──
+    // For categories with line items (housing, recurring), check items sum = category budget
+    const budgetItemRows = page.locator('.budget-item-row');
+    const biCount = await budgetItemRows.count();
+    const itemsByCategory = {};
+
+    for (let b = 0; b < biCount; b++) {
+      const row = budgetItemRows.nth(b);
+      const amountInput = row.locator('.bi-amount');
+      if ((await amountInput.count()) === 0) continue;
+      const amount = parseFloat((await amountInput.inputValue()) || '0');
+
+      // Find parent category
+      const parentCat = row.locator('xpath=ancestor::div[contains(@class,"cat-row")]');
+      if ((await parentCat.count()) === 0) continue;
+      const parentId = await parentCat.first().getAttribute('id');
+      if (!parentId) continue;
+      const catKey = parentId.replace('cat-', '');
+
+      if (!itemsByCategory[catKey]) itemsByCategory[catKey] = [];
+      itemsByCategory[catKey].push(amount);
+    }
+
+    // Check: sum of items in each category = category budget
+    for (const [catKey, items] of Object.entries(itemsByCategory)) {
+      const itemSum = items.reduce((s, a) => s + a, 0);
+      const catBudget = catData[catKey]?.budget || 0;
+      const diff = Math.abs(itemSum - catBudget);
+      console.log(
+        `  ${catKey} items: ${items.length} items sum=${itemSum.toFixed(2)}, budget=${catBudget.toFixed(2)}, diff=${diff.toFixed(2)}`,
+      );
+      if (diff > 1)
+        errors.push(`${monthName}: ${catKey} items sum (${itemSum}) != budget (${catBudget})`);
+    }
+
+    // ── 5. Read transactions and check they sum to category spent ──
+    // Open all categories to see transactions
+    const catTops = page.locator('.cat-top');
+    const topCount = await catTops.count();
+    for (let t = 0; t < topCount; t++) {
+      const catRow = catTops.nth(t).locator('xpath=ancestor::div[contains(@class,"cat-row")]');
+      if ((await catRow.count()) === 0) continue;
+      const isOpen = (await catRow.first().getAttribute('class')) || '';
+      if (!isOpen.includes('open')) {
+        await catTops.nth(t).click();
+        await page.waitForTimeout(200);
+      }
+    }
+    await page.waitForTimeout(500);
+
+    // Read transaction amounts per category
+    const txRows = page.locator('.tx-item');
+    const txCount = await txRows.count();
+    const txByCategory = {};
+    for (let t = 0; t < txCount; t++) {
+      const txRow = txRows.nth(t);
+      const amountEl = txRow.locator('.tx-amount');
+      if ((await amountEl.count()) === 0) continue;
+      const amount = parseAmount(await amountEl.textContent());
+
+      const parentCat = txRow.locator('xpath=ancestor::div[contains(@class,"cat-row")]');
+      if ((await parentCat.count()) === 0) continue;
+      const parentId = await parentCat.first().getAttribute('id');
+      if (!parentId) continue;
+      const catKey = parentId.replace('cat-', '');
+
+      if (!txByCategory[catKey]) txByCategory[catKey] = [];
+      txByCategory[catKey].push(amount);
+    }
+
+    // Check: sum of transactions = category spent (for non-hasTab, non-hasLines categories)
+    const hasTabCats = ['charity', 'travel', 'admin'];
+    const hasLinesCats = ['housing', 'recurring'];
+    for (const [catKey, txs] of Object.entries(txByCategory)) {
+      if (hasTabCats.includes(catKey)) continue; // these use budget as spent
+      const txSum = txs.reduce((s, a) => s + a, 0);
+      const catSpent = catData[catKey]?.spent || 0;
+      const diff = Math.abs(txSum - catSpent);
+      console.log(
+        `  ${catKey} txns: ${txs.length} txns sum=${txSum.toFixed(2)}, displayed spent=${catSpent.toFixed(2)}, diff=${diff.toFixed(2)}`,
+      );
+      if (diff > 1)
+        errors.push(
+          `${monthName}: ${catKey} transaction sum (${txSum}) != displayed spent (${catSpent})`,
+        );
+    }
+
+    // ── 6. Check Savings section ──
+    const savingsEl = page.locator('text=Savings').first();
+    if ((await savingsEl.count()) > 0) {
+      const savingsParent = savingsEl.locator('xpath=ancestor::div[1]');
+      const savingsText = await savingsParent.textContent();
+      const savedRibbon = ribbon['🏦 Saved'] || ribbon['Saved'] || 0;
+      console.log(
+        `  Savings text: "${savingsText.trim().substring(0, 50)}...", Ribbon Saved: ${savedRibbon}`,
+      );
+    }
+
+    // ── 7. Verify Budgeted = sum of all category budgets + savings ──
+    // Sum up all non-linked, non-household category budgets
+    let computedBudgeted = 0;
+    const linkedCats = ['household']; // linked to housing
+    for (const [catKey, data] of Object.entries(catData)) {
+      if (linkedCats.includes(catKey)) continue;
+      computedBudgeted += data.budget;
+    }
+    // Add savings
+    const savedAmount = ribbon['🏦 Saved'] || ribbon['Saved'] || 0;
+    computedBudgeted += savedAmount;
+
+    const ribbonBudgeted = ribbon['Budgeted'] || 0;
+    const budgetedDiff = Math.abs(computedBudgeted - ribbonBudgeted);
+    console.log(
+      `  TOTAL CHECK: sum of categories(${computedBudgeted.toFixed(2)}) vs ribbon Budgeted(${ribbonBudgeted.toFixed(2)}), diff=${budgetedDiff.toFixed(2)}`,
+    );
+    if (budgetedDiff > 2)
+      errors.push(
+        `${monthName}: Category sum + savings (${computedBudgeted}) != Budgeted (${ribbonBudgeted})`,
+      );
+
+    allMonthData[monthName] = { ribbon, catData, itemsByCategory, txByCategory };
+  }
+
+  // ── 8. Cross-check with Year view ──
+  console.log('\n===== YEAR VIEW CROSS-CHECK =====');
+  await page.locator('.ptab', { hasText: 'Year' }).click();
+  await page.waitForTimeout(4000);
+
+  const yearRows = page.locator('tr');
+  const rowCount = await yearRows.count();
+
+  // Find key rows
+  const yearData = {};
+  const rowLabels = ['Total Income', 'Total Budgeted', 'Total Spent', 'Unbudgeted', 'Remaining'];
+  for (let r = 0; r < rowCount; r++) {
+    const text = await yearRows.nth(r).textContent();
+    for (const label of rowLabels) {
+      if (text.includes(label) && !yearData[label]) {
+        const cells = yearRows.nth(r).locator('td');
+        const cellCount = await cells.count();
+        const values = [];
+        for (let c = 1; c <= Math.min(4, cellCount - 1); c++) {
+          values.push(parseAmount(await cells.nth(c).textContent()));
+        }
+        yearData[label] = values;
+        break;
+      }
+    }
+  }
+
+  console.log(`Year data: ${JSON.stringify(yearData)}`);
+
+  // Year view math: Income - Budgeted = Unbudgeted, Income - Spent = Remaining
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
+  for (let m = 0; m < 4; m++) {
+    const name = monthNames[m];
+    const inc = yearData['Total Income']?.[m];
+    const bud = yearData['Total Budgeted']?.[m];
+    const spt = yearData['Total Spent']?.[m];
+    const unb = yearData['Unbudgeted']?.[m];
+    const rem = yearData['Remaining']?.[m];
+
+    if (inc !== undefined && bud !== undefined && unb !== undefined) {
+      const expectedUnb = inc - bud;
+      const diff = Math.abs(expectedUnb - unb);
+      console.log(
+        `  ${name}: Income(${inc}) - Budgeted(${bud}) = ${expectedUnb}, Unbudgeted = ${unb}, diff = ${diff}`,
+      );
+      if (diff > 2)
+        errors.push(`Year ${name}: Income - Budgeted (${expectedUnb}) != Unbudgeted (${unb})`);
+    }
+
+    if (inc !== undefined && spt !== undefined && rem !== undefined) {
+      const expectedRem = inc - spt;
+      const diff = Math.abs(expectedRem - rem);
+      console.log(
+        `  ${name}: Income(${inc}) - Spent(${spt}) = ${expectedRem}, Remaining = ${rem}, diff = ${diff}`,
+      );
+      if (diff > 2)
+        errors.push(`Year ${name}: Income - Spent (${expectedRem}) != Remaining (${rem})`);
+    }
+
+    // Cross-check year vs month page
+    const monthRibbon = allMonthData[name]?.ribbon;
+    if (monthRibbon && bud !== undefined) {
+      const pageBudgeted = monthRibbon['Budgeted'] || 0;
+      const diff = Math.abs(Math.round(pageBudgeted) - bud);
+      console.log(
+        `  ${name}: Page Budgeted(${pageBudgeted}) vs Year Budgeted(${bud}), diff = ${diff}`,
+      );
+      if (diff > 2)
+        errors.push(`${name}: Page Budgeted (${pageBudgeted}) != Year Budgeted (${bud})`);
+    }
+
+    if (monthRibbon && spt !== undefined) {
+      const pageSpent = monthRibbon['Spent'] || 0;
+      const diff = Math.abs(Math.round(pageSpent) - spt);
+      console.log(`  ${name}: Page Spent(${pageSpent}) vs Year Spent(${spt}), diff = ${diff}`);
+      if (diff > 2) errors.push(`${name}: Page Spent (${pageSpent}) != Year Spent (${spt})`);
+    }
+  }
+
+  // ── FINAL REPORT ──
+  console.log(`\n===== AUDIT COMPLETE =====`);
+  console.log(`Errors found: ${errors.length}`);
+  errors.forEach((e) => console.log(`  ❌ ${e}`));
+
+  expect(errors.length, `Math errors found:\n${errors.join('\n')}`).toBe(0);
 });
