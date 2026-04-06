@@ -1186,7 +1186,9 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
       const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
       if (label.includes('Left to Budget')) {
         const val = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
-        leftToBudget = parseFloat(val.replace(/[₪,~\u2212]/g, (m) => m === '\u2212' ? '-' : '').trim());
+        leftToBudget = parseFloat(
+          val.replace(/[₪,~\u2212]/g, (m) => (m === '\u2212' ? '-' : '')).trim(),
+        );
       }
     }
     pageValues[monthName] = leftToBudget;
