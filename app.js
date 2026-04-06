@@ -1732,13 +1732,17 @@ function renderApp() {
         .eq('category', 'charity')
         .single()
         .then(({ data }) => {
-          if (data) sb.from('budgets').update({ amount: _chCalc }).eq('id', data.id);
+          if (data)
+            return sb
+              .from('budgets')
+              .update({ amount: _chCalc })
+              .eq('id', data.id)
+              .then(() => {});
           else
-            sb.from('budgets').insert({
-              month_id: state.currentMonthId,
-              category: 'charity',
-              amount: _chCalc,
-            });
+            return sb
+              .from('budgets')
+              .insert({ month_id: state.currentMonthId, category: 'charity', amount: _chCalc })
+              .then(() => {});
         });
     }
   }
