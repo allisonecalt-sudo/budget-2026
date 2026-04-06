@@ -4693,7 +4693,7 @@ function renderAdminTab() {
   const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
   const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
   const gap = budget - totalAlloc;
-  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalSpent = (state.admin.subItems || []).filter(s => s.is_paid).reduce((n, s) => n + Number(s.amount), 0);
   const remaining = budget - totalSpent;
 
   const fmtA = (n) =>
@@ -4794,8 +4794,13 @@ function renderAdminTab() {
           const sPaid = s.is_paid;
           const sRowOp = sPaid ? 'opacity:.55;' : '';
           const sStrike = sPaid ? 'text-decoration:line-through;' : '';
+          const sEstimate = s.is_estimate;
+          const sMonthNum = s.month_num || (new Date().getMonth() + 1);
+          const monthOptions = MONTH_NAMES.map((mn, mi) =>
+            '<option value="' + (mi + 1) + '"' + ((mi + 1) === sMonthNum ? ' selected' : '') + '>' + mn + '</option>'
+          ).join('');
           return (
-            '<div style="display:grid;grid-template-columns:22px 1fr 80px 22px;gap:.35rem;align-items:center;padding:.25rem 0;' +
+            '<div style="display:grid;grid-template-columns:22px 55px 1fr 80px 36px 22px;gap:.35rem;align-items:center;padding:.25rem 0;' +
             sRowOp +
             '">' +
             '<div onclick="updateAdminSub(\'' +
@@ -4811,6 +4816,9 @@ function renderAdminTab() {
             ';cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:.6rem;font-weight:700;transition:all .15s ease;">' +
             (sPaid ? '✓' : '') +
             '</div>' +
+            '<select onchange="updateAdminSub(\'' + s.id + "','month_num',parseInt(this.value))\" style=\"font-size:.65rem;padding:.1rem .15rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;\">" +
+            monthOptions +
+            '</select>' +
             '<input type="text" value="' +
             esc(s.label) +
             '" placeholder="What was this payment for?" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;' +
@@ -4825,6 +4833,13 @@ function renderAdminTab() {
             '" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateAdminSub(\'' +
             s.id +
             "','amount',this.value)\">" +
+            '<button onclick="updateAdminSub(\'' + s.id + "','is_estimate'," + !sEstimate + ')" title="' +
+            (sEstimate ? 'Marked as estimate — click to confirm' : 'Mark as estimate') +
+            '" style="background:' + (sEstimate ? 'var(--ambersoft,#fff3cd)' : 'none') +
+            ';border:1px solid ' + (sEstimate ? 'var(--amber)' : 'var(--border)') +
+            ';border-radius:4px;color:' + (sEstimate ? 'var(--amber)' : 'var(--dim)') +
+            ';cursor:pointer;font-size:.58rem;padding:.1rem .1rem;font-weight:' + (sEstimate ? '700' : '400') +
+            ";font-family:'DM Sans',sans-serif;line-height:1;\">~est</button>" +
             '<button onclick="deleteAdminSub(\'' +
             s.id +
             '\')" title="Delete" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;padding:0;line-height:1;opacity:.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">×</button>' +
@@ -5073,72 +5088,53 @@ function renderAdminTab() {
           </div>
         </div>
 
-        <!-- Payment Log -->
+        <!-- Payment Log (auto-generated from paid sub-payments) -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.2rem;">Payment Log</div>
+          <div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">Auto-generated from yearly expense payments</div>
 
-          <!-- Add payment form -->
-          <div style="display:grid;grid-template-columns:70px 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
-            <select id="ap-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">
-              ${MONTH_NAMES.map((mn, i) => `<option value="${i + 1}"${i + 1 === currentMonthNum ? ' selected' : ''}>${mn}</option>`).join('')}
-            </select>
-            <input type="text" id="ap-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onkeydown="if(event.key==='Enter')addAdminPayment()">
-            <input type="number" id="ap-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onkeydown="if(event.key==='Enter')addAdminPayment()">
-            <button onclick="addAdminPayment()" style="padding:.3rem .4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-size:.8rem;cursor:pointer;font-weight:600;">+</button>
-          </div>
-
-          ${
-            payments.length === 0
-              ? '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>'
-              : (() => {
-                  const ps = localStorage.getItem('adminPaySort') || 'month';
-                  const sorted = [...payments].sort((a, b) => {
-                    if (ps === 'month') return a.month_num - b.month_num;
-                    if (ps === 'month-desc') return b.month_num - a.month_num;
-                    if (ps === 'high') return Number(b.amount) - Number(a.amount);
-                    if (ps === 'low') return Number(a.amount) - Number(b.amount);
-                    return 0;
-                  });
-                  const sb2 = (key, label) =>
-                    `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
-                  return `
+          ${(() => {
+            const paidSubs = (state.admin.subItems || []).filter(s => s.is_paid);
+            if (paidSubs.length === 0) {
+              return '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet — mark sub-payments as paid in Yearly Expenses</div>';
+            }
+            const ps = localStorage.getItem('adminPaySort') || 'month';
+            const sorted = [...paidSubs].sort((a, b) => {
+              if (ps === 'month') return (a.month_num || 0) - (b.month_num || 0);
+              if (ps === 'month-desc') return (b.month_num || 0) - (a.month_num || 0);
+              if (ps === 'high') return Number(b.amount) - Number(a.amount);
+              if (ps === 'low') return Number(a.amount) - Number(b.amount);
+              return 0;
+            });
+            const itemMap = {};
+            (state.admin.items || []).forEach(it => { itemMap[it.id] = it.label || '(unnamed)'; });
+            const sb2 = (key, label) =>
+              `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
+            return `
             <div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
               ${sb2('month', 'Mo ↑')}${sb2('month-desc', 'Mo ↓')}${sb2('high', 'Highest')}${sb2('low', 'Lowest')}
             </div>
-            <div style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
-              <span>Mo</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>
+            <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
+              <span>Mo</span><span>Item</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span>
             </div>
-            ${sorted
-              .map(
-                (p) => `
-            <div data-admin-payment-id="${p.id}" style="display:grid;grid-template-columns:45px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;${p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
-              <span style="font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace;">${MONTH_NAMES[p.month_num - 1]}</span>
-              <input type="text" value="${esc(p.label)}" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:'DM Sans',sans-serif;width:100%;"
-                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
-                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
-                onchange="updateAdminPayment('${p.id}','label',this.value)">
-              <input type="number" value="${p.amount}" min="0" step="0.01" style="font-size:.8rem;font-family:'DM Mono',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:${p.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${p.is_estimate ? '700' : '400'};outline:none;text-align:right;width:100%;-moz-appearance:textfield;"
-                onmouseover="this.style.borderBottomColor='var(--border)'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor='transparent'"
-                onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'"
-                onchange="updateAdminPayment('${p.id}','amount',this.value)">
-              <button onclick="updateAdminPayment('${p.id}','is_estimate',${!p.is_estimate})"
-                title="${p.is_estimate ? 'Marked as estimate — click to confirm' : 'Mark as estimate'}"
-                style="background:${p.is_estimate ? 'var(--ambersoft,#fff3cd)' : 'none'};border:1px solid ${p.is_estimate ? 'var(--amber)' : 'var(--border)'};border-radius:4px;color:${p.is_estimate ? 'var(--amber)' : 'var(--dim)'};cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:${p.is_estimate ? '700' : '400'};font-family:'DM Sans',sans-serif;width:100%;">~est</button>
-              <button onclick="deleteAdminPayment('${p.id}')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>
-            </div>`,
-              )
-              .join('')}
+            ${sorted.map(s => {
+              const parentLabel = itemMap[s.item_id] || '?';
+              const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '?' : '?';
+              return `
+            <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
+              <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
+              <span style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
+              <span style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc(s.label || '—')}</span>
+              <span style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
+              <span style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
+            </div>`;
+            }).join('')}
             <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
               <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>
               <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;">${fmtA(totalSpent)}</span>
             </div>`;
-                })()
-          }
+          })()}
         </div>
       </div>
     </div>
@@ -5249,7 +5245,7 @@ async function deleteAdminItem(id) {
 async function addAdminSub(itemId) {
   const { data, error } = await sb
     .from('admin_sub_items')
-    .insert({ item_id: itemId, label: '', amount: 0 })
+    .insert({ item_id: itemId, label: '', amount: 0, month_num: new Date().getMonth() + 1 })
     .select()
     .single();
   if (error) {
@@ -5265,7 +5261,7 @@ async function updateAdminSub(id, field, value) {
   const s = state.admin.subItems.find((s) => s.id === id);
   if (!s) return;
   const val =
-    field === 'amount' ? parseFloat(value) || 0 : field === 'is_paid' ? Boolean(value) : value;
+    field === 'amount' ? parseFloat(value) || 0 : field === 'month_num' ? parseInt(value) || 1 : field === 'is_paid' || field === 'is_estimate' ? Boolean(value) : value;
   await sb
     .from('admin_sub_items')
     .update({ [field]: val })
