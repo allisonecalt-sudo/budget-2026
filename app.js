@@ -4870,9 +4870,15 @@ function renderAdminTab() {
       '" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\'' +
       item.id +
       "','label',this.value)\">" +
-      (viewMode !== 'category' ? '<span style="font-size:.55rem;padding:.1rem .3rem;border-radius:8px;background:var(--surface2, #f5f5f5);border:1px solid var(--border);color:var(--muted);white-space:nowrap;flex-shrink:0;cursor:default;" title="Category: ' + (item.category || 'Other') + '">' +
-      (catEmoji[item.category] || '📌') + ' ' + (item.category || 'Other') +
-      '</span>' : '') +
+      (viewMode !== 'category'
+        ? '<span style="font-size:.55rem;padding:.1rem .3rem;border-radius:8px;background:var(--surface2, #f5f5f5);border:1px solid var(--border);color:var(--muted);white-space:nowrap;flex-shrink:0;cursor:default;" title="Category: ' +
+          (item.category || 'Other') +
+          '">' +
+          (catEmoji[item.category] || '📌') +
+          ' ' +
+          (item.category || 'Other') +
+          '</span>'
+        : '') +
       subBadge +
       '</div>' +
       '<input type="number" value="' +
