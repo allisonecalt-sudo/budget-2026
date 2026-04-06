@@ -2449,9 +2449,9 @@ function renderApp() {
                         const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;');
                         const renderTxRow = (tx) => `
                           <div class="tx-item" data-tx-id="${tx.id}">
-                            <div class="tx-date-wrap" onclick="event.stopPropagation()">
+                            <div class="tx-date-wrap" onclick="event.stopPropagation(); this.classList.add('editing'); this.querySelector('.tx-edit-date').focus();">
                               <span class="tx-date-display">${fmtDate(tx.date)}</span>
-                              <input class="tx-edit-date" type="date" value="${tx.date || ''}" onchange="updateTx('${tx.id}','date',this.value)">
+                              <input class="tx-edit-date" type="date" value="${tx.date || ''}" onfocus="this.parentElement.classList.add('editing')" onblur="this.parentElement.classList.remove('editing')" onchange="updateTx('${tx.id}','date',this.value)">
                             </div>
                             <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','store',this.value)">
                             <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','item',this.value)">

@@ -943,6 +943,20 @@ input.tx-edit-date {
   background: transparent;
   padding: 0;
 }
+input.tx-edit-date:focus {
+  position: relative;
+  opacity: 1;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}
+.tx-date-wrap.editing .tx-date-display {
+  display: none;
+}
 input.tx-edit-date::-webkit-calendar-picker-indicator {
   opacity: 0.4;
   width: 12px;
