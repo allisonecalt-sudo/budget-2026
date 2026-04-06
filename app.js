@@ -1717,9 +1717,31 @@ function renderApp() {
   if (!state.currentMonthId) state.currentMonthId = current.id;
 
   const income = totalIncome(current);
-  // Sync charity % from localStorage into state.budgets so snapshot sees it immediately
+  // Sync charity % from localStorage into state.budgets AND Supabase (quietly, no undo/log)
   const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
-  if (_chPct && income) state.budgets['charity'] = Math.round((income * _chPct) / 100);
+  if (_chPct && income) {
+    const _chCalc = Math.round((income * _chPct) / 100);
+    state.budgets['charity'] = _chCalc;
+    // Quietly sync to DB if out of date (no renderApp, no undo, no log)
+    if (!state._lastCharitySync || state._lastCharitySync[state.currentMonthId] !== _chCalc) {
+      if (!state._lastCharitySync) state._lastCharitySync = {};
+      state._lastCharitySync[state.currentMonthId] = _chCalc;
+      sb.from('budgets')
+        .select('id')
+        .eq('month_id', state.currentMonthId)
+        .eq('category', 'charity')
+        .single()
+        .then(({ data }) => {
+          if (data) sb.from('budgets').update({ amount: _chCalc }).eq('id', data.id);
+          else
+            sb.from('budgets').insert({
+              month_id: state.currentMonthId,
+              category: 'charity',
+              amount: _chCalc,
+            });
+        });
+    }
+  }
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
   // Skip linkedLine categories (household) — already counted inside their parent (housing)
