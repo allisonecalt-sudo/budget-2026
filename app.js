@@ -5142,7 +5142,7 @@ function renderAdminTab() {
             ${sorted
               .map((s) => {
                 const parentLabel = itemMap[s.item_id] || '?';
-                const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '?' : '?';
+                const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
                 return `
             <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
               <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
