@@ -2541,7 +2541,7 @@ function renderApp() {
             <button class="mtab" onclick="document.getElementById('snapshot-modal').style.display='none'">✕ Close</button>
           </div>
         </div>
-        <div id="snapshot-body" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
+        <div id="snapshot-body"></div>
       </div>
     </div>
 
@@ -6658,10 +6658,10 @@ function openSnapshot() {
         const s = c.hasTab ? b : spent[c.key] || 0;
         const r = b - s;
         return `<tr class="sn-cat ${gid} collapsed">
-        <td style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
-        <td>${b ? n(b) : ''}</td>
-        <td>${b ? n(s) : ''}</td>
-        <td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
+        <td data-label="Category" style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
+        <td data-label="Budget">${b ? n(b) : ''}</td>
+        <td data-label="Spent">${b ? n(s) : ''}</td>
+        <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
       </tr>`;
       })
       .join('');
@@ -6670,13 +6670,13 @@ function openSnapshot() {
       const b = catBudget(c.key) || 0;
       const s = c.hasTab ? b : spent[c.key] || 0;
       const r = b - s;
-      return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
-        <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
-        <td>${gb ? n(gb) : ''}</td>
-        <td>${n(gs)}</td>
-        <td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
+        <td data-label="Category"><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
+        <td data-label="Budget">${gb ? n(gb) : ''}</td>
+        <td data-label="Spent">${n(gs)}</td>
+        <td data-label="Remaining" class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
       </tr>${catRows}`;
   }).join('');
 
@@ -6686,12 +6686,12 @@ function openSnapshot() {
       <thead><tr><th>Category</th><th>Budget ₪</th><th>Spent ₪</th><th>Remaining ₪</th></tr></thead>
       <tbody>
         <tr class="sn-section"><td colspan="4">📊 Summary — ${current.month_name}</td></tr>
-        <tr class="sn-cat"><td>Income</td><td></td><td>${n(income)}</td><td></td></tr>
-        <tr class="sn-cat"><td>Spent</td><td></td><td>${n(totalSpent)}</td><td></td></tr>
-        <tr class="sn-cat"><td>Remaining</td><td></td><td></td><td class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
-        <tr class="sn-group"><td>🏦 Savings</td><td>${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td>${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td>0</td></tr>
-        <tr class="sn-cat"><td>🏦 In Bank</td><td>${n(state.budgets['savings_bank'] || 0)}</td><td>${n(state.budgets['savings_bank'] || 0)}</td><td>0</td></tr>
-        <tr class="sn-cat"><td>📈 Invested</td><td>${n(state.budgets['savings_invested'] || 0)}</td><td>${n(state.budgets['savings_invested'] || 0)}</td><td>0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">Income</td><td data-label="Budget"></td><td data-label="Spent">${n(income)}</td><td data-label="Remaining"></td></tr>
+        <tr class="sn-cat"><td data-label="Category">Spent</td><td data-label="Budget"></td><td data-label="Spent">${n(totalSpent)}</td><td data-label="Remaining"></td></tr>
+        <tr class="sn-cat"><td data-label="Category">Remaining</td><td data-label="Budget"></td><td data-label="Spent"></td><td data-label="Remaining" class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
+        <tr class="sn-group"><td data-label="Category">🏦 Savings</td><td data-label="Budget">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Spent">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Remaining">0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">🏦 In Bank</td><td data-label="Budget">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Spent">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Remaining">0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">📈 Invested</td><td data-label="Budget">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Spent">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Remaining">0</td></tr>
         ${groupRows}
       </tbody>
     </table>`;
