@@ -5189,6 +5189,8 @@ async function addAdminItem() {
   }, 50);
 }
 
+const AUTO_SUB_LABEL = '[auto] full payment';
+
 async function saveAdminItem(id, field, value) {
   const item = state.admin.items.find((i) => i.id === id);
   if (!item) return;
@@ -5204,6 +5206,45 @@ async function saveAdminItem(id, field, value) {
     .update({ [field]: val })
     .eq('id', id);
   item[field] = val;
+
+  // Option C: when checking a parent with NO existing sub-items, auto-create
+  // a paid sub-payment for the full projected amount. When unchecking, remove it.
+  // If the parent already has sub-items, is_logged is purely a visibility toggle.
+  let autoCreatedSub = null;
+  let autoDeletedSub = null;
+  if (field === 'is_logged') {
+    const existingSubs = (state.admin.subItems || []).filter((s) => s.item_id === id);
+    const hasUserSubs = existingSubs.some((s) => s.label !== AUTO_SUB_LABEL);
+    if (!hasUserSubs) {
+      if (val === true && existingSubs.length === 0 && Number(item.projected_amount) > 0) {
+        // Checking on + no subs at all → create auto sub
+        const { data } = await sb
+          .from('admin_sub_items')
+          .insert({
+            item_id: id,
+            label: AUTO_SUB_LABEL,
+            amount: Number(item.projected_amount),
+            month_num: new Date().getMonth() + 1,
+            is_paid: true,
+          })
+          .select()
+          .single();
+        if (data) {
+          state.admin.subItems.push(data);
+          autoCreatedSub = data;
+        }
+      } else if (val === false) {
+        // Unchecking + only auto subs exist → delete them
+        const autoSubs = existingSubs.filter((s) => s.label === AUTO_SUB_LABEL);
+        for (const s of autoSubs) {
+          await sb.from('admin_sub_items').delete().eq('id', s.id);
+          state.admin.subItems = state.admin.subItems.filter((x) => x.id !== s.id);
+          autoDeletedSub = s;
+        }
+      }
+    }
+  }
+
   logChange(
     'edit',
     'admin_item',
@@ -5220,6 +5261,24 @@ async function saveAdminItem(id, field, value) {
         .update({ [field]: oldVal })
         .eq('id', id);
       item[field] = oldVal;
+      if (autoCreatedSub) {
+        await sb.from('admin_sub_items').delete().eq('id', autoCreatedSub.id);
+        state.admin.subItems = state.admin.subItems.filter((x) => x.id !== autoCreatedSub.id);
+      }
+      if (autoDeletedSub) {
+        const { data } = await sb
+          .from('admin_sub_items')
+          .insert({
+            item_id: autoDeletedSub.item_id,
+            label: autoDeletedSub.label,
+            amount: autoDeletedSub.amount,
+            month_num: autoDeletedSub.month_num,
+            is_paid: autoDeletedSub.is_paid,
+          })
+          .select()
+          .single();
+        if (data) state.admin.subItems.push(data);
+      }
       renderApp();
     },
     redo: async () => {
@@ -5228,6 +5287,24 @@ async function saveAdminItem(id, field, value) {
         .update({ [field]: val })
         .eq('id', id);
       item[field] = val;
+      if (autoCreatedSub) {
+        const { data } = await sb
+          .from('admin_sub_items')
+          .insert({
+            item_id: autoCreatedSub.item_id,
+            label: autoCreatedSub.label,
+            amount: autoCreatedSub.amount,
+            month_num: autoCreatedSub.month_num,
+            is_paid: autoCreatedSub.is_paid,
+          })
+          .select()
+          .single();
+        if (data) state.admin.subItems.push(data);
+      }
+      if (autoDeletedSub) {
+        await sb.from('admin_sub_items').delete().eq('id', autoDeletedSub.id);
+        state.admin.subItems = state.admin.subItems.filter((x) => x.id !== autoDeletedSub.id);
+      }
       renderApp();
     },
   });
