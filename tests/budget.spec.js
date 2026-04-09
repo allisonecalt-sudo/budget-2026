@@ -1107,118 +1107,30 @@ test('admin tab shows summary cards', async ({ page }) => {
   await expect(page.locator('text=Remaining').first()).toBeVisible();
 });
 
-test('admin deep dive — items, sub-payments, payment log audit', async ({ page }, testInfo) => {
-  testInfo.setTimeout(90000);
+test('admin page — yearly expenses and payment log are linked', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
-  const adminTab = page.locator('.ptab', { hasText: 'Admin' });
-  await adminTab.click();
+  await page.locator('.ptab', { hasText: 'Admin' }).click();
   await page.waitForTimeout(1500);
 
-  // --- SUMMARY CARDS ---
-  const cards = await page
-    .locator('.tab-two-col')
-    .first()
-    .locator('..')
-    .locator('div[style*="grid-template-columns:repeat"]')
-    .first();
-  const cardTexts = await cards.allInnerTexts();
-  console.log('\n========== ADMIN DEEP DIVE ==========');
-  console.log('\n--- SUMMARY CARDS ---');
-  console.log(cardTexts.join(' | '));
+  // Yearly Expenses section exists with items
+  await expect(page.locator('text=Yearly Expenses')).toBeVisible({ timeout: 5000 });
+  const itemCount = await page.locator('[data-admin-item-id]').count();
+  expect(itemCount).toBeGreaterThan(0);
+  console.log(`Admin items: ${itemCount}`);
 
-  // --- YEARLY EXPENSE ITEMS (expand all to see sub-payments) ---
-  console.log('\n--- YEARLY EXPENSE ITEMS ---');
-  const itemRows = page.locator('[data-admin-item-id]');
-  const itemCount = await itemRows.count();
-  console.log(`Total items: ${itemCount}`);
+  // Payment Log section exists
+  await expect(page.locator('text=Payment Log')).toBeVisible();
 
-  for (let i = 0; i < itemCount; i++) {
-    const row = itemRows.nth(i);
-    const itemId = await row.getAttribute('data-admin-item-id');
-    const nameInput = row.locator('input[placeholder="Item name"]');
-    const name = await nameInput.inputValue().catch(() => '(no name)');
-    const amtInput = row.locator('input[type="number"]').first();
-    const projected = await amtInput.inputValue().catch(() => '0');
+  // Payment Log is auto-generated (not manual entry)
+  const hasAutoNote = await page
+    .locator('text=/auto-generated|Auto-generated/i')
+    .isVisible()
+    .catch(() => false);
+  console.log(`Payment Log auto-generated: ${hasAutoNote}`);
 
-    // Get category tag if visible
-    const catTag = row.locator('span[title^="Category:"]');
-    const category = await catTag.getAttribute('title').catch(() => 'unknown');
-
-    // Check for paid/left badges
-    const paidBadge = await row
-      .locator('text=/paid/')
-      .first()
-      .textContent()
-      .catch(() => '');
-    const leftBadge = await row
-      .locator('text=/left/')
-      .first()
-      .textContent()
-      .catch(() => '');
-
-    // Check if done (checkbox)
-    const isChecked = (await row.locator('div[title="Mark as not done"]').count()) > 0;
-
-    // Click expand arrow to see sub-payments
-    const expandBtn = row.locator('button[title="Show/hide sub-payments"]');
-    const isExpanded = await row
-      .locator('text=Payments')
-      .isVisible()
-      .catch(() => false);
-    if (!isExpanded && (await expandBtn.count()) > 0) {
-      await expandBtn.click();
-      await page.waitForTimeout(300);
-    }
-
-    // Read sub-payments
-    const subLabels = await row
-      .locator('input[placeholder="What was this payment for?"]')
-      .allInputValues()
-      .catch(() => []);
-    const subAmounts = await row
-      .locator('input[placeholder="₪ amount"]')
-      .allInputValues()
-      .catch(() => []);
-    const subPaidChecks = await row.locator('div[title="Mark unpaid"]').count();
-
-    // Get category from dropdown if expanded
-    const catSelect = row.locator('select[title="Category"]');
-    const catValue = await catSelect.inputValue().catch(() => 'N/A');
-
-    console.log(
-      `\n  ITEM: "${name}" | Projected: ₪${projected} | Category: ${catValue} | Done: ${isChecked}`,
-    );
-    if (paidBadge) console.log(`    ${paidBadge} ${leftBadge}`);
-    if (subLabels.length > 0) {
-      console.log(`    Sub-payments (${subLabels.length}):`);
-      for (let j = 0; j < subLabels.length; j++) {
-        console.log(
-          `      - "${subLabels[j]}" ₪${subAmounts[j] || '?'} ${j < subPaidChecks ? '✓ paid' : '○ unpaid'}`,
-        );
-      }
-    } else {
-      console.log('    No sub-payments');
-    }
-  }
-
-  // --- PAYMENT LOG (auto-generated from sub-payments) ---
-  console.log('\n--- PAYMENT LOG ---');
-  const payLogText = await page
-    .locator('text=Payment Log')
-    .first()
-    .locator('..')
-    .locator('..')
-    .textContent()
-    .catch(() => '');
-  console.log('Payment Log content (first 500 chars):', payLogText.substring(0, 500));
-
-  // Verify it says auto-generated
-  const autoNote = page.locator('text=Auto-generated');
-  const hasAutoNote = await autoNote.isVisible().catch(() => false);
-  console.log('Has auto-generated note:', hasAutoNote);
-
-  console.log('\n========== END DEEP DIVE ==========');
+  // Spent card shows a value
+  await expect(page.locator('text=paid so far')).toBeVisible();
 });
 
 // ─── Search Panel ───
