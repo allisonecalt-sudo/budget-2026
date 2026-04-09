@@ -4923,9 +4923,9 @@ function renderAdminTab() {
       "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide sub-payments\">" +
       (isOpen ? '▾' : '▸') +
       '</button>' +
-      '<div style="display:flex;align-items:baseline;min-width:0;gap:.3rem;"><input type="text" value="' +
+      '<div style="display:flex;align-items:baseline;min-width:0;gap:.3rem;flex-wrap:wrap;"><input type="text" value="' +
       esc(item.label) +
-      '" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;flex:1;min-width:0;' +
+      '" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;flex:1 1 100%;min-width:0;' +
       strikeLabel +
       '" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminItem(\'' +
       item.id +
