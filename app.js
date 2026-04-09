@@ -2533,15 +2533,15 @@ function renderApp() {
 
     <!-- Snapshot modal -->
     <div id="snapshot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:1.5rem;overflow-y:auto;backdrop-filter:blur(4px);" onclick="if(event.target===this)this.style.display='none'">
-      <div style="background:var(--surface);border-radius:var(--rl);padding:1.5rem;max-width:560px;width:100%;box-shadow:var(--shadowlg);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div style="background:var(--surface);border-radius:var(--rl);padding:1.5rem;max-width:560px;width:100%;box-shadow:var(--shadowlg);min-width:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.5rem;">
           <h3 style="font-size:1rem;font-weight:700;">📊 Snapshot</h3>
           <div style="display:flex;gap:.5rem;">
             <button class="btn btn-primary" onclick="window.print()" style="font-size:.8rem;padding:.4rem .9rem;">🖨️ Print / PDF</button>
             <button class="mtab" onclick="document.getElementById('snapshot-modal').style.display='none'">✕ Close</button>
           </div>
         </div>
-        <div id="snapshot-body"></div>
+        <div id="snapshot-body" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
       </div>
     </div>
 
