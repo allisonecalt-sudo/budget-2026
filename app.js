@@ -1734,10 +1734,7 @@ function renderApp() {
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
   const totalSpent =
-    CATEGORIES.reduce(
-      (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
-      0,
-    ) +
+    CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0) +
     (state.budgets['savings_bank'] || 0) +
     (state.budgets['savings_invested'] || 0);
   const remaining = income - totalSpent;
@@ -6116,10 +6113,7 @@ function renderYearSnapshot() {
   // Total budgeted for a month (all categories + savings)
   const totalBudgetedFor = (m) => {
     return (
-      CATEGORIES.reduce(
-        (sum, c) => sum + yearCatBudget(m.id, c.key),
-        0,
-      ) +
+      CATEGORIES.reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0) +
       (budgetMap[m.id]?.['savings_bank'] || 0) +
       (budgetMap[m.id]?.['savings_invested'] || 0)
     );
@@ -6661,10 +6655,7 @@ function openSnapshot() {
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
   // Also include savings as "spent" (money allocated out of income)
   const totalSpent =
-    CATEGORIES.reduce(
-      (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
-      0,
-    ) +
+    CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0) +
     (state.budgets['savings_bank'] || 0) +
     (state.budgets['savings_invested'] || 0);
   const totalBudgeted =
