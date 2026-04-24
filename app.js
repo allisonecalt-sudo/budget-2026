@@ -30,13 +30,7 @@ const CATEGORIES = [
   { key: 'health', label: 'Health', emoji: '🏥', hasStore: false },
   { key: 'therapy', label: 'Therapy', emoji: '🧠', hasStore: false },
   { key: 'housing', label: 'Housing', emoji: '🏠', hasStore: false, hasLines: true },
-  {
-    key: 'household',
-    label: 'Household Items',
-    emoji: '🧹',
-    hasStore: true,
-    linkedLine: { parent: 'housing', label: 'Household' },
-  },
+  { key: 'household', label: 'Household Items', emoji: '🧹', hasStore: true },
   { key: 'recurring', label: 'Recurring Payments', emoji: '🔄', hasStore: false, hasLines: true },
   { key: 'charity', label: 'Charity', emoji: '💚', hasStore: false, hasTab: true },
   { key: 'travel', label: 'Travel', emoji: '✈️', hasStore: false, hasTab: true },
@@ -6198,21 +6192,11 @@ function renderYearSnapshot() {
   });
 
   // Housing: sum all housing budget_items (rent, arnona, etc.)
-  // Household is already included as a budget_item inside housing, so use max(budget_item, actual_tx) to avoid double-count
-  const housingV = (m, f) => {
-    const housingBiExclHH = budgetItems
-      .filter(
-        (b) => b.month_id === m.id && b.category === 'housing' && b.subcategory !== 'household',
-      )
+  // Housing: sum all housing budget_items (household is now its own independent category)
+  const housingV = (m, f) =>
+    budgetItems
+      .filter((b) => b.month_id === m.id && b.category === 'housing')
       .reduce((s, b) => s + (Number(b.amount) || 0), 0);
-    const hhBudgetItem = budgetItems
-      .filter(
-        (b) => b.month_id === m.id && b.category === 'housing' && b.subcategory === 'household',
-      )
-      .reduce((s, b) => s + (Number(b.amount) || 0), 0);
-    const hhActual = txSum(m.id, ['household']);
-    return housingBiExclHH + Math.max(hhBudgetItem, hhActual);
-  };
   // Recurring: sum all recurring budget_items
   const recurringV = (m) =>
     budgetItems
