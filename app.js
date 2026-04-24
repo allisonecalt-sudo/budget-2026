@@ -1103,15 +1103,6 @@ function budgetItemsTotal(catKey) {
 }
 
 function catBudget(catKey) {
-  // For linked categories (e.g. Household → Housing line item), use the parent line item amount
-  const catDef = CATEGORIES.find((c) => c.key === catKey);
-  if (catDef && catDef.linkedLine) {
-    const parentItems = state.budgetItems[catDef.linkedLine.parent] || [];
-    const linked = parentItems.find(
-      (i) => i.label.toLowerCase() === catDef.linkedLine.label.toLowerCase(),
-    );
-    if (linked) return Number(linked.amount) || 0;
-  }
   const fromItems = budgetItemsTotal(catKey);
   return fromItems !== null ? fromItems : state.budgets[catKey] || 0;
 }
@@ -1742,9 +1733,8 @@ function renderApp() {
   }
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   const totalSpent =
-    CATEGORIES.filter((c) => !c.linkedLine).reduce(
+    CATEGORIES.reduce(
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     ) +
@@ -1752,7 +1742,7 @@ function renderApp() {
     (state.budgets['savings_invested'] || 0);
   const remaining = income - totalSpent;
   const totalBudgeted =
-    CATEGORIES.filter((c) => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0) +
+    CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0) +
     (state.budgets['savings_bank'] || 0) +
     (state.budgets['savings_invested'] || 0);
 
@@ -1812,12 +1802,11 @@ function renderApp() {
       // Snapshot table rows for expanded view
       const groupRows = CATEGORY_GROUPS.map((group) => {
         const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-        const nonLinked = cats.filter((c) => !c.linkedLine);
-        const gs = nonLinked.reduce(
+        const gs = cats.reduce(
           (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
           0,
         );
-        const gb = nonLinked.reduce((sum, c) => sum + catBudget(c.key), 0);
+        const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
         const gr = gb - gs;
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
         const catRows = cats
@@ -2176,8 +2165,8 @@ function renderApp() {
                             : `<span class="cat-spent-bold">${fmt(s)}</span>
                         <span style="color:var(--muted)"> / </span>
                         ${
-                          hasItems || c.linkedLine
-                            ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>${c.linkedLine ? '<span style="font-size:.58rem;color:var(--muted);margin-left:.2rem;">from housing</span>' : ''}`
+                          hasItems
+                            ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
                             : `<input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set budget" min="0" step="1"
                               onclick="event.stopPropagation()"
                               onchange="saveBudget('${c.key}', this.value)"
@@ -6111,17 +6100,7 @@ function renderYearSnapshot() {
     return items.length ? items.reduce((s, b) => s + (Number(b.amount) || 0), 0) : null;
   };
   const yearCatBudget = (mid, catKey) => {
-    const catDef = CATEGORIES.find((c) => c.key === catKey);
-    if (catDef && catDef.linkedLine) {
-      const parentItems = budgetItems.filter(
-        (b) => b.month_id === mid && b.category === catDef.linkedLine.parent,
-      );
-      const linked = parentItems.find(
-        (i) => (i.label || '').toLowerCase() === catDef.linkedLine.label.toLowerCase(),
-      );
-      if (linked) return Number(linked.amount) || 0;
-    }
-    // Mirror month page charity % override (line 1721-1722 in renderApp)
+    // Mirror month page charity % override
     if (catKey === 'charity') {
       const chPct = parseFloat(localStorage.getItem('charityPct_' + mid));
       const m = months.find((mo) => mo.id === mid);
@@ -6135,10 +6114,9 @@ function renderYearSnapshot() {
   };
 
   // Total budgeted for a month (all categories + savings)
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   const totalBudgetedFor = (m) => {
     return (
-      CATEGORIES.filter((c) => !c.linkedLine).reduce(
+      CATEGORIES.reduce(
         (sum, c) => sum + yearCatBudget(m.id, c.key),
         0,
       ) +
@@ -6150,11 +6128,10 @@ function renderYearSnapshot() {
   // Total spent for a month — mirrors ribbon's spentByCategory() exactly
   // For ALL months: actual transactions, with committed items (housing/recurring) as floor
   // Tab categories (charity/travel/admin) always count their budget allocation
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   // Savings always count as spent
   const totalSpentFor = (m, future) => {
     return (
-      CATEGORIES.filter((c) => !c.linkedLine).reduce((sum, c) => {
+      CATEGORIES.reduce((sum, c) => {
         if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
         if (c.hasLines) {
           const committed = biSum(m.id, [c.key]);
@@ -6682,17 +6659,16 @@ function openSnapshot() {
   const income = totalIncome(current);
   const spent = spentByCategory();
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
-  // Skip linkedLine categories (household) — already counted inside their parent (housing)
   // Also include savings as "spent" (money allocated out of income)
   const totalSpent =
-    CATEGORIES.filter((c) => !c.linkedLine).reduce(
+    CATEGORIES.reduce(
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     ) +
     (state.budgets['savings_bank'] || 0) +
     (state.budgets['savings_invested'] || 0);
   const totalBudgeted =
-    CATEGORIES.filter((c) => !c.linkedLine).reduce((sum, c) => sum + catBudget(c.key), 0) +
+    CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0) +
     (state.budgets['savings_bank'] || 0) +
     (state.budgets['savings_invested'] || 0);
   const leftToBudget = income - totalBudgeted;
@@ -6705,12 +6681,11 @@ function openSnapshot() {
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
     const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-    const nonLinked = cats.filter((c) => !c.linkedLine);
-    const gs = nonLinked.reduce(
+    const gs = cats.reduce(
       (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
       0,
     );
-    const gb = nonLinked.reduce((sum, c) => sum + catBudget(c.key), 0);
+    const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
     const gr = gb - gs;
     const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
     const catRows = cats
