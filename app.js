@@ -6282,6 +6282,12 @@ function renderYearSnapshot() {
     },
     {
       type: 'row',
+      label: '\u{1F9F9} Household Items',
+      valFn: (m, f) => spendV(m, ['household'], f),
+      sectionGroup: 'spending',
+    },
+    {
+      type: 'row',
       label: '\u{1F697} Transport',
       valFn: (m, f) => spendV(m, ['transport'], f),
       sectionGroup: 'spending',
