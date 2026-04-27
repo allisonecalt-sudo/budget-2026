@@ -1534,11 +1534,8 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     }
 
     // ── 7. Verify Budgeted = sum of all category budgets + savings ──
-    // Sum up all non-linked, non-household category budgets
     let computedBudgeted = 0;
-    const linkedCats = ['household']; // linked to housing
-    for (const [catKey, data] of Object.entries(catData)) {
-      if (linkedCats.includes(catKey)) continue;
+    for (const [, data] of Object.entries(catData)) {
       computedBudgeted += data.budget;
     }
     // Add savings
