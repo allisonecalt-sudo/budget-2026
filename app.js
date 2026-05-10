@@ -5518,8 +5518,8 @@ async function updateAdminPayment(id, field, value) {
 // ── Biz tab render ────────────────────────────────────────────────────
 function renderBizTab(current) {
   const biz = state.biz || { accountant_fee: 0, spending: 0, confirmed_amount: 0 };
-  const clients = state.ptClients;
-  const { earned, scheduled } = state.ptSessions || { earned: [], scheduled: [] };
+  const clients = state.ptClients || [];
+  const { earned = [], scheduled = [] } = state.ptSessions || {};
 
   const clientName = (id) => clients.find((c) => c.id === id)?.name || '?';
   const clientRate = (id) => clients.find((c) => c.id === id)?.rate || 0;
