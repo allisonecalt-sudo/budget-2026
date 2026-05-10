@@ -5684,10 +5684,13 @@ async function saveBizField(field, value) {
   });
 
   // If confirmed_amount changes, also update income_private in main months table
+  // Use state.biz.month_id (not state.currentMonthId) so a stale biz row during a
+  // month switch can't write the net to the wrong month's dashboard.
+  const bizMonthId = state.biz.month_id;
   if (field === 'confirmed_amount') {
     const net = num - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', state.currentMonthId);
-    const month = state.months.find((m) => m.id === state.currentMonthId);
+    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
+    const month = state.months.find((m) => m.id === bizMonthId);
     if (month) month.income_private = net;
   }
   if (field === 'accountant_fee' || field === 'spending') {
@@ -5695,8 +5698,8 @@ async function saveBizField(field, value) {
       (state.biz.confirmed_amount || 0) -
       (state.biz.accountant_fee || 0) -
       (state.biz.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', state.currentMonthId);
-    const month = state.months.find((m) => m.id === state.currentMonthId);
+    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
+    const month = state.months.find((m) => m.id === bizMonthId);
     if (month) month.income_private = net;
   }
 
