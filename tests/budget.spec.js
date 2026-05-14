@@ -248,7 +248,10 @@ test('history panel shows loading or content after opening', async ({ page }) =>
 });
 
 // ─── Undo/Redo: Add Transaction via Sidebar ───
-test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
+// SKIPPED: writes to live Supabase. Cleanup via undo can race; left a stray
+// PlaywrightTestStore row in production for ~6 weeks. Re-enable only when
+// tests run against an isolated DB.
+test.skip('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
   page,
 }) => {
   await page.goto('/');
@@ -310,7 +313,8 @@ test('add grocery transaction via sidebar, then undo removes it, redo restores i
 });
 
 // ─── Inline Add: History Logging ───
-test('inline add transaction appears in history log', async ({ page }) => {
+// SKIPPED: writes to live Supabase via inline form. Same race risk as sidebar add.
+test.skip('inline add transaction appears in history log', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
@@ -364,7 +368,8 @@ test('inline add transaction appears in history log', async ({ page }) => {
 });
 
 // ─── Inline Add: Performance ───
-test('inline add transaction completes within 5 seconds', async ({ page }) => {
+// SKIPPED: writes to live Supabase. Same race risk as other inline-add tests.
+test.skip('inline add transaction completes within 5 seconds', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
@@ -510,7 +515,10 @@ test('year view total savings row uses budget values', async ({ page }) => {
 });
 
 // ─── Savings Edit: Consistency Across Views ───
-test('editing savings updates ribbon and snapshot consistently', async ({ page }) => {
+// SKIPPED: filled 9999 directly into May savings_bank in production on
+// 2026-05-14. Cleanup via bankInput.fill(original) is race-prone — left
+// 9999 in the live ribbon. Re-enable only when tests run against isolated DB.
+test.skip('editing savings updates ribbon and snapshot consistently', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 
@@ -545,7 +553,9 @@ test('editing savings updates ribbon and snapshot consistently', async ({ page }
   await page.waitForTimeout(2000);
 });
 
-test('editing savings produces only one undo entry', async ({ page }) => {
+// SKIPPED: writes 8888 to live savings_bank. Cleanup uses Undo (more reliable
+// than fill-restore but still hits production data).
+test.skip('editing savings produces only one undo entry', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 
