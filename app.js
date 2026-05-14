@@ -4204,7 +4204,9 @@ function renderCharityTab() {
   const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
   const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
   const gap = budget - totalAlloc;
-  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaid = payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0);
+  const totalPledged = payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0);
+  const totalSpent = totalPaid + totalPledged;
   const remaining = budget - totalSpent;
 
   const fmtA = (n) =>
@@ -4597,9 +4599,9 @@ function renderCharityTab() {
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Given</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far (incl. estimates)</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Paid</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalPaid)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">+ <span style="color:var(--amber);font-weight:600;">${fmtA(totalPledged)}</span> pledged · <strong>${fmtA(totalSpent)}</strong> total</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining to Give</div>
@@ -6394,8 +6396,16 @@ function renderYearSnapshot() {
   const totalAnnInc = months.reduce((s, m) => s + incFor(m), 0);
   const pastMs = months.filter((m) => m.month_num <= todayMonth);
   const ytdIncome = pastMs.reduce((s, m) => s + incFor(m), 0);
-  const ytdSavings = pastMs.reduce((s, m) => s + (budgetMap[m.id]?.['savings_bank'] || 0), 0);
-  const projSavings = months.reduce((s, m) => s + (budgetMap[m.id]?.['savings_bank'] || 0), 0);
+  const ytdSavings = pastMs.reduce(
+    (s, m) =>
+      s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
+    0,
+  );
+  const projSavings = months.reduce(
+    (s, m) =>
+      s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
+    0,
+  );
 
   // Travel & Admin: projected budget from items, allocated from monthly allocations, gap = budget - allocated
   const totalTravelProjected = (state.travel.items || []).reduce(
@@ -6435,7 +6445,7 @@ function renderYearSnapshot() {
     fmtY(totalAnnInc / 12) +
     '</strong>/mo</span>' +
     '<span class="yr-sep">|</span>' +
-    '<span class="yr-stat">💰 Saved <strong style="color:var(--green)">' +
+    '<span class="yr-stat">💰 Saved + Invested <strong style="color:var(--green)">' +
     fmtY(ytdSavings) +
     '</strong> / ' +
     fmtY(projSavings) +
