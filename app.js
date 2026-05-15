@@ -269,6 +269,35 @@ function toast(msg, opts) {
   _toastTimer = setTimeout(() => t.classList.remove('show'), opts.duration || 5000);
 }
 
+// V5 — Thin-stroke chrome icons (Lucide-inspired, stroke-width 1.6) for the
+// persistent toolbar. Emoji stays at content level (tabs, categories) — chrome
+// gets monotone line icons that read as professional restraint.
+const _SVG = (paths, opts) => {
+  const o = opts || {};
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+    (o.size || 18) +
+    '" height="' +
+    (o.size || 18) +
+    '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    paths +
+    '</svg>'
+  );
+};
+const ICON_UNDO = _SVG('<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>');
+const ICON_REDO = _SVG('<path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>');
+// snapshot = camera-with-doc / report icon
+const ICON_SNAPSHOT = _SVG(
+  '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10M7 17h6"/>',
+);
+// collapse-all = double up-chevron
+const ICON_COLLAPSE = _SVG('<path d="M6 15l6-6 6 6"/><path d="M6 9l6-6 6 6"/>');
+// history = clock with counter-clockwise arrow
+const ICON_HISTORY = _SVG(
+  '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+);
+const ICON_SEARCH = _SVG('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>');
+
 // Snackbar helper for delete actions: shows "Deleted: <label> ₪<amount> · UNDO"
 function toastDeleted(label, amount) {
   const amt = amount != null ? ' ' + fmt(amount) : '';
@@ -1807,12 +1836,12 @@ function renderApp() {
         </div>
       </div>
       <div class="hdr-actions">
-        <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">↩</button>
-        <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">↪</button>
-        <button class="mtab toolbar-icon" onclick="openSnapshot()" title="Snapshot">📊</button>
-        <button class="mtab toolbar-icon" onclick="collapseAll()" title="Collapse all">⊟</button>
-        <button class="mtab toolbar-icon" onclick="openHistoryPanel()" title="History log">🕐</button>
-        <button class="mtab toolbar-icon" onclick="openSearchPanel()" title="Search transactions">🔍</button>
+        <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
+        <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
+        <button class="mtab toolbar-icon" onclick="openSnapshot()" title="Snapshot" aria-label="Snapshot">${ICON_SNAPSHOT}</button>
+        <button class="mtab toolbar-icon" onclick="collapseAll()" title="Collapse all" aria-label="Collapse all">${ICON_COLLAPSE}</button>
+        <button class="mtab toolbar-icon" onclick="openHistoryPanel()" title="History log" aria-label="History">${ICON_HISTORY}</button>
+        <button class="mtab toolbar-icon" onclick="openSearchPanel()" title="Search transactions" aria-label="Search">${ICON_SEARCH}</button>
         <button class="mtab toolbar-overflow-btn" onclick="openToolbarOverflow(event)" aria-label="More tools" title="More tools">⋯</button>
       </div>
       <div class="hdr-months">
@@ -8434,12 +8463,12 @@ function openToolbarOverflow(ev) {
   const redoDisabled = redoStack.length === 0 ? 'disabled' : '';
   const close = "document.getElementById('toolbar-overflow-menu')?.remove();";
   menu.innerHTML = `
-    <button class="toolbar-overflow-item" ${undoDisabled} onclick="doUndo();${close}">↩ Undo</button>
-    <button class="toolbar-overflow-item" ${redoDisabled} onclick="doRedo();${close}">↪ Redo</button>
-    <button class="toolbar-overflow-item" onclick="openSnapshot();${close}">📊 Snapshot</button>
-    <button class="toolbar-overflow-item" onclick="collapseAll();${close}">⊟ Collapse all</button>
-    <button class="toolbar-overflow-item" onclick="openHistoryPanel();${close}">🕐 History log</button>
-    <button class="toolbar-overflow-item" onclick="openSearchPanel();${close}">🔍 Search</button>
+    <button class="toolbar-overflow-item" ${undoDisabled} onclick="doUndo();${close}">${ICON_UNDO}<span>Undo</span></button>
+    <button class="toolbar-overflow-item" ${redoDisabled} onclick="doRedo();${close}">${ICON_REDO}<span>Redo</span></button>
+    <button class="toolbar-overflow-item" onclick="openSnapshot();${close}">${ICON_SNAPSHOT}<span>Snapshot</span></button>
+    <button class="toolbar-overflow-item" onclick="collapseAll();${close}">${ICON_COLLAPSE}<span>Collapse all</span></button>
+    <button class="toolbar-overflow-item" onclick="openHistoryPanel();${close}">${ICON_HISTORY}<span>History log</span></button>
+    <button class="toolbar-overflow-item" onclick="openSearchPanel();${close}">${ICON_SEARCH}<span>Search</span></button>
   `;
   document.body.appendChild(menu);
   // Position near the overflow button
