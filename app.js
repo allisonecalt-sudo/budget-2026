@@ -2669,6 +2669,43 @@ function renderApp() {
               </div>
             </div>`;
         }).join('')}
+
+        ${(() => {
+          // B3 — Pending decisions surface (default-collapsed, Budget tab only)
+          const pending = computePending();
+          const count = pending.length;
+          if (count === 0) return '';
+          const open = localStorage.getItem('pendingDecisionsOpen') === 'true';
+          const word = count === 1 ? 'thing' : 'things';
+          const fmtRow = (it) => {
+            const onclick = `pendingJump('${it.tab}'${it.type === 'estimate' ? `,'${it.id}'` : ''})`;
+            const tag =
+              it.type === 'estimate'
+                ? '<span class="pd-tag">est</span>'
+                : '<span class="pd-tag pd-tag-gap">gap</span>';
+            return `<div class="pd-row" onclick="${onclick}" tabindex="0"
+                onkeydown="if(event.key==='Enter')${onclick}">
+              <span class="pd-emoji">${it.emoji}</span>
+              <span class="pd-label">${it.label}${tag}</span>
+              <span class="pd-amount">${it.amount > 0 ? '₪' + fmt(it.amount).replace('₪', '') : ''}</span>
+              <span class="pd-chev">›</span>
+            </div>`;
+          };
+          return `<div class="pending-decisions ${open ? 'open' : ''}">
+            <button class="pd-header" onclick="togglePendingDecisions()" aria-expanded="${open}">
+              <span class="pd-chev-toggle">${open ? '▾' : '▸'}</span>
+              <span class="pd-title">📋 ${count} ${word} pending</span>
+              <span class="pd-arrow" aria-hidden="true">→</span>
+            </button>
+            ${
+              open
+                ? `<div class="pd-body">
+                ${pending.map(fmtRow).join('')}
+              </div>`
+                : ''
+            }
+          </div>`;
+        })()}
       </div>
       </div></div>
       `
@@ -8502,6 +8539,100 @@ function computeOwed() {
   );
   const below = Math.max(0, INVEST_THRESHOLD - liquidTotal);
   return { tGap, aGap, below, total: tGap + aGap + below };
+}
+
+// ── B3 — Pending decisions surface ─────────────────────────────────────
+// Auto-collects:
+//   - Estimates (is_estimate=true) on charity_payments, travel_payments, admin_payments
+//   - YEARLY allocation gaps: Travel gap, Admin gap, Below threshold (one line each)
+// Does NOT collect: receipts, per-month admin gaps, per-trip travel gaps.
+// (Per reference_budget_workflow.md — Allison's narrowed spec.)
+function computePending() {
+  const items = [];
+
+  // Estimates from each payments list
+  const collectEstimates = (payments, kind, tab, emoji) => {
+    (payments || [])
+      .filter((p) => p.is_estimate)
+      .forEach((p) => {
+        const amt = Number(p.amount) || 0;
+        const label = (p.label || p.what || '').trim() || `(unnamed ${kind})`;
+        items.push({
+          type: 'estimate',
+          kind,
+          emoji,
+          tab,
+          id: p.id,
+          label: `${kind}: ${label}`,
+          amount: amt,
+        });
+      });
+  };
+  collectEstimates(state.charity?.payments, 'Charity', 'charity', '💚');
+  collectEstimates(state.travel?.payments, 'Travel', 'travel', '✈️');
+  collectEstimates(state.admin?.payments, 'Admin', 'admin', '📋');
+
+  // Yearly allocation gaps — ONE per category line (no per-trip / per-month breakdown)
+  const owed = computeOwed();
+  if (owed.tGap > 0) {
+    items.push({
+      type: 'gap',
+      kind: 'travel',
+      emoji: '✈️',
+      tab: 'travel',
+      label: 'Travel gap',
+      amount: owed.tGap,
+    });
+  }
+  if (owed.aGap > 0) {
+    items.push({
+      type: 'gap',
+      kind: 'admin',
+      emoji: '📋',
+      tab: 'admin',
+      label: 'Admin gap',
+      amount: owed.aGap,
+    });
+  }
+  if (owed.below > 0) {
+    items.push({
+      type: 'gap',
+      kind: 'cash',
+      emoji: '💰',
+      tab: 'cash',
+      label: 'Below threshold',
+      amount: owed.below,
+    });
+  }
+
+  return items;
+}
+
+function togglePendingDecisions() {
+  const open = localStorage.getItem('pendingDecisionsOpen') === 'true';
+  localStorage.setItem('pendingDecisionsOpen', !open);
+  renderApp();
+}
+
+function pendingJump(tab, paymentId) {
+  switchTab(tab);
+  if (paymentId) {
+    // Best-effort highlight on the relevant payment row after the tab renders
+    setTimeout(() => {
+      const el =
+        document.querySelector(`[data-payment-id="${paymentId}"]`) ||
+        document.getElementById('pmt-' + paymentId);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.transition = 'background 0.4s ease';
+        const orig = el.style.background;
+        el.style.background = 'var(--ambersoft)';
+        setTimeout(() => {
+          el.style.background = orig;
+        }, 1400);
+      }
+    }, 250);
+  }
 }
 
 // ── M4 — Mobile month navigation: chevrons + swipe ─────────────────────
