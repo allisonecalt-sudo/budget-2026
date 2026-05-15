@@ -462,7 +462,16 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--rl);
   padding: 1.25rem;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--t-base) var(--ease-out),
+    transform var(--t-base) var(--ease-out),
+    border-color var(--t-base) var(--ease-out);
+}
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--border-soft);
 }
 .stat-label {
   font-size: 0.65rem;
@@ -498,7 +507,11 @@ textarea {
   border-radius: var(--rl);
   padding: 1.25rem 1.5rem;
   margin-bottom: 1rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--t-base) var(--ease-out);
+}
+.card:hover {
+  box-shadow: var(--shadow-md);
 }
 .card-title {
   font-size: 0.7rem;
@@ -587,7 +600,17 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: 0.85rem 1rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow var(--t-base) var(--ease-out),
+    border-color var(--t-base) var(--ease-out);
+}
+.cat-row:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #cfcdc5;
+}
+.cat-row.open {
+  box-shadow: var(--shadow-md);
 }
 .cat-top {
   display: flex;
@@ -1219,7 +1242,11 @@ input.tx-edit-date::-webkit-calendar-picker-indicator {
   border-radius: var(--rl);
   padding: 1.25rem 1.5rem;
   margin-bottom: 1rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--t-base) var(--ease-out);
+}
+.add-section:hover {
+  box-shadow: var(--shadow-md);
 }
 .add-title {
   font-size: 0.7rem;
@@ -1348,7 +1375,11 @@ input:focus {
   border-radius: var(--rl);
   padding: 1.25rem 1.5rem;
   margin-bottom: 1rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--t-base) var(--ease-out);
+}
+.biz-card:hover {
+  box-shadow: var(--shadow-md);
 }
 .biz-section-title {
   font-size: 0.7rem;
@@ -2182,9 +2213,16 @@ tr.collapsed {
   border: 1px solid var(--border);
   border-radius: var(--rl);
   padding: 0.85rem 1rem;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-sm);
   flex: 1 1 130px;
   min-width: 0;
+  transition:
+    box-shadow var(--t-base) var(--ease-out),
+    transform var(--t-base) var(--ease-out);
+}
+.year-sum-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 .year-sum-label {
   font-size: 0.6rem;
@@ -2389,9 +2427,7 @@ tr.collapsed {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  box-shadow:
-    0 6px 24px rgba(26, 25, 21, 0.18),
-    0 1px 3px rgba(26, 25, 21, 0.06);
+  box-shadow: var(--shadow-lg);
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
