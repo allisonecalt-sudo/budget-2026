@@ -5064,8 +5064,18 @@ function renderAdminTab() {
     if (aiSort === 'amount-low') return Number(a.projected_amount) - Number(b.projected_amount);
     return 0;
   };
-  const activeItems = [...items].filter((i) => !i.is_logged).sort(sortFn);
-  const doneItems = [...items].filter((i) => i.is_logged).sort(sortFn);
+  // DA5 — filter Yearly Expenses by item-name substring (case-insensitive).
+  // Persisted in localStorage so the input stays sticky across renders.
+  const adminFilter = (localStorage.getItem('adminItemFilter') || '').toLowerCase();
+  const matchFilter = (i) => !adminFilter || (i.label || '').toLowerCase().includes(adminFilter);
+  const activeItems = [...items]
+    .filter((i) => !i.is_logged)
+    .filter(matchFilter)
+    .sort(sortFn);
+  const doneItems = [...items]
+    .filter((i) => i.is_logged)
+    .filter(matchFilter)
+    .sort(sortFn);
   const showDone = localStorage.getItem('adminShowDone') === '1';
   const viewMode = localStorage.getItem('adminViewMode') || 'category';
   const catEmoji = {
@@ -5389,11 +5399,26 @@ function renderAdminTab() {
             ${sortBtnsHtml}
           </div>
         </div>
+        <!-- DA5 — substring filter on Yearly Expenses (22 active + 8 completed today;
+             scales as items accumulate). Applies to BOTH active and completed lists. -->
+        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.5rem;">
+          <input type="text" value="${esc(adminFilter)}" placeholder="🔍 Filter by name…" style="flex:1;font-size:.74rem;padding:.3rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" oninput="localStorage.setItem('adminItemFilter',this.value);renderApp()">
+          ${
+            adminFilter
+              ? `<button onclick="localStorage.removeItem('adminItemFilter');renderApp()" style="font-size:.7rem;padding:.22rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;" title="Clear filter">✕</button>`
+              : ''
+          }
+        </div>
         ${
           viewMode !== 'category'
             ? `<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 22px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
           <span></span><span>Item</span><span style="text-align:right;">Projected</span><span style="text-align:center;">Est</span><span></span><span></span>
         </div>`
+            : ''
+        }
+        ${
+          activeItems.length === 0 && adminFilter
+            ? `<div style="color:var(--dim);font-size:.78rem;padding:.6rem .25rem;font-style:italic;">No matches for &ldquo;${esc(adminFilter)}&rdquo;</div>`
             : ''
         }
         ${activeItemsHtml}
