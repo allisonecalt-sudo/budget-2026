@@ -5407,7 +5407,7 @@ function renderAdminTab() {
         <!-- Monthly Allocations -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">
+          <div class="admin-alloc-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">
             ${MONTH_NAMES.map((mn, i) => {
               const mnum = i + 1;
               const val = allocs[mnum] ? Number(allocs[mnum].amount) : 0;
@@ -5437,7 +5437,7 @@ function renderAdminTab() {
                 dotColor = 'var(--green)';
                 dotTitle = `${fmtA(val)} allocated, none paid yet`;
               }
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent ? 'var(--gsoft)' : 'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent ? 'var(--accent)' : 'transparent'};gap:.3rem;">
+              return `<div class="admin-alloc-cell" style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent ? 'var(--gsoft)' : 'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent ? 'var(--accent)' : 'transparent'};gap:.3rem;">
                 <span style="display:inline-flex;align-items:center;gap:.32rem;font-size:.72rem;color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};font-weight:${isCurrent ? '700' : '600'};">
                   <span class="adm-mo-dot" title="${dotTitle}" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
                   ${mn}
@@ -5488,20 +5488,20 @@ function renderAdminTab() {
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
               ${sb2('month', 'Mo ↑')}${sb2('month-desc', 'Mo ↓')}${sb2('high', 'Highest')}${sb2('low', 'Lowest')}
             </div>
-            <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
-              <span>Mo</span><span>Item</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span>
+            <div class="admin-pay-row admin-pay-header" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
+              <span class="admin-pay-mo">Mo</span><span class="admin-pay-item">Item</span><span class="admin-pay-what">What</span><span class="admin-pay-amt" style="text-align:right">Amount</span><span class="admin-pay-est" style="text-align:center">~est</span>
             </div>
             ${sorted
               .map((s) => {
                 const parentLabel = itemMap[s.item_id] || '?';
                 const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
                 return `
-            <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
-              <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
-              <span style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
-              <span style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
-              <span style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
-              <span style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
+            <div class="admin-pay-row" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
+              <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
+              <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
+              <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
+              <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
+              <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
             </div>`;
               })
               .join('')}

@@ -1709,6 +1709,68 @@ input:focus {
     /* shrink the value font on mobile so 5-digit ₪ values stay on one line */
     font-size: 1.1rem !important;
   }
+  /* DM5 — Admin Payment Log row: collapse 5-col grid into a 2-line card on mobile.
+     Row 1: Item name + Amount. Row 2: What + Mo. Each row gets to use the full
+     mobile width without ellipsis truncation. */
+  .admin-pay-row {
+    grid-template-columns: 1fr auto !important;
+    grid-template-areas:
+      'item amt'
+      'what mo' !important;
+    column-gap: 0.6rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0.55rem 0.1rem !important;
+  }
+  .admin-pay-header {
+    /* Hide the dense header on mobile — the 2-line card is self-evident */
+    display: none !important;
+  }
+  .admin-pay-mo {
+    grid-area: mo;
+    text-align: right !important;
+    font-size: 0.6rem !important;
+    color: var(--dim) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .admin-pay-item {
+    grid-area: item;
+    font-size: 0.7rem !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: normal !important;
+  }
+  .admin-pay-what {
+    grid-area: what;
+    font-size: 0.78rem !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: normal !important;
+  }
+  .admin-pay-amt {
+    grid-area: amt;
+    font-size: 0.86rem !important;
+    text-align: right !important;
+    align-self: start;
+  }
+  .admin-pay-est {
+    /* Hidden on mobile — the amber row tint already signals estimate */
+    display: none !important;
+  }
+  /* DM6 — Admin Allocation grid: 3 cols × 4 rows clip values on a 390px viewport.
+     Switch to 2 cols × 6 rows so each cell gets ~165px — enough for the
+     "Apr  4800" pair without the right-edge cut-off seen in production. */
+  .admin-alloc-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+  }
+  .admin-alloc-cell {
+    padding: 0.5rem 0.55rem !important;
+  }
+  .admin-alloc-cell input {
+    width: 78px !important;
+    font-size: 0.85rem !important;
+  }
   .tx-header,
   .tx-item {
     grid-template-columns: 70px 1fr 65px 22px;
