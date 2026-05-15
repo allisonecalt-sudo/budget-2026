@@ -6167,7 +6167,127 @@ function renderCashTab() {
   const holdingsRows = holdings.map(renderRow).join('');
   const owedRows = owed.map(renderRow).join('');
 
+  // B1 — Projected runway: months-to-threshold + holdings sparkline
+  // Uses past months' savings (bank + invested) to estimate avg savings velocity.
+  const todayMonthNum = new Date().getMonth() + 1;
+  let runwayHtml = '';
+  let sparklineHtml = '';
+  try {
+    const yd = state.yearData;
+    if (yd && state.months && state.months.length) {
+      const monthsSorted = [...state.months].sort((a, b) => a.month_num - b.month_num);
+      const budgetMap = {};
+      (yd.allBudgets || []).forEach((b) => {
+        if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {};
+        budgetMap[b.month_id][b.category] = b.amount;
+      });
+      const savingsFor = (m) =>
+        (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0);
+      // Past = months with month_num < currentMonthNum (current month not yet "done")
+      const past = monthsSorted.filter((m) => m.month_num < todayMonthNum);
+      const past6 = past.slice(-6);
+      if (past6.length > 0) {
+        const totalSav = past6.reduce((s, m) => s + savingsFor(m), 0);
+        const avgSav = totalSav / past6.length;
+        // Runway logic
+        let runwayLine = '';
+        if (totalLiquid >= INVEST_THRESHOLD) {
+          const above = totalLiquid - INVEST_THRESHOLD;
+          runwayLine =
+            'Above threshold by ₪' +
+            n(above) +
+            ' · saving ~₪' +
+            n(avgSav) +
+            '/mo (last ' +
+            past6.length +
+            ' mo avg)';
+        } else if (avgSav > 0) {
+          const monthsToThr = (INVEST_THRESHOLD - totalLiquid) / avgSav;
+          runwayLine =
+            'Months to threshold: <strong style="color:var(--accent);">' +
+            monthsToThr.toFixed(1) +
+            '</strong> at current ~₪' +
+            n(avgSav) +
+            '/mo savings (last ' +
+            past6.length +
+            ' mo avg)';
+        } else {
+          runwayLine =
+            'Below threshold by ₪' +
+            n(INVEST_THRESHOLD - totalLiquid) +
+            ' · savings flat or negative across last ' +
+            past6.length +
+            ' mo';
+        }
+        runwayHtml =
+          '<div class="cash-runway" style="margin-bottom:1rem;padding:.7rem .9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:.8rem;color:var(--text);display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;">' +
+          '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">📈 Runway</span>' +
+          '<span>' +
+          runwayLine +
+          '</span>' +
+          '</div>';
+        // Sparkline: 6 bars of savings amount per past month (relative to max)
+        const maxSav = Math.max(1, ...past6.map((m) => savingsFor(m)));
+        const barH = 28;
+        const barW = 14;
+        const barGap = 4;
+        const svgW = past6.length * (barW + barGap);
+        const bars = past6
+          .map((m, i) => {
+            const v = savingsFor(m);
+            const h = Math.max(2, (v / maxSav) * barH);
+            const x = i * (barW + barGap);
+            const y = barH - h;
+            const fill = v >= avgSav ? 'var(--green)' : v > 0 ? 'var(--accent)' : 'var(--dim)';
+            return (
+              '<rect x="' +
+              x +
+              '" y="' +
+              y +
+              '" width="' +
+              barW +
+              '" height="' +
+              h +
+              '" rx="2" fill="' +
+              fill +
+              '"><title>' +
+              m.month_name.slice(0, 3) +
+              ': ₪' +
+              n(v) +
+              '</title></rect>'
+            );
+          })
+          .join('');
+        sparklineHtml =
+          '<svg viewBox="0 0 ' +
+          svgW +
+          ' ' +
+          barH +
+          '" width="' +
+          svgW +
+          '" height="' +
+          barH +
+          '" style="display:inline-block;vertical-align:middle;">' +
+          bars +
+          '</svg>' +
+          '<span style="font-size:.62rem;color:var(--dim);margin-left:.55rem;">last ' +
+          past6.length +
+          ' mo savings</span>';
+        // Inject sparkline into runway box
+        runwayHtml = runwayHtml.replace(
+          '</div>',
+          '<span style="margin-left:auto;display:inline-flex;align-items:center;">' +
+            sparklineHtml +
+            '</span></div>',
+        );
+      }
+    }
+  } catch (e) {
+    /* runway is best-effort, never block the tab */
+  }
+
   return `<div style="max-width:800px;margin:1.5rem auto;padding:0 1rem;">
+    ${runwayHtml}
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
       <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
