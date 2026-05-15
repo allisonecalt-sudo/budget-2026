@@ -2230,6 +2230,30 @@ tr.collapsed {
   }
 }
 
+/* M4 — Mobile month nav chevrons (hidden on desktop) */
+.month-nav-chev {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .hdr-months {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .month-nav-chev {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    min-width: 32px;
+    padding: 0.4rem 0 !important;
+    font-size: 1.1rem !important;
+    line-height: 1;
+    font-weight: 600;
+  }
+}
+
 /* M3 — Mobile bottom tab bar (hidden on desktop) */
 .mobile-tabbar {
   display: none;

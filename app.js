@@ -1815,16 +1815,18 @@ function renderApp() {
         <button class="mtab" onclick="openSearchPanel()" title="Search transactions">🔍</button>
       </div>
       <div class="hdr-months">
+        <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
         <div class="month-tabs">
           ${state.months
             .map(
               (m) => `
-            <button class="mtab ${m.id === state.currentMonthId ? 'active' : ''}" onclick="switchMonth('${m.id}')">
+            <button class="mtab ${m.id === state.currentMonthId ? 'active' : ''}" onclick="switchMonth('${m.id}')" data-month-id="${m.id}">
               ${m.month_name.slice(0, 3)}
             </button>`,
             )
             .join('')}
         </div>
+        <button class="mtab month-nav-chev" onclick="navMonth(1)" aria-label="Next month" title="Next month">›</button>
       </div>
     </div>
 
@@ -2660,6 +2662,9 @@ function renderApp() {
   if (typeof renderFab === 'function') renderFab();
   // M3 — mobile bottom tab bar
   if (typeof renderMobileTabBar === 'function') renderMobileTabBar();
+  // M4 — center active month chip on mobile so it's always visible
+  if (typeof scrollActiveMonthIntoView === 'function')
+    requestAnimationFrame(scrollActiveMonthIntoView);
 }
 
 async function saveSavingsField(field, value) {
@@ -8024,6 +8029,59 @@ async function submitQuickAdd(kind) {
 function currentMonthNum() {
   const m = state.months.find((x) => x.id === state.currentMonthId);
   return (m && m.month_num) || new Date().getMonth() + 1;
+}
+
+// ── M4 — Mobile month navigation: chevrons + swipe ─────────────────────
+async function navMonth(delta) {
+  const idx = state.months.findIndex((m) => m.id === state.currentMonthId);
+  if (idx === -1) return;
+  const next = idx + delta;
+  if (next < 0 || next >= state.months.length) return;
+  await switchMonth(state.months[next].id);
+}
+
+// Swipe on the main content area to advance/go-back month (mobile only).
+let _swipeStartX = null;
+let _swipeStartY = null;
+let _swipeStartT = 0;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    if (window.innerWidth > 600) return;
+    if (e.target.closest('.app-panel') || e.target.closest('input,textarea,select,button')) return;
+    if (e.touches.length !== 1) return;
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+    _swipeStartT = Date.now();
+  },
+  { passive: true },
+);
+document.addEventListener(
+  'touchend',
+  (e) => {
+    if (_swipeStartX == null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - _swipeStartX;
+    const dy = t.clientY - _swipeStartY;
+    const dt = Date.now() - _swipeStartT;
+    _swipeStartX = null;
+    _swipeStartY = null;
+    // Horizontal swipe: > 60px X, < 50px |Y|, < 600ms duration
+    if (Math.abs(dx) > 60 && Math.abs(dy) < 50 && dt < 600) {
+      // Right swipe -> prev month, Left swipe -> next month
+      navMonth(dx > 0 ? -1 : 1);
+    }
+  },
+  { passive: true },
+);
+
+// After every render, scroll active month chip into view (mobile only)
+function scrollActiveMonthIntoView() {
+  if (window.innerWidth > 600) return;
+  const active = document.querySelector('.hdr-months .month-tabs .mtab.active');
+  if (active && typeof active.scrollIntoView === 'function') {
+    active.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
+  }
 }
 
 // ── M3 — Mobile bottom tab bar ─────────────────────────────────────────
