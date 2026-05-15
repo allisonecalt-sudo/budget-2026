@@ -4126,65 +4126,138 @@ function renderTravelTab() {
     const filtered = destFilter
       ? sorted.filter((p) => (p.destination || '').toLowerCase().includes(destFilter))
       : sorted;
-    const payRows = filtered
-      .map((p) => {
-        const destVal = esc(p.destination || '');
-        const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
-        const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
-        const amtWeightP = p.is_estimate ? '700' : '400';
-        const estBtnBg = p.is_estimate ? 'var(--ambersoft,#fff3cd)' : 'none';
-        const estBtnBorder = p.is_estimate ? 'var(--amber)' : 'var(--border)';
-        const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
-        const estBtnWeight = p.is_estimate ? '700' : '400';
-        return (
-          '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
-          estBgP +
-          '">' +
-          '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
-          MONTH_NAMES[p.month_num - 1] +
-          '</span>' +
-          '<input type="text" value="' +
-          destVal +
-          '" placeholder="Where" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
-          p.id +
-          "','destination',this.value)\">" +
-          '<input type="text" value="' +
-          esc(p.label) +
-          '" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
-          p.id +
-          "','label',this.value)\">" +
-          '<input type="number" value="' +
-          p.amount +
-          '" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:' +
-          amtColorP +
-          ';font-weight:' +
-          amtWeightP +
-          ';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
-          p.id +
-          "','amount',this.value)\">" +
-          '<button onclick="updateTravelPayment(\'' +
-          p.id +
-          "','is_estimate'," +
-          !p.is_estimate +
-          ')" title="' +
-          (p.is_estimate ? 'Marked as estimate — click to confirm' : 'Mark as estimate') +
-          '" style="background:' +
-          estBtnBg +
-          ';border:1px solid ' +
-          estBtnBorder +
-          ';border-radius:4px;color:' +
-          estBtnColor +
-          ';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:' +
-          estBtnWeight +
-          ";font-family:'DM Sans',sans-serif;width:100%;\">~est</button>" +
-          '<button onclick="deleteTravelPayment(\'' +
-          p.id +
-          '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>' +
-          '</div>'
-        );
-      })
-      .join('');
+    const groupByTrip = localStorage.getItem('travelGroupByTrip') !== 'false'; // default on
+    // Helper to render a single payment row (reused in grouped + flat modes)
+    const renderPayRow = (p) => {
+      const destVal = esc(p.destination || '');
+      const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
+      const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
+      const amtWeightP = p.is_estimate ? '700' : '400';
+      const estBtnBg = p.is_estimate ? 'var(--ambersoft,#fff3cd)' : 'none';
+      const estBtnBorder = p.is_estimate ? 'var(--amber)' : 'var(--border)';
+      const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
+      const estBtnWeight = p.is_estimate ? '700' : '400';
+      return (
+        '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+        estBgP +
+        '">' +
+        '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+        MONTH_NAMES[p.month_num - 1] +
+        '</span>' +
+        '<input type="text" value="' +
+        destVal +
+        '" placeholder="Where" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
+        p.id +
+        "','destination',this.value)\">" +
+        '<input type="text" value="' +
+        esc(p.label) +
+        '" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
+        p.id +
+        "','label',this.value)\">" +
+        '<input type="number" value="' +
+        p.amount +
+        '" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:' +
+        amtColorP +
+        ';font-weight:' +
+        amtWeightP +
+        ';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
+        p.id +
+        "','amount',this.value)\">" +
+        '<button onclick="updateTravelPayment(\'' +
+        p.id +
+        "','is_estimate'," +
+        !p.is_estimate +
+        ')" title="' +
+        (p.is_estimate ? 'Marked as estimate — click to confirm' : 'Mark as estimate') +
+        '" style="background:' +
+        estBtnBg +
+        ';border:1px solid ' +
+        estBtnBorder +
+        ';border-radius:4px;color:' +
+        estBtnColor +
+        ';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:' +
+        estBtnWeight +
+        ";font-family:'DM Sans',sans-serif;width:100%;\">~est</button>" +
+        '<button onclick="deleteTravelPayment(\'' +
+        p.id +
+        '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>' +
+        '</div>'
+      );
+    };
+    const payRows = filtered.map(renderPayRow).join('');
+    // Group-by-trip view: section per destination, with allocated vs spent header
+    let groupedHtml = '';
+    if (groupByTrip) {
+      const allocByTrip = {};
+      (items || []).forEach((it) => {
+        allocByTrip[(it.label || '').trim().toLowerCase()] = Number(it.projected_amount) || 0;
+      });
+      const groups = {};
+      filtered.forEach((p) => {
+        const key = (p.destination || '').trim() || '(unassigned)';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+      });
+      // Stable trip order: items first, then unknown, then unassigned
+      const itemNames = (items || []).map((it) => (it.label || '').trim()).filter(Boolean);
+      const seen = new Set();
+      const orderedKeys = [];
+      itemNames.forEach((n) => {
+        if (groups[n]) {
+          orderedKeys.push(n);
+          seen.add(n);
+        }
+      });
+      Object.keys(groups).forEach((k) => {
+        if (!seen.has(k) && k !== '(unassigned)') {
+          orderedKeys.push(k);
+          seen.add(k);
+        }
+      });
+      if (groups['(unassigned)']) orderedKeys.push('(unassigned)');
+      groupedHtml = orderedKeys
+        .map((tripName) => {
+          const ps = groups[tripName] || [];
+          const tripSpent = ps.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          const tripAlloc = allocByTrip[tripName.toLowerCase()] || 0;
+          const headerNote = tripAlloc
+            ? '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+              fmtA(tripSpent) +
+              ' of ' +
+              fmtA(tripAlloc) +
+              '</span>'
+            : '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+              fmtA(tripSpent) +
+              ' spent</span>';
+          return (
+            '<div style="margin-bottom:.7rem;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .25rem .25rem;border-bottom:1px solid var(--accent);margin-bottom:.15rem;">' +
+            '<span style="font-size:.78rem;font-weight:700;color:var(--accent);">✈️ ' +
+            esc(tripName) +
+            '</span>' +
+            headerNote +
+            '</div>' +
+            ps.map(renderPayRow).join('') +
+            '</div>'
+          );
+        })
+        .join('');
+    }
     const destFilterDisplay = localStorage.getItem('travelDestFilter') || '';
+    const groupBtn =
+      "<button onclick=\"localStorage.setItem('travelGroupByTrip', " +
+      (!groupByTrip).toString() +
+      ');renderApp()" style="font-size:.65rem;padding:.18rem .5rem;border:1px solid ' +
+      (groupByTrip ? 'var(--accent)' : 'var(--border)') +
+      ';border-radius:99px;background:' +
+      (groupByTrip ? 'var(--gsoft)' : 'none') +
+      ';color:' +
+      (groupByTrip ? 'var(--accent)' : 'var(--muted)') +
+      ";cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:" +
+      (groupByTrip ? '700' : '500') +
+      ';" title="Toggle grouping by trip">' +
+      (groupByTrip ? '✓ Group by trip' : 'Group by trip') +
+      '</button>';
     payLogHtml =
       '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">' +
       '<input type="text" value="' +
@@ -4193,6 +4266,7 @@ function renderTravelTab() {
       (destFilterDisplay
         ? '<button onclick="localStorage.removeItem(\'travelDestFilter\');renderApp()" style="font-size:.7rem;padding:.2rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;">✕ clear</button>'
         : '') +
+      groupBtn +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
       '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>' +
@@ -4202,10 +4276,12 @@ function renderTravelTab() {
       sb2('low', 'Lowest') +
       '</div>' +
       '<div style="overflow-x:auto;"><div style="min-width:360px;">' +
-      '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
-      '<span>Mo</span><span>Where</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>' +
-      '</div>' +
-      payRows +
+      (groupByTrip
+        ? groupedHtml
+        : '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+          '<span>Mo</span><span>Where</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>' +
+          '</div>' +
+          payRows) +
       '</div></div>' +
       '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>' +
@@ -4360,9 +4436,15 @@ function renderTravelTab() {
           <!-- Add payment form -->
           <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <select id="tp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
-            <input type="text" id="tp-dest" placeholder="Where" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            <input type="text" id="tp-dest" placeholder="Trip" list="tp-trip-list" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
+            <datalist id="tp-trip-list">
+              ${(state.travel.items || [])
+                .filter((i) => i.label)
+                .map((i) => '<option value="' + esc(i.label) + '">')
+                .join('')}
+            </datalist>
             <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
