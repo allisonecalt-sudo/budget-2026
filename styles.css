@@ -3129,6 +3129,14 @@ tr.collapsed {
   display: none;
 }
 @media (max-width: 600px) {
+  /* DC4 — FAB obscured the right-edge controls of the bottom-most category
+     rows on Budget tab (budget input, +lines, x toggle). FAB is 56px circle
+     anchored bottom:70px right:1rem — total footprint claims the bottom-right
+     ~140×72px of the viewport. Add page-bottom clearance so any row can scroll
+     fully clear of that footprint instead of getting trapped beneath it. */
+  #root {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0));
+  }
   .mobile-fab {
     display: flex;
     align-items: center;
