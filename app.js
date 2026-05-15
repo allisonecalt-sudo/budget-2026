@@ -4334,23 +4334,23 @@ function renderTravelTab() {
       const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
       const estBtnWeight = p.is_estimate ? '700' : '400';
       return (
-        '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+        '<div class="travel-pay-row" style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
         estBgP +
         '">' +
-        '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+        '<span class="travel-pay-mo" style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
         MONTH_NAMES[p.month_num - 1] +
         '</span>' +
-        '<input type="text" value="' +
+        '<input class="travel-pay-where" type="text" value="' +
         destVal +
         '" placeholder="Where" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
         p.id +
         "','destination',this.value)\">" +
-        '<input type="text" value="' +
+        '<input class="travel-pay-what" type="text" value="' +
         esc(p.label) +
         '" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
         p.id +
         "','label',this.value)\">" +
-        '<input type="number" value="' +
+        '<input class="travel-pay-amt" type="number" value="' +
         p.amount +
         '" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:' +
         amtColorP +
@@ -4359,7 +4359,7 @@ function renderTravelTab() {
         ';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
         p.id +
         "','amount',this.value)\">" +
-        '<button onclick="updateTravelPayment(\'' +
+        '<button class="travel-pay-est" onclick="updateTravelPayment(\'' +
         p.id +
         "','is_estimate'," +
         !p.is_estimate +
@@ -4374,7 +4374,7 @@ function renderTravelTab() {
         ';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:' +
         estBtnWeight +
         ";font-family:'DM Sans',sans-serif;width:100%;\">~est</button>" +
-        '<button onclick="deleteTravelPayment(\'' +
+        '<button class="travel-pay-x" onclick="deleteTravelPayment(\'' +
         p.id +
         '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>' +
         '</div>'
@@ -4471,11 +4471,11 @@ function renderTravelTab() {
       sb2('high', 'Highest') +
       sb2('low', 'Lowest') +
       '</div>' +
-      '<div style="overflow-x:auto;"><div style="min-width:360px;">' +
+      '<div class="travel-pay-scroll" style="overflow-x:auto;"><div class="travel-pay-inner" style="min-width:360px;">' +
       (groupByTrip
         ? groupedHtml
-        : '<div style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
-          '<span>Mo</span><span>Where</span><span>What</span><span style="text-align:right">Amount</span><span style="text-align:center">~est</span><span></span>' +
+        : '<div class="travel-pay-row travel-pay-header" style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+          '<span class="travel-pay-mo">Mo</span><span class="travel-pay-where">Where</span><span class="travel-pay-what">What</span><span class="travel-pay-amt" style="text-align:right">Amount</span><span class="travel-pay-est" style="text-align:center">~est</span><span class="travel-pay-x"></span>' +
           '</div>' +
           payRows) +
       '</div></div>' +

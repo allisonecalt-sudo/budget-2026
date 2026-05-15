@@ -1934,6 +1934,69 @@ input:focus {
   .travel-alloc-cell {
     padding: 0.4rem 0.55rem !important;
   }
+  /* DT4 — Travel Payment Log row: 6-col grid (45 80 1fr 80 38 26) is even
+     more cramped than Admin's 5-col on mobile. Mirror DM5 card-stack so
+     name + amount + trip context all fit without ellipsis truncation.
+     Layout on mobile:
+       Row 1: What (item label, prominent) ........ Amount (right)
+       Row 2: Where (trip, dim)               Mo (right, dim)
+     The wrapper's min-width:360px would force horizontal scroll; release it
+     to let the inner stack size to the mobile viewport. ~est is hidden — the
+     amber row tint already signals estimate (same as DM5). */
+  .travel-pay-scroll {
+    overflow-x: visible !important;
+  }
+  .travel-pay-inner {
+    min-width: 0 !important;
+  }
+  .travel-pay-row {
+    grid-template-columns: 1fr auto auto !important;
+    grid-template-areas:
+      'what amt del'
+      'where mo del' !important;
+    column-gap: 0.55rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0.55rem 0.1rem !important;
+    align-items: center !important;
+  }
+  .travel-pay-header {
+    /* Hide dense header on mobile — the 2-line card is self-evident */
+    display: none !important;
+  }
+  .travel-pay-mo {
+    grid-area: mo;
+    text-align: right !important;
+    font-size: 0.6rem !important;
+    color: var(--dim) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .travel-pay-where {
+    grid-area: where;
+    font-size: 0.7rem !important;
+    color: var(--muted) !important;
+  }
+  .travel-pay-what {
+    grid-area: what;
+    font-size: 0.86rem !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: normal !important;
+  }
+  .travel-pay-amt {
+    grid-area: amt;
+    font-size: 0.92rem !important;
+    text-align: right !important;
+    align-self: start;
+  }
+  .travel-pay-est {
+    /* Hidden on mobile — the amber row tint already signals estimate */
+    display: none !important;
+  }
+  .travel-pay-x {
+    grid-area: del;
+    align-self: center !important;
+  }
   /* DM9 — sort button rows on Travel/Admin/Charity overflowed off the right
      edge of the mobile viewport. Force horizontal scroll with no wrap so
      buttons stay one row, and hide the scrollbar. Same gesture pattern as
