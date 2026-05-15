@@ -2,8 +2,38 @@ const prettier = require('eslint-config-prettier');
 
 module.exports = [
   {
+    files: ['sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: {
+        // Service worker globals
+        self: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+        indexedDB: 'readonly',
+        Response: 'readonly',
+        Request: 'readonly',
+        URL: 'readonly',
+        clients: 'readonly',
+        console: 'readonly',
+        Math: 'readonly',
+        JSON: 'readonly',
+        Promise: 'readonly',
+        Date: 'readonly',
+        Array: 'readonly',
+        Number: 'readonly',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+      'no-undef': 'error',
+      'no-redeclare': 'off',
+    },
+  },
+  {
     files: ['**/*.js'],
-    ignores: ['node_modules/**'],
+    ignores: ['node_modules/**', 'sw.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'script',

@@ -1836,6 +1836,9 @@ function renderApp() {
         </div>
       </div>
       <div class="hdr-actions">
+        <span id="offline-queue-indicator" class="offline-queue-indicator" style="display:none;" title="Pending writes — will sync when online" onclick="syncQueueNow()">
+          <span class="oqi-dot"></span><span id="offline-queue-count">0</span> pending
+        </span>
         <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
         <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
         <button class="mtab toolbar-icon" onclick="openSnapshot()" title="Snapshot" aria-label="Snapshot">${ICON_SNAPSHOT}</button>
@@ -8798,4 +8801,55 @@ function openMoreSheet() {
   panel.style.display = 'flex';
   showBackdrop();
   requestAnimationFrame(() => panel.classList.add('app-panel-open'));
+}
+
+// ── B4 — Offline write queue UI bridge ─────────────────────────────────
+// Service worker (sw.js) postMessages {type:'queue-update', count} to us
+// whenever a write is enqueued or drained. We update a small toolbar
+// indicator. Manual sync trigger: clicking the indicator asks the SW to
+// drain immediately.
+function updateOfflineQueueUI(count) {
+  const el = document.getElementById('offline-queue-indicator');
+  const num = document.getElementById('offline-queue-count');
+  if (!el || !num) return;
+  if (count > 0) {
+    num.textContent = String(count);
+    el.style.display = '';
+    el.title = `${count} pending ${count === 1 ? 'write' : 'writes'} — click to retry sync`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// Called by sw.js bridge in index.html (window.onQueueUpdate)
+window.onQueueUpdate = function (data) {
+  updateOfflineQueueUI(Number(data && data.count) || 0);
+};
+
+function syncQueueNow() {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    toast('Sync not available — service worker not ready');
+    return;
+  }
+  navigator.serviceWorker.controller.postMessage({ type: 'drain-now' });
+  toast('Syncing queued writes…');
+}
+
+// Ping the SW for the current queue count on load (e.g. after page reload
+// while writes are still queued from a prior offline session).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.ready
+    .then((reg) => {
+      // Some browsers don't have controller until next load — guard.
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'queue-count' });
+      }
+    })
+    .catch(() => {});
+  // When connectivity returns, ask the SW to drain.
+  window.addEventListener('online', () => {
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'drain-now' });
+    }
+  });
 }

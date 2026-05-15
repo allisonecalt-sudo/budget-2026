@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint app.js",
-    "lint:fix": "eslint app.js --fix",
-    "format": "prettier --write app.js styles.css index.html",
-    "format:check": "prettier --check app.js styles.css index.html"
+    "lint": "eslint app.js sw.js",
+    "lint:fix": "eslint app.js sw.js --fix",
+    "format": "prettier --write app.js sw.js styles.css index.html manifest.webmanifest",
+    "format:check": "prettier --check app.js sw.js styles.css index.html manifest.webmanifest"
   },
   "repository": {
     "type": "git",

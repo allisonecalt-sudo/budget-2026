@@ -2692,3 +2692,65 @@ tr.collapsed {
     transition: none;
   }
 }
+
+/* ── B4 — Offline write queue indicator (toolbar) ─────────────────────── */
+.offline-queue-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  background: var(--ambersoft);
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  margin-right: 0.4rem;
+  flex-shrink: 0;
+}
+.offline-queue-indicator:hover {
+  background: var(--amber);
+  color: var(--surface);
+}
+.offline-queue-indicator:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+.oqi-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 0 rgba(181, 98, 26, 0.6);
+  animation: oqi-pulse 1.6s ease-out infinite;
+}
+.offline-queue-indicator:hover .oqi-dot {
+  background: var(--surface);
+}
+@keyframes oqi-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(181, 98, 26, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(181, 98, 26, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(181, 98, 26, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .oqi-dot {
+    animation: none;
+  }
+}
+@media (max-width: 600px) {
+  .offline-queue-indicator {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.45rem;
+    margin-right: 0.2rem;
+  }
+}
