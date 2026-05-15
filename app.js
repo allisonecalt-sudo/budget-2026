@@ -1703,11 +1703,16 @@ function renderApp() {
 
   // Biz net for current month — Income modal displays this read-only.
   // Single source of truth for income_private = biz_months net (set by saveBizField).
-  const _bizCur = (state.allBiz || []).find((b) => b.month_id === current.id) || {};
-  const bizNetCurrent =
-    (Number(_bizCur.confirmed_amount) || 0) -
-    (Number(_bizCur.accountant_fee) || 0) -
-    (Number(_bizCur.spending) || 0);
+  // Fallback: if state.allBiz hasn't been loaded yet (Biz tab never visited this
+  // session), use months.income_private directly. Past months already have a
+  // correct income_private cascaded from saveBizField, so this avoids showing
+  // ₪0 on first page load before Biz data loads.
+  const _bizCur = (state.allBiz || []).find((b) => b.month_id === current.id);
+  const bizNetCurrent = _bizCur
+    ? (Number(_bizCur.confirmed_amount) || 0) -
+      (Number(_bizCur.accountant_fee) || 0) -
+      (Number(_bizCur.spending) || 0)
+    : Number(current.income_private) || 0;
 
   const income = totalIncome(current);
   // Sync charity % from localStorage into state.budgets AND Supabase (quietly, no undo/log)
@@ -3009,29 +3014,15 @@ async function loadBizData() {
   const current = state.months.find((m) => m.id === state.currentMonthId);
   if (!current) return;
 
-  // Load or create biz_months row
+  // Load biz_months row — DO NOT auto-insert. Tab visit is a read, not a write.
+  // If no row exists, state.biz = null and renderBizTab shows a "Set up this
+  // month" empty state. Insert only happens when she clicks Set Up or edits a
+  // field. Avoids placeholder rows being silently created on navigation.
   const { data: bizRows } = await sb
     .from('biz_months')
     .select('*')
     .eq('month_id', state.currentMonthId);
-  if (bizRows && bizRows.length > 0) {
-    state.biz = bizRows[0];
-  } else {
-    // Pre-populate with the recurring accountant fee + matching placeholder
-    // confirmed amount so net = 0. Allison overrides with real numbers when
-    // the month becomes active. Avoids a misleading −₪200 in future months.
-    const { data: newBiz } = await sb
-      .from('biz_months')
-      .insert({
-        month_id: state.currentMonthId,
-        accountant_fee: 200,
-        spending: 0,
-        confirmed_amount: 200,
-      })
-      .select()
-      .single();
-    state.biz = newBiz;
-  }
+  state.biz = bizRows && bizRows.length > 0 ? bizRows[0] : null;
 
   // Load clients from private tracker
   const { data: clients } = await pt.from('clients').select('*');
@@ -4618,8 +4609,8 @@ function renderCharityTab() {
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining to Give</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(totalAlloc - totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">allocated − given</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(totalAlloc - totalPaid)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">allocated − paid (pledges excluded)</div>
       </div>
     </div>
 
@@ -5532,7 +5523,21 @@ async function updateAdminPayment(id, field, value) {
 
 // ── Biz tab render ────────────────────────────────────────────────────
 function renderBizTab(current) {
-  const biz = state.biz || { accountant_fee: 0, spending: 0, confirmed_amount: 0 };
+  // Empty state: no biz_months row exists for this month yet. Show a setup
+  // button instead of silently auto-inserting a placeholder row on tab visit.
+  if (!state.biz) {
+    return `
+      <div class="biz-card" style="text-align:center;padding:2rem 1rem;">
+        <div style="font-size:.95rem;font-weight:600;margin-bottom:.4rem;">No biz data yet for ${current.month_name}</div>
+        <div style="color:var(--dim);font-size:.8rem;margin-bottom:1.1rem;">
+          Click below to set up this month with the recurring ₪200 accountant fee.<br>
+          Confirmed income will default to ₪200 (net 0). Override with real numbers when VV pays.
+        </div>
+        <button class="btn btn-primary" onclick="setupBizMonth()">Set up ${current.month_name} →</button>
+      </div>
+    `;
+  }
+  const biz = state.biz;
   const clients = state.ptClients || [];
   const { earned = [], scheduled = [] } = state.ptSessions || {};
 
@@ -5587,7 +5592,7 @@ function renderBizTab(current) {
       <div class="biz-section-title">Scheduled — ${prevMonthName} (not happened)</div>
       ${
         Object.keys(scheduledByClient).length === 0
-          ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions scheduled for ${current.month_name}</div>`
+          ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions scheduled for ${prevMonthName}</div>`
           : Object.entries(scheduledByClient)
               .map(
                 ([cid, sessions]) => `
@@ -5660,7 +5665,39 @@ function renderAccountantTracker(current) {
   `;
 }
 
+// Explicit user-initiated setup for a new biz_months row. Called from the
+// renderBizTab empty state. Inserts the placeholder (fee=200, confirmed=200,
+// spending=0 → net 0) so future months don't bleed −₪200 into displays.
+async function setupBizMonth() {
+  if (state.biz) return;
+  const monthId = state.currentMonthId;
+  const { data: newBiz, error } = await sb
+    .from('biz_months')
+    .insert({
+      month_id: monthId,
+      accountant_fee: 200,
+      spending: 0,
+      confirmed_amount: 200,
+    })
+    .select()
+    .single();
+  if (error) {
+    toast('Error setting up month');
+    return;
+  }
+  state.biz = newBiz;
+  // Add to allBiz cache so the Income modal's bizNetCurrent picks it up.
+  if (!state.allBiz) state.allBiz = [];
+  state.allBiz.push(newBiz);
+  renderApp();
+  toast('Set up ✓');
+}
+
 async function saveBizField(field, value) {
+  if (!state.biz) {
+    toast('Set up this month first');
+    return;
+  }
   const num = parseFloat(value) || 0;
   const oldVal = state.biz ? state.biz[field] : 0;
   const { error } = await sb
