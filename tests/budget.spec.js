@@ -1004,10 +1004,13 @@ test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) 
 test('snapshot renders correctly at mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
-  await page.waitForSelector('.mtab', { timeout: 10000 });
+  // .mtab is hidden on mobile in the toolbar; wait for the overflow button instead.
+  await page.waitForSelector('.toolbar-overflow-btn', { timeout: 10000 });
 
-  // Open snapshot modal
-  await page.locator('.mtab[title="Snapshot"]').click();
+  // On mobile, toolbar icons are collapsed into the ⋯ overflow menu.
+  // Open the overflow first, then tap "Snapshot".
+  await page.locator('.toolbar-overflow-btn').click();
+  await page.locator('.toolbar-overflow-item').filter({ hasText: 'Snapshot' }).click();
   await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
   await page.waitForTimeout(1000);
 
