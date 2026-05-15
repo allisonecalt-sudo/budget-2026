@@ -1807,12 +1807,13 @@ function renderApp() {
         </div>
       </div>
       <div class="hdr-actions">
-        <button id="undo-btn" class="mtab" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">↩</button>
-        <button id="redo-btn" class="mtab" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">↪</button>
-        <button class="mtab" onclick="openSnapshot()" title="Snapshot">📊</button>
-        <button class="mtab" onclick="collapseAll()" title="Collapse all">⊟</button>
-        <button class="mtab" onclick="openHistoryPanel()" title="History log">🕐</button>
-        <button class="mtab" onclick="openSearchPanel()" title="Search transactions">🔍</button>
+        <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)">↩</button>
+        <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)">↪</button>
+        <button class="mtab toolbar-icon" onclick="openSnapshot()" title="Snapshot">📊</button>
+        <button class="mtab toolbar-icon" onclick="collapseAll()" title="Collapse all">⊟</button>
+        <button class="mtab toolbar-icon" onclick="openHistoryPanel()" title="History log">🕐</button>
+        <button class="mtab toolbar-icon" onclick="openSearchPanel()" title="Search transactions">🔍</button>
+        <button class="mtab toolbar-overflow-btn" onclick="openToolbarOverflow(event)" aria-label="More tools" title="More tools">⋯</button>
       </div>
       <div class="hdr-months">
         <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
@@ -8074,6 +8075,49 @@ document.addEventListener(
   },
   { passive: true },
 );
+
+// ── Toolbar overflow on mobile (collapse 6 icons into ⋯ menu) ─────────
+function openToolbarOverflow(ev) {
+  if (ev) ev.stopPropagation();
+  let menu = document.getElementById('toolbar-overflow-menu');
+  if (menu) {
+    menu.remove();
+    return;
+  }
+  menu = document.createElement('div');
+  menu.id = 'toolbar-overflow-menu';
+  menu.className = 'toolbar-overflow-menu';
+  const undoDisabled = undoStack.length === 0 ? 'disabled' : '';
+  const redoDisabled = redoStack.length === 0 ? 'disabled' : '';
+  const close = "document.getElementById('toolbar-overflow-menu')?.remove();";
+  menu.innerHTML = `
+    <button class="toolbar-overflow-item" ${undoDisabled} onclick="doUndo();${close}">↩ Undo</button>
+    <button class="toolbar-overflow-item" ${redoDisabled} onclick="doRedo();${close}">↪ Redo</button>
+    <button class="toolbar-overflow-item" onclick="openSnapshot();${close}">📊 Snapshot</button>
+    <button class="toolbar-overflow-item" onclick="collapseAll();${close}">⊟ Collapse all</button>
+    <button class="toolbar-overflow-item" onclick="openHistoryPanel();${close}">🕐 History log</button>
+    <button class="toolbar-overflow-item" onclick="openSearchPanel();${close}">🔍 Search</button>
+  `;
+  document.body.appendChild(menu);
+  // Position near the overflow button
+  const btn = ev?.currentTarget || document.querySelector('.toolbar-overflow-btn');
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = r.bottom + 6 + 'px';
+    menu.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  }
+  // Click-outside to close
+  setTimeout(() => {
+    const handler = (e) => {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener('click', handler);
+      }
+    };
+    document.addEventListener('click', handler);
+  }, 0);
+}
 
 // After every render, scroll active month chip into view (mobile only)
 function scrollActiveMonthIntoView() {

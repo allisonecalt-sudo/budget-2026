@@ -2230,6 +2230,56 @@ tr.collapsed {
   }
 }
 
+/* Toolbar overflow on mobile — hide 6 icons, show ⋯ button */
+.toolbar-overflow-btn {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .toolbar-icon {
+    display: none !important;
+  }
+  .toolbar-overflow-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+}
+.toolbar-overflow-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow:
+    0 6px 24px rgba(26, 25, 21, 0.18),
+    0 1px 3px rgba(26, 25, 21, 0.06);
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  z-index: 660;
+}
+.toolbar-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.toolbar-overflow-item:hover {
+  background: var(--surface2);
+}
+.toolbar-overflow-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* M4 — Mobile month nav chevrons (hidden on desktop) */
 .month-nav-chev {
   display: none !important;
