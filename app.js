@@ -5887,6 +5887,35 @@ function cashILS(acct) {
   return amt;
 }
 
+// One-click sync: creates or updates a "PT clinical (auto)" row in cash_accounts
+// with state.ptOwedTotal. Splitwise/manual rows are preserved separately.
+async function syncPtOwedToCash() {
+  if (!state.ptOwedTotal) {
+    toast('No PT owed total to sync');
+    return;
+  }
+  const existing = (state.cashAccounts || []).find((a) => a.name === 'PT clinical (auto)');
+  if (existing) {
+    await sb
+      .from('cash_accounts')
+      .update({ amount: state.ptOwedTotal })
+      .eq('id', existing.id);
+  } else {
+    await sb.from('cash_accounts').insert({
+      name: 'PT clinical (auto)',
+      amount: state.ptOwedTotal,
+      currency: 'ILS',
+      is_owed: true,
+      notes: 'Auto-synced from PT — click sync button on drift warning to refresh',
+      sort_order: 10,
+    });
+  }
+  await loadCashData();
+  renderApp();
+  toast('Synced from PT ✓');
+}
+window.syncPtOwedToCash = syncPtOwedToCash;
+
 async function saveCashField(id, field, value) {
   const acct = state.cashAccounts.find((a) => a.id === id);
   if (!acct) return;
@@ -5972,7 +6001,7 @@ function renderCashTab() {
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div>${
         state.ptOwedTotal && Math.abs(state.ptOwedTotal - totalOwed) > 1
-          ? `<div style="font-size:.6rem;color:var(--amber);margin-top:.2rem;font-weight:600;" title="PT shows ₪${n(state.ptOwedTotal)} in unpaid sessions. Cash row shows ₪${n(totalOwed)}. Difference: ₪${n(Math.abs(state.ptOwedTotal - totalOwed))}.">⚠ PT: ₪${n(state.ptOwedTotal)} (drift ₪${n(state.ptOwedTotal - totalOwed > 0 ? state.ptOwedTotal - totalOwed : totalOwed - state.ptOwedTotal)})</div>`
+          ? `<div style="font-size:.6rem;color:var(--amber);margin-top:.2rem;font-weight:600;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;" title="PT shows ₪${n(state.ptOwedTotal)} in unpaid sessions. Cash row shows ₪${n(totalOwed)}. Click Sync to add/update a 'PT clinical (auto)' row.">⚠ PT: ₪${n(state.ptOwedTotal)} (drift ₪${n(state.ptOwedTotal - totalOwed > 0 ? state.ptOwedTotal - totalOwed : totalOwed - state.ptOwedTotal)})<button onclick="syncPtOwedToCash()" style="font-size:.6rem;padding:.15rem .4rem;border:1px solid var(--amber);background:var(--ambersoft);color:var(--amber);border-radius:.25rem;cursor:pointer;font-weight:700;">Sync →</button></div>`
           : ''
       }</div>
       <div class="year-sum-card"><div class="year-sum-label">Invest Threshold</div><div class="year-sum-val">₪${n(INVEST_THRESHOLD)}</div></div>

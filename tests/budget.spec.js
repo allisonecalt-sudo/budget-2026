@@ -1303,6 +1303,7 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
 
 // ─── COMPREHENSIVE MATH AUDIT: Every number must add up (Jan–Apr) ───
 test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }) => {
+  test.setTimeout(60000); // 4 months × heavy DOM scraping + Year cross-check needs more than the default 30s
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
