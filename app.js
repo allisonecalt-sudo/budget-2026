@@ -4321,7 +4321,7 @@ function renderTravelTab() {
         : '') +
       groupBtn +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
+      '<div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
       '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>' +
       sb2('month', 'Mo ↑') +
       sb2('month-desc', 'Mo ↓') +
@@ -4455,7 +4455,7 @@ function renderTravelTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
-          <div style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
+          <div class="tab-sort-row" style="display:flex;gap:.25rem;">${sortBtnsHtml}</div>
         </div>
         <div style="font-size:.6rem;color:var(--dim);margin-bottom:.6rem;">~est = estimate &nbsp;|&nbsp; × = delete &nbsp;|&nbsp; ○ = mark done</div>
         <div style="display:grid;grid-template-columns:1fr 90px 42px 28px 28px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .25rem .4rem;border-bottom:1px solid var(--border);">
@@ -4854,7 +4854,7 @@ function renderCharityTab() {
       })
       .join('');
     payLogHtml =
-      '<div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
+      '<div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
       '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>' +
       sb2('month', 'Mo ↑') +
       sb2('month-desc', 'Mo ↓') +
@@ -5369,7 +5369,7 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">Yearly Expenses</div>
-          <div style="display:flex;gap:.25rem;align-items:center;">
+          <div class="tab-sort-row" style="display:flex;gap:.25rem;align-items:center;">
             <button onclick="localStorage.setItem('adminViewMode','${viewMode === 'category' ? 'list' : 'category'}');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid ${viewMode === 'category' ? 'var(--accent)' : 'var(--border)'};border-radius:4px;background:${viewMode === 'category' ? 'var(--gsoft)' : 'none'};color:${viewMode === 'category' ? 'var(--accent)' : 'var(--dim)'};cursor:pointer;font-family:'DM Sans',sans-serif;" title="Toggle grouped/flat view">${viewMode === 'category' ? 'Grouped' : 'List'}</button>
             ${sortBtnsHtml}
           </div>
@@ -5484,7 +5484,7 @@ function renderAdminTab() {
             const sb2 = (key, label) =>
               `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
             return `
-            <div style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
+            <div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
               ${sb2('month', 'Mo ↑')}${sb2('month-desc', 'Mo ↓')}${sb2('high', 'Highest')}${sb2('low', 'Lowest')}
             </div>

@@ -193,7 +193,9 @@ textarea {
   line-height: 1.3;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-feature-settings:
+    'tnum' 1,
+    'lnum' 1;
 }
 .ribbon-toggle {
   font-size: 0.65rem;
@@ -502,7 +504,9 @@ textarea {
      baseline + advance (catches edge cases DM Mono misses). */
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-feature-settings:
+    'tnum' 1,
+    'lnum' 1;
 }
 .stat-val.green {
   color: var(--green);
@@ -1899,6 +1903,23 @@ input:focus {
     width: 78px !important;
     font-size: 0.85rem !important;
   }
+  /* DM9 — sort button rows on Travel/Admin/Charity overflowed off the right
+     edge of the mobile viewport. Force horizontal scroll with no wrap so
+     buttons stay one row, and hide the scrollbar. Same gesture pattern as
+     month-tabs. */
+  .tab-sort-row {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    padding-right: 0.5rem !important;
+  }
+  .tab-sort-row::-webkit-scrollbar {
+    display: none !important;
+  }
+  .tab-sort-row > button {
+    flex-shrink: 0 !important;
+  }
   .tx-header,
   .tx-item {
     grid-template-columns: 70px 1fr 65px 22px;
@@ -2431,7 +2452,9 @@ tr.collapsed {
   line-height: 1.1;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  font-feature-settings:
+    'tnum' 1,
+    'lnum' 1;
 }
 .year-sum-card.below-threshold {
   border-color: var(--red);
