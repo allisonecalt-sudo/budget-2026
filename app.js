@@ -5610,27 +5610,6 @@ function renderBizTab(current) {
     </div>
 
     <div class="biz-card">
-      <div class="biz-section-title">Scheduled — ${prevMonthName} (not happened)</div>
-      ${
-        Object.keys(scheduledByClient).length === 0
-          ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions scheduled for ${prevMonthName}</div>`
-          : Object.entries(scheduledByClient)
-              .map(
-                ([cid, sessions]) => `
-          <div class="biz-session-item">
-            <span>${clientName(cid)} × ${sessions.length}</span>
-            <span class="biz-val amber">${fmt(sessions.length * clientRate(cid) * 0.85)}</span>
-          </div>`,
-              )
-              .join('')
-      }
-      <div class="biz-row" style="background:var(--ambersoft);">
-        <span class="biz-label" style="font-weight:700;">Scheduled total</span>
-        <span class="biz-val amber">${fmt(scheduledTotal)}</span>
-      </div>
-    </div>
-
-    <div class="biz-card">
       <div class="biz-section-title">Confirmed Income (VV)</div>
       <div class="biz-row">
         <span class="biz-label">Confirmed amount</span>
