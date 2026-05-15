@@ -479,14 +479,20 @@ function renderRecurringGrid() {
           '</th>'
         );
       })
-      .join('');
+      .join('') +
+    // RG2 — annual total column. Sum of every cell in the row, across the year.
+    // Subscriptions / installments need this answer (₪280/mo Claude Max = ₪3,360/yr).
+    '<th style="text-align:right;padding:.3rem .5rem;font-size:.65rem;font-weight:700;color:var(--muted);' +
+    'border-left:2px solid var(--border);min-width:74px;background:var(--surface);">Year</th>';
 
   const renderRow = (label) => {
+    let rowAnnual = 0;
     const cells = existingMonths
       .map((m) => {
         const items = state.allRecurringItems[m.id] || [];
         const item = items.find((i) => i.label === label);
         const val = item ? Number(item.amount) : null;
+        if (val) rowAnnual += val;
         const isCur = m.month_num === today;
         const isPast = m.month_num < today;
         const bgColor = isCur ? 'var(--gsoft)' : 'transparent';
@@ -511,11 +517,18 @@ function renderRecurringGrid() {
         );
       })
       .join('');
+    const annualCell =
+      '<td style="text-align:right;padding:.25rem .5rem;font-size:.75rem;font-weight:600;' +
+      "color:var(--muted);font-family:'DM Mono',monospace;border-left:2px solid var(--border);background:var(--surface);\" " +
+      'title="Sum across the year">' +
+      (rowAnnual ? fmt(rowAnnual).replace('₪', '') : '<span style="color:var(--dim)">—</span>') +
+      '</td>';
     return (
       '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">' +
       label +
       '</td>' +
       cells +
+      annualCell +
       '</tr>'
     );
   };
@@ -537,7 +550,7 @@ function renderRecurringGrid() {
       const labels = sc === 'tashlumim' ? installSort(groups[sc]) : groups[sc];
       rows +=
         '<tr><td colspan="' +
-        (existingMonths.length + 1) +
+        (existingMonths.length + 2) +
         '" style="padding:.3rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--surface2);">' +
         SUBCAT_LABELS[sc] +
         '</td></tr>';
@@ -547,10 +560,12 @@ function renderRecurringGrid() {
   if (noSubcat.length > 0) rows += noSubcat.map(renderRow).join('');
 
   // Totals row
+  let grandAnnual = 0;
   const totalCells = existingMonths
     .map((m) => {
       const items = state.allRecurringItems[m.id] || [];
       const total = items.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+      grandAnnual += total;
       const isCur = m.month_num === today;
       const isPast = m.month_num < today;
       const txtColor = isPast ? 'var(--dim)' : isCur ? 'var(--accent)' : 'var(--text)';
@@ -563,9 +578,16 @@ function renderRecurringGrid() {
       );
     })
     .join('');
+  const grandAnnualCell =
+    '<td style="text-align:right;padding:.3rem .5rem;font-size:.78rem;font-weight:700;' +
+    "color:var(--accent);font-family:'DM Mono',monospace;border-left:2px solid var(--border);background:var(--surface);\" " +
+    'title="Annual recurring total">' +
+    (grandAnnual ? fmt(grandAnnual).replace('₪', '') : '—') +
+    '</td>';
   rows +=
     '<tr style="border-top:2px solid var(--border);"><td style="padding:.3rem .5rem;font-size:.72rem;font-weight:700;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);">TOTAL</td>' +
     totalCells +
+    grandAnnualCell +
     '</tr>';
 
   const addLineBtn =
