@@ -8735,17 +8735,17 @@ function scrollActiveMonthIntoView() {
 }
 
 // ── M3 — Mobile bottom tab bar ─────────────────────────────────────────
-// 5 visible tabs (Budget / Travel / Charity / Cash / More). "More" opens a
-// sheet with Year / Admin / Biz. Desktop top pill row stays unchanged.
+// 5 visible tabs (Budget / Travel / Charity / Admin / More). "More" opens a
+// sheet with Year / Cash / Biz. Desktop top pill row stays unchanged.
 const MOBILE_TABS_VISIBLE = [
   { key: 'budget', label: 'Budget', icon: '🏠' },
   { key: 'travel', label: 'Travel', icon: '✈️' },
   { key: 'charity', label: 'Charity', icon: '💚' },
-  { key: 'cash', label: 'Cash', icon: '💰' },
+  { key: 'admin', label: 'Admin', icon: '📋' },
 ];
 const MOBILE_TABS_MORE = [
   { key: 'year', label: 'Year', icon: '📊' },
-  { key: 'admin', label: 'Admin', icon: '📋' },
+  { key: 'cash', label: 'Cash', icon: '💰' },
   { key: 'biz', label: 'Biz', icon: '💼' },
 ];
 
