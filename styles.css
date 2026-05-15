@@ -583,6 +583,11 @@ body {
 .sn-cat.collapsed {
   display: none;
 }
+/* Snapshot chevrons rotate smoothly when toggling */
+.sn-chev {
+  display: inline-block;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
 .sn-table td:not(:first-child) {
   text-align: right;
   font-family: 'DM Mono', monospace;
@@ -810,8 +815,22 @@ input.bi-amount:focus {
 .group-block {
   margin-bottom: 1rem;
 }
+.group-cats {
+  /* Smooth collapse: animate max-height + opacity + small slide. (Smoothness audit) */
+  overflow: hidden;
+  max-height: 5000px; /* effectively uncapped when open */
+  opacity: 1;
+  transition:
+    max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.18s ease-out,
+    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(0);
+}
 .group-block.collapsed .group-cats {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
 }
 .group-header {
   display: flex;
@@ -929,15 +948,30 @@ input.bi-amount:focus {
   color: var(--red);
 }
 
-/* Transactions */
+/* Transactions — smooth open/close (Smoothness audit) */
 .tx-list {
-  display: none;
   border-top: 1px solid var(--border);
-  margin-top: 0.75rem;
-  padding-top: 0.5rem;
+  margin-top: 0;
+  padding-top: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease-out,
+    margin-top 0.22s ease-out,
+    padding-top 0.22s ease-out,
+    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(-4px);
 }
 .cat-row.open .tx-list {
-  display: block;
+  max-height: 6000px;
+  opacity: 1;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 .tx-header {
   display: grid;
@@ -2159,7 +2193,10 @@ tr.collapsed {
   .app-panel-backdrop,
   .group-chevron,
   .progress-fill,
-  .owed-chev {
+  .owed-chev,
+  .group-cats,
+  .tx-list,
+  .sn-chev {
     transition: none !important;
   }
 }

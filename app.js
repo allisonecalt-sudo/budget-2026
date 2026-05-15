@@ -2823,7 +2823,15 @@ function toggleCat(key) {
     state.openCats.add(key);
   }
   localStorage.setItem('openCats', JSON.stringify([...state.openCats]));
-  renderApp();
+  // Smooth open/close — toggle the class directly when the row exists in
+  // the DOM, so the CSS transition can run. Fall back to full re-render if
+  // the row isn't here yet (first paint, tab switch, etc.).
+  const row = document.getElementById('cat-' + key);
+  if (row) {
+    row.classList.toggle('open');
+  } else {
+    renderApp();
+  }
 }
 
 async function saveIncomeField(field, value) {
@@ -5815,6 +5823,7 @@ async function saveBizField(field, value) {
 }
 
 function toggleGroup(key) {
+  // Direct class toggle (no re-render) so the CSS transition runs smoothly.
   const el = document.getElementById('group-' + key);
   if (el) el.classList.toggle('collapsed');
 }
@@ -6178,10 +6187,15 @@ function snToggle(gid) {
   var hdr = document.getElementById(gid + '-hdr');
   var chev = hdr && hdr.querySelector('.sn-chev');
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
+  // Smoother feel: rotate the chevron via transform instead of swapping glyphs.
+  // Use ▶ as the canonical glyph so the CSS transition can interpolate.
+  if (chev) {
+    chev.textContent = '▶';
+    chev.style.transform = isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)';
+  }
   rows.forEach(function (r) {
     r.classList.toggle('collapsed');
   });
-  if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
 }
 
 function yrToggle(grp) {
@@ -6189,10 +6203,13 @@ function yrToggle(grp) {
   var hdr = document.getElementById('yr-hdr-' + grp);
   var chev = hdr && hdr.querySelector('.sn-chev');
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
+  if (chev) {
+    chev.textContent = '▶';
+    chev.style.transform = isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)';
+  }
   rows.forEach(function (r) {
     r.classList.toggle('collapsed');
   });
-  if (chev) chev.textContent = isCollapsed ? '▼' : '▶';
 }
 function yrCollapseAll() {
   document.querySelectorAll('[class*="yr-grp-"]').forEach(function (r) {
@@ -6200,7 +6217,10 @@ function yrCollapseAll() {
   });
   document.querySelectorAll('[id^="yr-hdr-"]').forEach(function (h) {
     var c = h.querySelector('.sn-chev');
-    if (c) c.textContent = '▶';
+    if (c) {
+      c.textContent = '▶';
+      c.style.transform = 'rotate(0deg)';
+    }
   });
 }
 function yrExpandAll() {
@@ -6209,7 +6229,10 @@ function yrExpandAll() {
   });
   document.querySelectorAll('[id^="yr-hdr-"]').forEach(function (h) {
     var c = h.querySelector('.sn-chev');
-    if (c) c.textContent = '▼';
+    if (c) {
+      c.textContent = '▶';
+      c.style.transform = 'rotate(90deg)';
+    }
   });
 }
 
