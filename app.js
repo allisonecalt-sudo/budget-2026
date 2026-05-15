@@ -5334,17 +5334,23 @@ function renderAdminTab() {
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- DA1 — explicit year-scope label so the KPI strip isn't read as "May only"
+         while the active month chip says May. Admin is yearly per workflow. -->
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+      <span style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--info,var(--muted));background:var(--infosoft,var(--surface2));padding:.18rem .45rem;border-radius:99px;border:1px solid var(--border);">📅 Yearly view</span>
+      <span style="font-size:.62rem;color:var(--dim);font-style:italic;">Admin runs as a year-long budget — the active month chip doesn't filter this strip.</span>
+    </div>
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected total</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected for the year</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside (all months)</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
@@ -5354,12 +5360,12 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − YTD spent</div>
       </div>
     </div>
 
