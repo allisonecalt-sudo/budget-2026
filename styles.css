@@ -2163,3 +2163,17 @@ tr.collapsed {
     transition: none !important;
   }
 }
+
+/* ── Soft yearly-gap marker on Remaining cells (Q2) ───────────────────── */
+.cell-gap-warn {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-size: 0.78em; /* tiny — relative to surrounding cell */
+  color: var(--amber);
+  cursor: help;
+  vertical-align: baseline;
+  user-select: none;
+}
+.cell-gap-warn:hover {
+  color: #d97706;
+}

@@ -1827,7 +1827,8 @@ function renderApp() {
             const b = catBudget(c.key) || 0;
             const s = c.hasTab ? b : spent[c.key] || 0;
             const r = b - s;
-            return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+            const mark = c.hasTab ? gapMarker(c.key) : '';
+            return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}${mark}</td></tr>`;
           })
           .join('');
         if (cats.length === 1) {
@@ -1835,7 +1836,8 @@ function renderApp() {
           const b = catBudget(c.key) || 0;
           const s = c.hasTab ? b : spent[c.key] || 0;
           const r = b - s;
-          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+          const mark = c.hasTab ? gapMarker(c.key) : '';
+          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}${mark}</td></tr>`;
         }
         return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
           <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td></tr>${catRows}`;
@@ -2207,7 +2209,7 @@ function renderApp() {
                           onclick="event.stopPropagation()"
                           onchange="saveBudget('${c.key}', this.value)"
                           onkeydown="if(event.key==='Enter'){this.blur()}"
-                          style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 95}px">
+                          style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 95}px">${gapMarker(c.key)}
                       </div>
                     </div>
                   </div>`;
@@ -6135,6 +6137,42 @@ function renderCashTab() {
   </div>`;
 }
 
+// Q2 — yearly funding gap for Travel/Admin/Charity. Returns positive number
+// when projected need exceeds allocations across the full year.
+function categoryYearlyGap(catKey) {
+  if (catKey === 'travel' && state.travel) {
+    const proj = (state.travel.items || []).reduce(
+      (s, i) => s + (Number(i.projected_amount) || 0),
+      0,
+    );
+    const alloc = Object.values(state.travel.allocations || {}).reduce(
+      (s, a) => s + (Number(a.amount) || 0),
+      0,
+    );
+    return Math.max(0, proj - alloc);
+  }
+  if (catKey === 'admin' && state.admin) {
+    const proj = (state.admin.items || []).reduce(
+      (s, i) => s + (Number(i.projected_amount) || 0),
+      0,
+    );
+    const alloc = Object.values(state.admin.allocations || {}).reduce(
+      (s, a) => s + (Number(a.amount) || 0),
+      0,
+    );
+    return Math.max(0, proj - alloc);
+  }
+  return 0;
+}
+// Build the small amber marker + tooltip for a Remaining cell when there's
+// a real yearly gap on a Travel/Admin row. Returns empty string otherwise.
+function gapMarker(catKey) {
+  const gap = categoryYearlyGap(catKey);
+  if (!gap) return '';
+  const fmtG = (v) => '₪' + Math.round(v).toLocaleString('en-IL');
+  return ` <span class="cell-gap-warn" title="Yearly gap ${fmtG(gap)} — projected need exceeds allocations" aria-label="Yearly gap ${fmtG(gap)}">⚠</span>`;
+}
+
 function snToggle(gid) {
   var rows = document.querySelectorAll('.' + gid);
   var hdr = document.getElementById(gid + '-hdr');
@@ -6878,11 +6916,12 @@ function openSnapshot() {
         const b = catBudget(c.key) || 0;
         const s = c.hasTab ? b : spent[c.key] || 0;
         const r = b - s;
+        const mark = c.hasTab ? gapMarker(c.key) : '';
         return `<tr class="sn-cat ${gid} collapsed">
         <td data-label="Category" style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td data-label="Budget">${b ? n(b) : ''}</td>
         <td data-label="Spent">${b ? n(s) : ''}</td>
-        <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
+        <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}${mark}</td>
       </tr>`;
       })
       .join('');
@@ -6891,7 +6930,8 @@ function openSnapshot() {
       const b = catBudget(c.key) || 0;
       const s = c.hasTab ? b : spent[c.key] || 0;
       const r = b - s;
-      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+      const mark = c.hasTab ? gapMarker(c.key) : '';
+      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}${mark}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
         <td data-label="Category"><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
