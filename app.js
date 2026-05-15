@@ -4499,7 +4499,7 @@ function renderTravelTab() {
     const inputColor = isCurrent ? 'var(--accent)' : 'var(--text)';
     const inputWeight = isCurrent ? '600' : '400';
     return (
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:' +
+      '<div class="travel-alloc-cell" style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:' +
       rowBg +
       ';border-radius:6px;border:1px solid ' +
       rowBorder +
@@ -4625,7 +4625,7 @@ function renderTravelTab() {
         <!-- Monthly Allocations -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
+          <div class="travel-alloc-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColor};">${fmtA(totalAlloc)} ${gapText}</span>

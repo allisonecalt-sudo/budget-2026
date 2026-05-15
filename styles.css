@@ -1924,6 +1924,16 @@ input:focus {
     width: 78px !important;
     font-size: 0.85rem !important;
   }
+  /* DT3 — Travel Allocation grid: same 3-col -> 2-col fix as DM6 (Admin).
+     Travel's 12-month allocation grid otherwise clips the rightmost column
+     on a 390px viewport. Display-only (no input — set via Budget tab). */
+  .travel-alloc-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+  }
+  .travel-alloc-cell {
+    padding: 0.4rem 0.55rem !important;
+  }
   /* DM9 — sort button rows on Travel/Admin/Charity overflowed off the right
      edge of the mobile viewport. Force horizontal scroll with no wrap so
      buttons stay one row, and hide the scrollbar. Same gesture pattern as
