@@ -2768,6 +2768,21 @@ function renderApp() {
   // M4 — center active month chip on mobile so it's always visible
   if (typeof scrollActiveMonthIntoView === 'function')
     requestAnimationFrame(scrollActiveMonthIntoView);
+  // DM1 — ensure every number input opens the decimal keypad on mobile,
+  // not the full QWERTY. Templates emit <input type="number"> without inputmode;
+  // patch every render so newly rendered inputs are covered too.
+  if (typeof applyNumericInputModes === 'function') applyNumericInputModes();
+}
+
+/* DM1 — apply inputmode="decimal" to all number inputs after each render so
+   iOS/Android show the right virtual keypad. Idempotent: skips inputs that
+   already declare an inputmode (e.g., a future field that explicitly wants
+   "numeric" for integer-only). */
+function applyNumericInputModes() {
+  const inputs = document.querySelectorAll('input[type="number"]:not([inputmode])');
+  inputs.forEach((el) => {
+    el.setAttribute('inputmode', 'decimal');
+  });
 }
 
 async function saveSavingsField(field, value) {
