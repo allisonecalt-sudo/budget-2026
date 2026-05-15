@@ -3024,26 +3024,47 @@ async function loadBizData() {
     .eq('month_id', state.currentMonthId);
   state.biz = bizRows && bizRows.length > 0 ? bizRows[0] : null;
 
-  // Load clients from private tracker
-  const { data: clients } = await pt.from('clients').select('*');
-  state.ptClients = clients || [];
-
-  // All sessions from previous month (happened + scheduled)
+  // PT client/session data via Edge Function (pt-sessions). The function uses
+  // PT's service key server-side and returns privacy-safe data: client initial
+  // (not name) + rate, plus per-session amount (rate * 0.85). Bypasses PT's
+  // RLS which blocks anon reads from the browser.
   const prevMonthNum = current.month_num - 1;
   const prevYear = prevMonthNum === 0 ? 2025 : 2026;
   const actualPrevMonthNum = prevMonthNum === 0 ? 12 : prevMonthNum;
   const monthStart = `${prevYear}-${String(actualPrevMonthNum).padStart(2, '0')}-01`;
   const monthEnd = `${current.year}-${String(current.month_num).padStart(2, '0')}-01`;
 
-  const { data: prevSessions } = await pt
-    .from('sessions')
-    .select('*')
-    .gte('date', monthStart)
-    .lt('date', monthEnd);
-  const earned = (prevSessions || []).filter((s) => s.status === 'happened');
-  const scheduled = (prevSessions || []).filter((s) => s.status === 'scheduled');
-
-  state.ptSessions = { earned, scheduled };
+  try {
+    const fnUrl = `${SB_URL}/functions/v1/pt-sessions?start_date=${monthStart}&end_date=${monthEnd}`;
+    const resp = await fetch(fnUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${SB_KEY}`,
+        apikey: SB_KEY,
+      },
+    });
+    if (!resp.ok) throw new Error(`Edge function returned ${resp.status}`);
+    const payload = await resp.json();
+    // Shape ptClients to match what renderBizTab expects: { id, name, rate }.
+    // We use `initial` as the display name (privacy: no full names in browser).
+    state.ptClients = (payload.clients || []).map((c) => ({
+      id: c.id,
+      name: c.initial,
+      rate: c.rate,
+    }));
+    const sessions = payload.sessions || [];
+    state.ptSessions = {
+      earned: sessions.filter((s) => s.status === 'happened'),
+      scheduled: sessions.filter((s) => s.status === 'scheduled'),
+    };
+    // Cash tab "Owed to You" — drift detection against cash_accounts (C1).
+    state.ptOwedTotal = Number(payload.owed_total) || 0;
+  } catch (err) {
+    console.error('pt-sessions edge function failed:', err);
+    state.ptClients = [];
+    state.ptSessions = { earned: [], scheduled: [] };
+    state.ptOwedTotal = 0;
+  }
 
   // Load all biz_months for accountant fee tracking
   const monthIds = state.months.map((m) => m.id);
@@ -5864,6 +5885,21 @@ async function loadCashData() {
   } catch (e) {
     state.usdRate = state.usdRate || 3.13;
   }
+  // Pull live owed total from PT (sessions where status=happened & paid=false).
+  // Lets the Cash tab show a drift indicator vs the manually-tracked owed rows.
+  try {
+    const fnUrl = `${SB_URL}/functions/v1/pt-sessions`;
+    const resp = await fetch(fnUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${SB_KEY}`, apikey: SB_KEY },
+    });
+    if (resp.ok) {
+      const payload = await resp.json();
+      state.ptOwedTotal = Number(payload.owed_total) || 0;
+    }
+  } catch (e) {
+    // Silent — Cash tab still works without drift indicator
+  }
 }
 
 function cashILS(acct) {
@@ -5955,7 +5991,11 @@ function renderCashTab() {
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
       <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
-      <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
+      <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div>${
+        state.ptOwedTotal && Math.abs(state.ptOwedTotal - totalOwed) > 1
+          ? `<div style="font-size:.6rem;color:var(--amber);margin-top:.2rem;font-weight:600;" title="PT shows ₪${n(state.ptOwedTotal)} in unpaid sessions. Cash row shows ₪${n(totalOwed)}. Difference: ₪${n(Math.abs(state.ptOwedTotal - totalOwed))}.">⚠ PT: ₪${n(state.ptOwedTotal)} (drift ₪${n(state.ptOwedTotal - totalOwed > 0 ? state.ptOwedTotal - totalOwed : totalOwed - state.ptOwedTotal)})</div>`
+          : ''
+      }</div>
       <div class="year-sum-card"><div class="year-sum-label">Invest Threshold</div><div class="year-sum-val">₪${n(INVEST_THRESHOLD)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">${investable >= 0 ? 'Investable' : 'Below Threshold'}</div><div class="year-sum-val" style="color:${investable >= 0 ? 'var(--green)' : 'var(--red)'};">${investable >= 0 ? '₪' + n(investable) : '-₪' + n(Math.abs(investable))}</div></div>
     </div>
