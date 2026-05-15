@@ -2398,6 +2398,52 @@ tr.collapsed {
   }
 }
 
+/* B5 — Year tab filter chips */
+.yr-chip {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+.yr-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.yr-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+/* Filter behaviors: hide rows that don't belong to the selected slice */
+.year-tab-wrap[data-year-filter='spending'] tr[data-yr-section]:not([data-yr-section='spending']) {
+  display: none;
+}
+.year-tab-wrap[data-year-filter='income'] tr[data-yr-section]:not([data-yr-section='income']) {
+  display: none;
+}
+/* "Gaps" -> only show the overview Unbudgeted/Remaining nets + savings + charity */
+.year-tab-wrap[data-year-filter='gaps']
+  tr[data-yr-section]:not([data-yr-section='overview']):not([data-yr-section='charity']):not(
+    [data-yr-section='savings']
+  ) {
+  display: none;
+}
+/* "Above-budget months" -> dim the non-above-budget month cells via opacity.
+   We can't trivially hide whole columns in HTML tables without css subgrid;
+   use a soft de-emphasis instead. Header cells still highlight. */
+.year-tab-wrap[data-year-filter='above'] .year-table .future {
+  opacity: 0.35;
+}
+
 /* M5 — Always-visible Owed widget (global, top-right floating) */
 .global-owed-widget {
   position: fixed;

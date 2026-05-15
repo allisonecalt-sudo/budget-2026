@@ -6839,9 +6839,11 @@ function renderYearSnapshot() {
             row.collapsible +
             '"'
           : '';
+        const dataAttr = row.collapsible ? ' data-yr-section="' + row.collapsible + '"' : '';
         return (
           '<tr class="year-row-section"' +
           clickAttr +
+          dataAttr +
           '><td colspan="' +
           (months.length + 4) +
           '">' +
@@ -6887,10 +6889,13 @@ function renderYearSnapshot() {
           })
           .join('');
         const totalPctStr = (total * 100).toFixed(1) + '%';
+        const pctSecAttr = row.sectionGroup ? ' data-yr-section="' + row.sectionGroup + '"' : '';
         return (
           '<tr class="' +
           rowCls +
-          '"><td class="year-col-label">' +
+          '"' +
+          pctSecAttr +
+          '><td class="year-col-label">' +
           row.label +
           '</td>' +
           cells +
@@ -6931,11 +6936,13 @@ function renderYearSnapshot() {
           row.expandable +
           '"'
         : '';
+      const secAttr = row.sectionGroup ? ' data-yr-section="' + row.sectionGroup + '"' : '';
       return (
         '<tr class="' +
         rowCls +
         '"' +
         expandAttr +
+        secAttr +
         '><td class="year-col-label">' +
         labelHtml +
         '</td>' +
@@ -6974,9 +6981,50 @@ function renderYearSnapshot() {
     '<button onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
     '<button onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
     '</div>';
+  // B5 \u2014 Filter chips (slice the year grid)
+  const yearFilter = localStorage.getItem('yearFilter') || 'all';
+  const chipDef = [
+    { key: 'all', label: 'All' },
+    { key: 'spending', label: 'Spending only' },
+    { key: 'income', label: 'Income only' },
+    { key: 'gaps', label: 'Gaps only' },
+    { key: 'above', label: 'Above-budget months' },
+  ];
+  const chipsHtml =
+    '<div class="year-filter-chips" style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;margin-bottom:.85rem;">' +
+    '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-right:.2rem;">Filter:</span>' +
+    chipDef
+      .map(
+        (c) =>
+          '<button onclick="setYearFilter(\'' +
+          c.key +
+          '\')" class="yr-chip ' +
+          (yearFilter === c.key ? 'active' : '') +
+          '">' +
+          c.label +
+          '</button>',
+      )
+      .join('') +
+    '</div>';
+  // For "above" filter, mark each th + td with month status as data-month-status,
+  // and let CSS dim non-above-budget month columns.
+  const aboveFilterCols = months.map((m) => {
+    const inc = incFor(m);
+    const spent = totalSpentFor(m, m.month_num > todayMonth);
+    return spent > inc ? 1 : 0; // above-budget = total spent > income
+  });
+  const aboveAttrs = aboveFilterCols
+    .map((s, i) => 'data-yr-col-' + (i + 1) + '="' + (s ? 'above' : 'ok') + '"')
+    .join(' ');
+
   return (
-    '<div class="year-tab-wrap">' +
+    '<div class="year-tab-wrap" data-year-filter="' +
+    yearFilter +
+    '" ' +
+    aboveAttrs +
+    '>' +
     toggleHtml +
+    chipsHtml +
     summaryHtml +
     '<div class="year-table-wrap"><table class="year-table">' +
     thead +
@@ -6984,6 +7032,11 @@ function renderYearSnapshot() {
     tbody +
     '</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>'
   );
+}
+
+function setYearFilter(key) {
+  localStorage.setItem('yearFilter', key);
+  renderApp();
 }
 
 function openSnapshot() {
