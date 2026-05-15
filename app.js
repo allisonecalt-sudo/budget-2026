@@ -4948,23 +4948,23 @@ function renderCharityTab() {
         const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
         const estBtnWeight = p.is_estimate ? '700' : '400';
         return (
-          '<div style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+          '<div class="charity-pay-row" style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
           estBgP +
           '">' +
-          '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+          '<span class="charity-pay-mo" style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
           MONTH_NAMES[p.month_num - 1] +
           '</span>' +
-          '<input type="text" value="' +
+          '<input class="charity-pay-name" type="text" value="' +
           esc(p.label) +
           '" placeholder="Charity" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\'' +
           p.id +
           "','label',this.value)\">" +
-          '<input type="date" value="' +
+          '<input class="charity-pay-date" type="date" value="' +
           (p.payment_date || '') +
           '" style="font-size:.74rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\'' +
           p.id +
           "','payment_date',this.value)\">" +
-          '<input type="number" value="' +
+          '<input class="charity-pay-amt" type="number" value="' +
           p.amount +
           '" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:' +
           amtColorP +
@@ -4973,7 +4973,7 @@ function renderCharityTab() {
           ';outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\'' +
           p.id +
           "','amount',this.value)\">" +
-          '<button onclick="updateCharityPayment(\'' +
+          '<button class="charity-pay-receipt" onclick="updateCharityPayment(\'' +
           p.id +
           "','has_receipt'," +
           !p.has_receipt +
@@ -4986,7 +4986,7 @@ function renderCharityTab() {
           ';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;">' +
           (p.has_receipt ? '🧾' : '□') +
           '</button>' +
-          '<button onclick="updateCharityPayment(\'' +
+          '<button class="charity-pay-given" onclick="updateCharityPayment(\'' +
           p.id +
           "','is_given'," +
           !p.is_given +
@@ -4999,7 +4999,7 @@ function renderCharityTab() {
           ';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">' +
           (p.is_given ? '✓' : '○') +
           '</button>' +
-          '<button onclick="updateCharityPayment(\'' +
+          '<button class="charity-pay-est" onclick="updateCharityPayment(\'' +
           p.id +
           "','is_estimate'," +
           !p.is_estimate +
@@ -5014,7 +5014,7 @@ function renderCharityTab() {
           ';cursor:pointer;font-size:.62rem;padding:.1rem .15rem;font-weight:' +
           estBtnWeight +
           ";font-family:'DM Sans',sans-serif;width:100%;\">~est</button>" +
-          '<button onclick="deleteCharityPayment(\'' +
+          '<button class="charity-pay-x" onclick="deleteCharityPayment(\'' +
           p.id +
           '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .25rem;line-height:1;">×</button>' +
           '</div>'
@@ -5029,8 +5029,8 @@ function renderCharityTab() {
       sb2('high', 'Highest') +
       sb2('low', 'Lowest') +
       '</div>' +
-      '<div style="overflow-x:auto;"><div style="min-width:400px;">' +
-      '<div style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+      '<div class="charity-pay-scroll" style="overflow-x:auto;"><div class="charity-pay-inner" style="min-width:400px;">' +
+      '<div class="charity-pay-header" style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
       '<span>Mo</span><span>Charity</span><span>Date</span><span style="text-align:right">Amount</span><span style="text-align:center">🧾</span><span style="text-align:center">✓</span><span style="text-align:center">~est</span><span></span>' +
       '</div>' +
       payRows +
@@ -6547,23 +6547,23 @@ function renderCashTab() {
   const renderRow = (a) => {
     const ilsVal = cashILS(a);
     const isUSD = a.currency === 'USD';
-    return `<tr>
-      <td style="padding:.5rem .75rem;">
+    return `<tr class="cash-row">
+      <td class="cash-cell-name" style="padding:.5rem .75rem;">
         <input type="text" value="${a.name}" style="border:none;background:none;font-size:.85rem;font-weight:600;width:140px;font-family:inherit;" onchange="saveCashField('${a.id}','name',this.value)">
       </td>
-      <td style="text-align:right;padding:.5rem .75rem;">
+      <td class="cash-cell-amt" style="text-align:right;padding:.5rem .75rem;">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:.3rem;">
           ${isUSD ? '<span style="font-size:.7rem;color:var(--dim);">$</span>' : '<span style="font-size:.7rem;color:var(--dim);">₪</span>'}
           <input type="number" value="${Number(a.amount) || 0}" style="border:1px solid var(--border);border-radius:6px;padding:.25rem .4rem;width:90px;text-align:right;font-size:.85rem;font-family:\'DM Mono\',monospace;background:var(--bg);" onchange="saveCashField('${a.id}','amount',this.value)" step="1">
         </div>
       </td>
-      <td style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;font-size:.85rem;${isUSD ? 'color:var(--dim);' : ''}">
+      <td class="cash-cell-ils" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;font-size:.85rem;${isUSD ? 'color:var(--dim);' : ''}">
         ${isUSD ? '₪' + n(ilsVal) + ' <span style="font-size:.6rem;color:var(--dim);">@ ' + (state.usdRate || 3.13).toFixed(2) + '</span>' : ''}
       </td>
-      <td style="padding:.5rem .75rem;">
+      <td class="cash-cell-notes" style="padding:.5rem .75rem;">
         <input type="text" value="${a.notes || ''}" placeholder="notes..." style="border:none;background:none;font-size:.75rem;color:var(--dim);width:100%;font-family:inherit;" onchange="saveCashField('${a.id}','notes',this.value)">
       </td>
-      <td style="padding:.5rem .25rem;text-align:center;">
+      <td class="cash-cell-del" style="padding:.5rem .25rem;text-align:center;">
         <button onclick="deleteCashAccount('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.85rem;padding:0;">×</button>
       </td>
     </tr>`;
@@ -6707,8 +6707,8 @@ function renderCashTab() {
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
       <div style="padding:.6rem .75rem;background:var(--gsoft);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">💰 Holdings</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr style="border-bottom:1px solid var(--border);">
+      <table class="cash-table" style="width:100%;border-collapse:collapse;">
+        <thead class="cash-thead"><tr style="border-bottom:1px solid var(--border);">
           <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Account</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Amount</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">ILS</th>
@@ -6716,7 +6716,7 @@ function renderCashTab() {
           <th style="width:30px;"></th>
         </tr></thead>
         <tbody>${holdingsRows}
-          <tr style="border-top:2px solid var(--border);font-weight:700;">
+          <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
             <td style="padding:.5rem .75rem;">Total Holdings</td>
             <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;">₪${n(totalHoldings)}</td>
             <td colspan="2"></td>
@@ -6727,8 +6727,8 @@ function renderCashTab() {
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
       <div style="padding:.6rem .75rem;background:var(--gsoft);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">📥 Owed to You</div>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr style="border-bottom:1px solid var(--border);">
+      <table class="cash-table" style="width:100%;border-collapse:collapse;">
+        <thead class="cash-thead"><tr style="border-bottom:1px solid var(--border);">
           <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Source</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Amount</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">ILS</th>
@@ -6736,7 +6736,7 @@ function renderCashTab() {
           <th style="width:30px;"></th>
         </tr></thead>
         <tbody>${owedRows}
-          <tr style="border-top:2px solid var(--border);font-weight:700;">
+          <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
             <td style="padding:.5rem .75rem;">Total Owed</td>
             <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;">₪${n(totalOwed)}</td>
             <td colspan="2"></td>

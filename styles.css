@@ -1997,6 +1997,159 @@ input:focus {
     grid-area: del;
     align-self: center !important;
   }
+  /* DC1 — Charity Payment Log row: 8-col grid (45 1fr 90 80 28 28 38 26) is
+     even more cramped than Admin/Travel on mobile. The desktop pattern severely
+     truncates charity names ("peta", "ם דף", "coro", "yedic") and pushes the
+     right-edge action icons offscreen. Mirror DM5/DT4 card-stack so name +
+     amount + actions all fit without truncation.
+     Layout on mobile:
+       Row 1: Charity name (prominent) ........ Amount (right) Delete
+       Row 2: Date (dim)              [🧾 ✓] cluster   Mo (right, dim)
+     Release the wrapper's min-width:400px so the inner stack sizes to viewport.
+     Hide ~est button — amber row tint already signals estimate (same as DM5/DT4). */
+  .charity-pay-scroll {
+    overflow-x: visible !important;
+  }
+  .charity-pay-inner {
+    min-width: 0 !important;
+  }
+  .charity-pay-row {
+    grid-template-columns: 1fr auto auto auto auto !important;
+    grid-template-areas:
+      'name name name amt del'
+      'date receipt given mo del' !important;
+    column-gap: 0.45rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0.55rem 0.1rem !important;
+    align-items: center !important;
+  }
+  .charity-pay-header {
+    /* Hide dense header on mobile — the 2-line card is self-evident */
+    display: none !important;
+  }
+  .charity-pay-mo {
+    grid-area: mo;
+    text-align: right !important;
+    font-size: 0.6rem !important;
+    color: var(--dim) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .charity-pay-name {
+    grid-area: name;
+    font-size: 0.86rem !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: normal !important;
+  }
+  .charity-pay-date {
+    grid-area: date;
+    font-size: 0.7rem !important;
+    color: var(--muted) !important;
+  }
+  .charity-pay-amt {
+    grid-area: amt;
+    font-size: 0.92rem !important;
+    text-align: right !important;
+    align-self: start;
+  }
+  .charity-pay-receipt {
+    grid-area: receipt;
+    align-self: center !important;
+  }
+  .charity-pay-given {
+    grid-area: given;
+    align-self: center !important;
+  }
+  .charity-pay-est {
+    /* Hidden on mobile — the amber row tint already signals estimate */
+    display: none !important;
+  }
+  .charity-pay-x {
+    grid-area: del;
+    align-self: center !important;
+  }
+  /* DC2 — Cash Holdings + Owed-to-you tables: 5-col table chops the NOTES
+     column to single-character width on mobile ("NOT", "T", "F"). Convert
+     each row into a 2-line card so notes get a full mobile-width line and
+     ILS conversion stays readable. Apply to BOTH holdings + owed tables.
+     Layout on mobile per row:
+       Row 1: Account name (prominent)         Amount (right) Delete
+       Row 2: ILS conversion (dim)             Notes (full width)
+     Hide the dense thead on mobile — the card layout is self-evident. */
+  .cash-table {
+    display: block !important;
+  }
+  .cash-thead {
+    display: none !important;
+  }
+  .cash-table > tbody {
+    display: block !important;
+  }
+  .cash-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto auto !important;
+    grid-template-areas:
+      'name amt del'
+      'ils notes notes' !important;
+    column-gap: 0.55rem !important;
+    row-gap: 0.15rem !important;
+    padding: 0.45rem 0.4rem !important;
+    border-bottom: 1px solid var(--border);
+    align-items: center !important;
+  }
+  .cash-cell-name {
+    grid-area: name;
+    padding: 0 !important;
+  }
+  .cash-cell-name input {
+    width: 100% !important;
+  }
+  .cash-cell-amt {
+    grid-area: amt;
+    padding: 0 !important;
+    align-self: center !important;
+  }
+  .cash-cell-ils {
+    grid-area: ils;
+    padding: 0 !important;
+    text-align: left !important;
+    font-size: 0.7rem !important;
+    color: var(--dim) !important;
+  }
+  .cash-cell-notes {
+    grid-area: notes;
+    padding: 0 !important;
+  }
+  .cash-cell-notes input {
+    text-align: right;
+  }
+  .cash-cell-del {
+    grid-area: del;
+    padding: 0 !important;
+    align-self: center !important;
+  }
+  .cash-total-row {
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    padding: 0.55rem 0.4rem !important;
+    border-top: 2px solid var(--border) !important;
+    font-weight: 700 !important;
+  }
+  .cash-total-row > td {
+    padding: 0 !important;
+    display: block;
+  }
+  .cash-total-row > td:first-child {
+    text-align: left;
+  }
+  .cash-total-row > td:nth-child(2) {
+    text-align: right;
+    font-family: 'DM Mono', monospace;
+  }
+  .cash-total-row > td:nth-child(3) {
+    display: none;
+  }
   /* DM9 — sort button rows on Travel/Admin/Charity overflowed off the right
      edge of the mobile viewport. Force horizontal scroll with no wrap so
      buttons stay one row, and hide the scrollbar. Same gesture pattern as
