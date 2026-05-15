@@ -6782,13 +6782,11 @@ function categoryYearlyGap(catKey) {
   }
   return 0;
 }
-// Build the small amber marker + tooltip for a Remaining cell when there's
-// a real yearly gap on a Travel/Admin row. Returns empty string otherwise.
-function gapMarker(catKey) {
-  const gap = categoryYearlyGap(catKey);
-  if (!gap) return '';
-  const fmtG = (v) => '₪' + Math.round(v).toLocaleString('en-IL');
-  return ` <span class="cell-gap-warn" title="Yearly gap ${fmtG(gap)} — projected need exceeds allocations" aria-label="Yearly gap ${fmtG(gap)}">⚠</span>`;
+// Q2 marker disabled 2026-05-15 per Allison: "get rid of these triangles
+// I don't need them." The Owed strip on the top KPI row already surfaces
+// the gap glanceably; the per-cell triangle is duplicate signal.
+function gapMarker(_catKey) {
+  return '';
 }
 
 function snToggle(gid) {
