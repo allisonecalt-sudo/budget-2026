@@ -902,6 +902,27 @@ input.bi-amount::-webkit-inner-spin-button {
 input.bi-amount:focus {
   border-bottom-color: var(--accent) !important;
 }
+/* Per-row subcategory picker (recurring + housing list view).
+   Desktop: compact pill that fits between item name and amount.
+   Mobile: hidden — the section banner already conveys the group, and the
+   tiny native picker rendered as an unreadable disc. Long-press / row-edit
+   would re-expose it (future). */
+.bi-subcat {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  min-width: 88px;
+  max-width: 110px;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .bi-subcat {
+    display: none;
+  }
+}
 .bi-del {
   background: none;
   border: none;

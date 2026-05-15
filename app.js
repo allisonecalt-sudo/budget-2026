@@ -2386,10 +2386,15 @@ function renderApp() {
                             c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
                           const isGridCat = c.key === 'housing' || c.key === 'recurring';
                           const renderBudgetItemRow = (item) => {
+                            // Subcat picker: per-row select. On mobile the section
+                            // banner already conveys the subcategory, so hide it
+                            // there (CSS) — keeps the row scannable and prevents
+                            // the previous "tiny disc" rendering. Re-expose on
+                            // edit by tapping the row's "more" affordance.
                             const subSel =
-                              '<select onchange="saveBudgetItem(\'' +
+                              '<select class="bi-subcat" onchange="saveBudgetItem(\'' +
                               item.id +
-                              '\',\'subcategory\',this.value)" onclick="event.stopPropagation()" style="font-size:.65rem;padding:.1rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);max-width:90px;">' +
+                              '\',\'subcategory\',this.value)" onclick="event.stopPropagation()" title="Move to subcategory">' +
                               '<option value=""' +
                               (!item.subcategory ? ' selected' : '') +
                               '>--</option>' +
