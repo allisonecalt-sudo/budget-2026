@@ -5281,7 +5281,16 @@ function renderAdminTab() {
       "','is_logged'," +
       !item.is_logged +
       ')" title="' +
-      (item.is_logged ? 'Mark as not done' : 'Mark as done') +
+      // DA4 — tooltip differs by sub-state. With existing sub-payments,
+      // is_logged is a visibility-only toggle ("collapse into Completed").
+      // Without sub-payments, the click auto-creates a [auto] full payment row
+      // marked paid (line ~5240). Two behaviors, one control — make the
+      // hover hint match.
+      (item.is_logged
+        ? 'Reopen — moves back to active list'
+        : subs.length > 0
+          ? 'Mark complete (collapses into Completed list — payments stay logged)'
+          : 'Mark fully paid (auto-creates a payment record for this month)') +
       '" style="width:18px;height:18px;border-radius:4px;border:2px solid ' +
       (item.is_logged ? 'var(--accent)' : 'var(--border)') +
       ';background:' +
