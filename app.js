@@ -4491,10 +4491,16 @@ function renderTravelTab() {
           '</div>' +
           payRows) +
       '</div></div>' +
-      '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">' +
+      // DT7 — ground "Total spent" with the year budget so the number reads in
+      // context. Without "of \$X budget" the spend feels free-floating; with it
+      // you can see at a glance how close YTD spending is to the year pot.
+      '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>' +
       '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">' +
       fmtA(totalSpent) +
+      '<span style="font-weight:400;color:var(--dim);font-size:.72rem;margin-left:.35rem;">of ' +
+      fmtA(budget) +
+      ' budget</span>' +
       '</span>' +
       '</div>';
   }
