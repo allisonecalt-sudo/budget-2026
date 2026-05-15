@@ -60,6 +60,7 @@ module.exports = [
         KeyboardEvent: 'readonly',
         MouseEvent: 'readonly',
         TouchEvent: 'readonly',
+        MutationObserver: 'readonly',
         // Supabase CDN global
         supabase: 'readonly',
       },
@@ -71,7 +72,7 @@ module.exports = [
       'no-constant-condition': 'warn',
       'no-debugger': 'error',
       'no-duplicate-case': 'error',
-      'eqeqeq': ['warn', 'smart'],
+      eqeqeq: ['warn', 'smart'],
       'no-eval': 'error',
       'no-implied-eval': 'error',
     },

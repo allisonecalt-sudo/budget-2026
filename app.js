@@ -2774,15 +2774,43 @@ function renderApp() {
   if (typeof applyNumericInputModes === 'function') applyNumericInputModes();
 }
 
-/* DM1 — apply inputmode="decimal" to all number inputs after each render so
-   iOS/Android show the right virtual keypad. Idempotent: skips inputs that
-   already declare an inputmode (e.g., a future field that explicitly wants
-   "numeric" for integer-only). */
-function applyNumericInputModes() {
-  const inputs = document.querySelectorAll('input[type="number"]:not([inputmode])');
+/* DM1 — apply inputmode="decimal" to all number inputs so iOS/Android show
+   the right virtual keypad. The post-render hook handles whole-page renders;
+   the MutationObserver below catches any partial DOM updates (panels, sub-row
+   expansions) that don't go through renderApp(). Idempotent: skips inputs
+   that already declare an inputmode (e.g., a future field that explicitly
+   wants "numeric" for integer-only). */
+function applyNumericInputModes(root) {
+  const scope = root && root.querySelectorAll ? root : document;
+  const inputs = scope.querySelectorAll('input[type="number"]:not([inputmode])');
   inputs.forEach((el) => {
     el.setAttribute('inputmode', 'decimal');
   });
+}
+// Catch dynamically-inserted number inputs (panels, sub-rows, lazy renders).
+// Runs once globally; effectively free since we early-out when no number
+// inputs are added in the mutation batch.
+if (typeof window !== 'undefined' && 'MutationObserver' in window) {
+  const _inputModeObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue; // ELEMENT_NODE only
+        if (node.matches && node.matches('input[type="number"]:not([inputmode])')) {
+          node.setAttribute('inputmode', 'decimal');
+        } else if (node.querySelectorAll) {
+          applyNumericInputModes(node);
+        }
+      }
+    }
+  });
+  // Defer attach until DOM body exists.
+  if (document.body) {
+    _inputModeObserver.observe(document.body, { childList: true, subtree: true });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      _inputModeObserver.observe(document.body, { childList: true, subtree: true });
+    });
+  }
 }
 
 async function saveSavingsField(field, value) {
