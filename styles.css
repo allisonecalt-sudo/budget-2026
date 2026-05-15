@@ -1907,3 +1907,82 @@ tr.collapsed {
 .search-tx-clickable:hover {
   background: var(--surface2);
 }
+
+/* ── Owed strip (Q1 — Budget tab top KPI) ─────────────────────────────── */
+.ribbon-stat.owed-strip {
+  flex: 1.6;
+  text-align: left;
+  padding: 0.25rem 0.6rem;
+  min-width: 200px;
+}
+.ribbon-stat.owed-strip .ribbon-label {
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.owed-chev {
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.15rem;
+  line-height: 1;
+  border-radius: 3px;
+  transition:
+    background 0.15s,
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.owed-chev:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.owed-segments {
+  font-size: 0.78rem;
+}
+.owed-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: pointer;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  color: var(--red);
+  font-weight: 600;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.owed-seg:hover {
+  background: var(--rsoft);
+}
+.owed-seg.owed-seg-zero {
+  color: var(--muted);
+}
+.owed-seg.owed-seg-zero:hover {
+  background: var(--gsoft);
+}
+.owed-sep {
+  color: var(--dim);
+  font-size: 0.7rem;
+}
+@media (max-width: 600px) {
+  .ribbon-stat.owed-strip {
+    grid-column: span 3 !important;
+    text-align: left !important;
+    padding: 0.4rem 0.5rem !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    min-width: 0;
+  }
+  .ribbon-stat.owed-strip .ribbon-label {
+    font-size: 0.58rem !important;
+  }
+  .owed-segments {
+    font-size: 0.72rem;
+    gap: 0.4rem !important;
+  }
+  .owed-seg {
+    padding: 0.1rem 0.3rem;
+  }
+}

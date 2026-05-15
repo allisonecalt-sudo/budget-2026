@@ -1347,7 +1347,10 @@ async function switchMonth(monthId) {
     loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId)),
   ];
   // Load year-level data in background, re-render when done
-  Promise.all([loadAdminData(), loadTravelData(), loadCharityData()]).then(() => renderApp());
+  // Cash data needed for the Budget-tab Owed KPI (below-threshold)
+  Promise.all([loadAdminData(), loadTravelData(), loadCharityData(), loadCashData()]).then(() =>
+    renderApp(),
+  );
   if (state.activeTab === 'biz') loads.push(loadBizData());
   try {
     await Promise.all(loads);
@@ -1884,6 +1887,54 @@ function renderApp() {
           <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${income - totalSpent >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div></div>
           <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</div></div>
+          ${(() => {
+            // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
+            // Always visible on Budget-tab top KPIs, glanceable on mobile too.
+            const owedOpen = localStorage.getItem('owedStripOpen') !== 'false'; // default open
+            const tProj = (state.travel.items || []).reduce(
+              (s, i) => s + (Number(i.projected_amount) || 0),
+              0,
+            );
+            const tAlloc = Object.values(state.travel.allocations || {}).reduce(
+              (s, a) => s + (Number(a.amount) || 0),
+              0,
+            );
+            const tGap = Math.max(0, tProj - tAlloc);
+            const aProj = (state.admin.items || []).reduce(
+              (s, i) => s + (Number(i.projected_amount) || 0),
+              0,
+            );
+            const aAlloc = Object.values(state.admin.allocations || {}).reduce(
+              (s, a) => s + (Number(a.amount) || 0),
+              0,
+            );
+            const aGap = Math.max(0, aProj - aAlloc);
+            // Below threshold: Cash invest threshold − total liquid
+            const INVEST_THRESHOLD = 35000;
+            const accts = state.cashAccounts || [];
+            const liquidTotal = accts.reduce((s, a) => s + cashILS(a), 0);
+            const below = Math.max(0, INVEST_THRESHOLD - liquidTotal);
+            const totalOwed = tGap + aGap + below;
+            const seg = (emoji, val, tab, label) =>
+              val > 0
+                ? `<span class="owed-seg" title="${label}: -${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`
+                : `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
+            const chev = owedOpen ? '▾' : '▸';
+            return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
+              <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
+                <button class="owed-chev" onclick="toggleOwedStrip()" title="${owedOpen ? 'Hide' : 'Show'} owed elsewhere" aria-label="${owedOpen ? 'Hide' : 'Show'} owed">${chev}</button>
+                <span style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
+              </div>
+              <div class="owed-segments" style="display:${owedOpen ? 'flex' : 'none'};gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.15rem;">
+                ${seg('✈️', tGap, 'travel', 'Travel gap')}
+                <span class="owed-sep">·</span>
+                ${seg('📋', aGap, 'admin', 'Admin gap')}
+                <span class="owed-sep">·</span>
+                ${seg('💰', below, 'cash', 'Below threshold')}
+              </div>
+              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? '-' : ''}${fmt(totalOwed)}</div>` : ''}
+            </div>`;
+          })()}
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
             <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
             <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
@@ -5852,6 +5903,13 @@ function toggleRibbonExpand() {
   renderApp();
 }
 
+// Owed strip — collapsible chevron, persists state, default open. (Q1)
+function toggleOwedStrip() {
+  const open = localStorage.getItem('owedStripOpen') !== 'false'; // default open
+  localStorage.setItem('owedStripOpen', !open);
+  renderApp();
+}
+
 // ── Cash / Liquidity Tab ──────────────────────────────────────────────
 async function loadCashData() {
   const { data } = await sb.from('cash_accounts').select('*').order('sort_order');
@@ -6875,6 +6933,7 @@ async function loadFresh() {
     loadAdminData(),
     loadTravelData(),
     loadCharityData(),
+    loadCashData(), // Needed for the Owed KPI on Budget tab — shows below-threshold delta
   ]);
   const tab = state.activeTab;
   if (tab === 'biz') await loadBizData();
