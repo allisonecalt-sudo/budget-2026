@@ -650,8 +650,8 @@ function editRecurringCell(label, monthNum, currentVal) {
   td.style.cursor = 'text';
   td.innerHTML =
     '<input type="number" inputmode="decimal" step="0.01" min="0" class="rg-edit" ' +
-    'style="width:100%;text-align:right;font-family:\'DM Mono\',monospace;font-size:.78rem;' +
-    "padding:.18rem .25rem;border:1px solid var(--accent);border-radius:3px;background:var(--surface);outline:none;\" " +
+    "style=\"width:100%;text-align:right;font-family:'DM Mono',monospace;font-size:.78rem;" +
+    'padding:.18rem .25rem;border:1px solid var(--accent);border-radius:3px;background:var(--surface);outline:none;" ' +
     'value="' +
     (currentVal || '') +
     '">';
