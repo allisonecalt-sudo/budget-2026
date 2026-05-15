@@ -2162,9 +2162,13 @@ input:focus {
   font-size: 0.65rem;
   font-weight: 600;
   min-width: 72px;
-  border-left: 1px solid var(--border);
+  /* YG2 — stronger separation from monthly columns: thicker accent border + tint */
+  border-left: 2px solid var(--border);
+  background: var(--surface2);
   color: var(--muted);
-  background: var(--surface);
+}
+.year-th-extra:first-of-type {
+  border-left-color: var(--accent);
 }
 /* Data rows */
 .year-col-label {
@@ -2211,6 +2215,8 @@ input:focus {
 }
 .year-cell.future {
   color: var(--dim);
+  /* YG3 — Match the legend: "italics = projected". Was missing entirely. */
+  font-style: italic;
 }
 .year-cell.current-col {
   background: rgba(45, 106, 79, 0.04);
@@ -2223,21 +2229,33 @@ input:focus {
   color: var(--red);
   font-weight: 600;
 }
+/* YG2 — summary columns (Total / Avg / % Inc) visually separated from
+   the 12 month columns. Thicker accent border on first summary cell, tint
+   to distinguish from the data field. Tabular-nums for clean alignment. */
 .year-cell-extra {
   text-align: right;
   font-weight: 600;
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  background: var(--surface2);
+  font-variant-numeric: tabular-nums;
+}
+.year-cell-extra:first-of-type {
+  border-left-color: var(--accent);
 }
 .year-cell-avg {
   text-align: right;
   color: var(--muted);
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  background: var(--surface2);
+  font-variant-numeric: tabular-nums;
 }
 .year-cell-pct {
   text-align: right;
   color: var(--dim);
   font-size: 0.67rem;
-  border-left: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  background: var(--surface2);
+  font-variant-numeric: tabular-nums;
 }
 tr.collapsed {
   display: none !important;
@@ -2841,11 +2859,43 @@ tr.collapsed {
   ) {
   display: none;
 }
-/* "Above-budget months" -> dim the non-above-budget month cells via opacity.
-   We can't trivially hide whole columns in HTML tables without css subgrid;
-   use a soft de-emphasis instead. Header cells still highlight. */
-.year-tab-wrap[data-year-filter='above'] .year-table .future {
-  opacity: 0.35;
+/* "Above-budget months" -> dim every month-column whose status is 'ok'
+   (i.e. spent <= income). The wrapper carries data-yr-col-N="above|ok"
+   computed in JS for each of the 12 months. We translate that into nth-child
+   rules so the dimming applies to exactly the right columns regardless of
+   whether they're past, current, or future.
+   Cells: column N == nth-child(N+1) because the first <td> is the row label.
+   Headers: column N == nth-child(N+1) for the same reason. */
+.year-tab-wrap[data-year-filter='above'][data-yr-col-1='ok'] .year-table tbody td:nth-child(2),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-1='ok'] .year-table thead th:nth-child(2),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-2='ok'] .year-table tbody td:nth-child(3),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-2='ok'] .year-table thead th:nth-child(3),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-3='ok'] .year-table tbody td:nth-child(4),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-3='ok'] .year-table thead th:nth-child(4),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-4='ok'] .year-table tbody td:nth-child(5),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-4='ok'] .year-table thead th:nth-child(5),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-5='ok'] .year-table tbody td:nth-child(6),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-5='ok'] .year-table thead th:nth-child(6),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-6='ok'] .year-table tbody td:nth-child(7),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-6='ok'] .year-table thead th:nth-child(7),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-7='ok'] .year-table tbody td:nth-child(8),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-7='ok'] .year-table thead th:nth-child(8),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-8='ok'] .year-table tbody td:nth-child(9),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-8='ok'] .year-table thead th:nth-child(9),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-9='ok'] .year-table tbody td:nth-child(10),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-9='ok'] .year-table thead th:nth-child(10),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-10='ok'] .year-table tbody td:nth-child(11),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-10='ok'] .year-table thead th:nth-child(11),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-11='ok'] .year-table tbody td:nth-child(12),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-11='ok'] .year-table thead th:nth-child(12),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-12='ok'] .year-table tbody td:nth-child(13),
+.year-tab-wrap[data-year-filter='above'][data-yr-col-12='ok'] .year-table thead th:nth-child(13) {
+  opacity: 0.3;
+  /* Don't dim the row's first cell (label), Total/Avg/% Inc, or section headers. */
+}
+/* Section header rows span the whole table — never dim them. */
+.year-tab-wrap[data-year-filter='above'] .year-row-section td {
+  opacity: 1 !important;
 }
 
 /* M2 — Sticky "+" FAB on mobile (hidden on desktop) */
