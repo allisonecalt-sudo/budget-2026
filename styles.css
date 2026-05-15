@@ -1986,3 +1986,77 @@ tr.collapsed {
     padding: 0.1rem 0.3rem;
   }
 }
+
+/* ── Cash-tab KPI cards (Q3) ──────────────────────────────────────────── */
+.year-sum-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 0.8rem 1rem;
+  box-shadow: var(--shadow);
+  flex: 1 1 130px;
+  min-width: 0;
+}
+.year-sum-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.year-sum-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.year-sum-card.below-threshold {
+  border-color: var(--red);
+  box-shadow:
+    0 0 0 2px var(--rsoft),
+    var(--shadow);
+  background: linear-gradient(180deg, rgba(192, 57, 43, 0.04) 0%, var(--surface) 60%);
+}
+@media (max-width: 600px) {
+  .year-sum-card {
+    flex: 1 1 calc(50% - 0.4rem);
+    padding: 0.65rem 0.7rem;
+  }
+  .year-sum-val {
+    font-size: 1rem;
+  }
+}
+
+/* ── 44x44 mobile tap targets for toolbar icons (Q4) ──────────────────── */
+@media (max-width: 600px) {
+  .hdr-actions .mtab {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem !important;
+    font-size: 1rem !important; /* keep emoji size readable */
+  }
+}
+
+/* ── Scroll-fade affordance on tab + month rows (Q7) ──────────────────── */
+@media (max-width: 600px) {
+  .hdr-tabs .page-tabs,
+  .hdr-months .month-tabs {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      black 0,
+      black calc(100% - 24px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%);
+  }
+  /* Drop the fade once the user has scrolled to the right edge */
+  .hdr-tabs .page-tabs.scroll-end,
+  .hdr-months .month-tabs.scroll-end {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

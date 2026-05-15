@@ -2619,6 +2619,8 @@ function renderApp() {
       updateStoreSuggestions(catSel.value);
     });
   }
+  // Q7 — wire scroll-fade affordance after each render
+  if (typeof applyScrollFadeListeners === 'function') applyScrollFadeListeners();
 }
 
 async function saveSavingsField(field, value) {
@@ -5910,6 +5912,23 @@ function toggleOwedStrip() {
   renderApp();
 }
 
+// Scroll-fade affordance (Q7) — toggle .scroll-end class when content
+// reaches its right edge so the fade-mask drops away gracefully.
+function applyScrollFadeListeners() {
+  const targets = document.querySelectorAll('.hdr-tabs .page-tabs, .hdr-months .month-tabs');
+  targets.forEach((el) => {
+    if (el.dataset.scrollFadeBound) return;
+    el.dataset.scrollFadeBound = '1';
+    const update = () => {
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+      const noOverflow = el.scrollWidth <= el.clientWidth;
+      el.classList.toggle('scroll-end', atEnd || noOverflow);
+    };
+    el.addEventListener('scroll', update, { passive: true });
+    requestAnimationFrame(update);
+  });
+}
+
 // ── Cash / Liquidity Tab ──────────────────────────────────────────────
 async function loadCashData() {
   const { data } = await sb.from('cash_accounts').select('*').order('sort_order');
@@ -6063,7 +6082,7 @@ function renderCashTab() {
           : ''
       }</div>
       <div class="year-sum-card"><div class="year-sum-label">Invest Threshold</div><div class="year-sum-val">₪${n(INVEST_THRESHOLD)}</div></div>
-      <div class="year-sum-card"><div class="year-sum-label">${investable >= 0 ? 'Investable' : 'Below Threshold'}</div><div class="year-sum-val" style="color:${investable >= 0 ? 'var(--green)' : 'var(--red)'};">${investable >= 0 ? '₪' + n(investable) : '-₪' + n(Math.abs(investable))}</div></div>
+      <div class="year-sum-card${investable < 0 ? ' below-threshold' : ''}"><div class="year-sum-label">${investable >= 0 ? 'Investable' : 'Below Threshold'}</div><div class="year-sum-val" style="color:${investable >= 0 ? 'var(--green)' : 'var(--red)'};">${investable >= 0 ? '₪' + n(investable) : '-₪' + n(Math.abs(investable))}</div></div>
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
