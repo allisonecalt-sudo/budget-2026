@@ -5109,7 +5109,7 @@ function renderCharityTab() {
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining to Give</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(totalAlloc - totalPaid)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">allocated − paid (pledges excluded)</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">free now · after pledges: <strong style="color:${totalAlloc - totalSpent < 0 ? 'var(--red)' : 'var(--text)'};">${fmtA(totalAlloc - totalSpent)}</strong></div>
       </div>
     </div>
 
