@@ -2790,8 +2790,12 @@ function applyNumericInputModes(root) {
 // Catch dynamically-inserted number inputs (panels, sub-rows, lazy renders).
 // Runs once globally; effectively free since we early-out when no number
 // inputs are added in the mutation batch.
-if (typeof window !== 'undefined' && 'MutationObserver' in window) {
-  const _inputModeObserver = new MutationObserver((mutations) => {
+function _installInputModeObserver() {
+  if (window._inputModeObserverInstalled) return;
+  if (!document.body) return;
+  if (!('MutationObserver' in window)) return;
+  window._inputModeObserverInstalled = true;
+  const obs = new MutationObserver((mutations) => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
         if (node.nodeType !== 1) continue; // ELEMENT_NODE only
@@ -2803,14 +2807,17 @@ if (typeof window !== 'undefined' && 'MutationObserver' in window) {
       }
     }
   });
-  // Defer attach until DOM body exists.
-  if (document.body) {
-    _inputModeObserver.observe(document.body, { childList: true, subtree: true });
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      _inputModeObserver.observe(document.body, { childList: true, subtree: true });
-    });
-  }
+  obs.observe(document.body, { childList: true, subtree: true });
+  // First pass for already-rendered inputs.
+  applyNumericInputModes();
+}
+// Try synchronously (script lives at end of body) and fall back to
+// DOMContentLoaded + setTimeout if body isn't ready yet.
+_installInputModeObserver();
+if (!window._inputModeObserverInstalled) {
+  document.addEventListener('DOMContentLoaded', _installInputModeObserver);
+  setTimeout(_installInputModeObserver, 0);
+  setTimeout(_installInputModeObserver, 100);
 }
 
 async function saveSavingsField(field, value) {
