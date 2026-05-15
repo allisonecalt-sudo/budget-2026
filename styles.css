@@ -1,9 +1,14 @@
 :root {
   --bg: #f5f4f0;
   --surface: #fff;
+  /* V6 — surface-elevated sits between --surface and --surface2 for finer hierarchy
+     (subtle row hover, raised inputs, gentle group separators) */
+  --surface-elevated: #fafaf6;
   --surface2: #f0efeb;
   --surface3: #e8e7e2;
   --border: #dddbd4;
+  /* V6 — softer border for inner dividers / subtle group structure */
+  --border-soft: #e8e6df;
   --text: #1a1915;
   --muted: #6b6960;
   --dim: #a09e96;
@@ -19,13 +24,60 @@
   /* V4 — muted teal accent for informational/neutral states (auto, sync, expected) */
   --info: #2a5564;
   --infosoft: rgba(42, 85, 100, 0.1);
+  /* V6 — focus-ring soft halo (uses --info muted teal per visual-polish brief) */
+  --focus-ring: rgba(42, 85, 100, 0.35);
   --shadow: 0 2px 8px rgba(26, 25, 21, 0.08);
   --shadowlg: 0 8px 32px rgba(26, 25, 21, 0.12);
   /* V3 — card micro-shadow stack (Stripe/Linear/Vercel pattern) */
   --shadow-card: 0 1px 2px rgba(26, 25, 21, 0.04), 0 1px 0 rgba(26, 25, 21, 0.02) inset;
+  /* V6 — Linear/Vercel-style layered elevation system.
+     -sm: subtle (always-on, non-interactive lift) — cards at rest.
+     -md: hover/focus lift — pulls a card off the page on hover.
+     -lg: floating panels (toolbar overflow, popovers).
+     -xl: modal / sheet shadows (rarely used).
+     Each pairs a tight 1px shadow with a softer larger blur for depth. */
+  --shadow-sm: 0 1px 2px rgba(26, 25, 21, 0.04), 0 1px 3px rgba(26, 25, 21, 0.05);
+  --shadow-md: 0 1px 2px rgba(26, 25, 21, 0.05), 0 4px 12px rgba(26, 25, 21, 0.07);
+  --shadow-lg: 0 2px 4px rgba(26, 25, 21, 0.05), 0 12px 28px rgba(26, 25, 21, 0.12);
+  --shadow-xl: 0 4px 8px rgba(26, 25, 21, 0.06), 0 20px 40px rgba(26, 25, 21, 0.16);
   --gradient-card-wash: linear-gradient(180deg, #ffffff 0%, #fbfaf6 100%);
+  /* V6 — primary button gradient (subtle inner highlight, Stripe/Linear pattern) */
+  --gradient-primary: linear-gradient(180deg, #348062 0%, #2d6a4f 100%);
+  --gradient-primary-hover: linear-gradient(180deg, #40916c 0%, #348062 100%);
+  /* V6 — radii scale: 6 (small chips/inputs) / 10 (cards/buttons, default --r) /
+     16 (large cards/wash surfaces, --rl) / 999 (pills). Ad-hoc 4/7/8 values
+     should snap to the scale; legacy 4-8px values intentionally preserved
+     where they appear inside dense table rows that visually need tighter radii. */
+  --r-sm: 6px;
   --r: 10px;
   --rl: 16px;
+  --r-pill: 999px;
+  /* V6 — interaction timing (consistent ease across the app) */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 120ms;
+  --t-base: 160ms;
+}
+
+/* V6 — global focus-visible: clean muted-teal ring on every keyboard-focused
+   interactive element. Per-component overrides win via specificity. */
+:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* Inputs use a soft halo + border shift instead of a hard outline */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 * {
   box-sizing: border-box;
