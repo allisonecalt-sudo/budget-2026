@@ -2656,6 +2656,8 @@ function renderApp() {
   }
   // Q7 — wire scroll-fade affordance after each render
   if (typeof applyScrollFadeListeners === 'function') applyScrollFadeListeners();
+  // M2 — sticky "+" FAB on mobile, tab-aware
+  if (typeof renderFab === 'function') renderFab();
 }
 
 async function saveSavingsField(field, value) {
@@ -7767,4 +7769,257 @@ async function searchJumpToTx(txId, monthId) {
     renderApp();
   }
   jumpToTransaction(txId);
+}
+
+// ── M2 — Sticky "+" FAB on mobile, tab-aware quick-add ─────────────────
+// Renders a floating "+" button bottom-right on viewports <= 600px.
+// Tab-aware: opens a quick-add bottom-sheet for the current tab.
+// Tabs without a quick-add path (year, cash, biz) get no FAB.
+function fabSpec() {
+  switch (state.activeTab) {
+    case 'budget':
+      return { label: 'Add transaction', kind: 'tx' };
+    case 'travel':
+      return { label: 'Add travel payment', kind: 'travel' };
+    case 'charity':
+      return { label: 'Log charity payment', kind: 'charity' };
+    case 'admin':
+      return { label: 'Log admin payment', kind: 'admin' };
+    default:
+      return null;
+  }
+}
+
+function renderFab() {
+  let fab = document.getElementById('mobile-fab');
+  const spec = fabSpec();
+  if (!spec) {
+    if (fab) fab.remove();
+    return;
+  }
+  if (!fab) {
+    fab = document.createElement('button');
+    fab.id = 'mobile-fab';
+    fab.type = 'button';
+    fab.className = 'mobile-fab';
+    fab.innerHTML = '+';
+    fab.setAttribute('aria-label', spec.label);
+    fab.onclick = openQuickAddSheet;
+    document.body.appendChild(fab);
+  } else {
+    fab.setAttribute('aria-label', spec.label);
+  }
+}
+
+function openQuickAddSheet() {
+  const spec = fabSpec();
+  if (!spec) return;
+  closeAllPanels();
+  let panel = document.getElementById('quick-add-sheet');
+  if (panel) panel.remove();
+  panel = document.createElement('div');
+  panel.id = 'quick-add-sheet';
+  panel.className = 'app-panel app-panel-quickadd';
+  ensureBackdrop();
+  panel.innerHTML = `
+    <div class="app-panel-drag-handle" aria-hidden="true"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem .55rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-weight:700;font-size:.95rem;">${spec.label}</span>
+      <button onclick="closeAllPanels()" aria-label="Close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:.25rem .5rem;">✕</button>
+    </div>
+    <div style="padding:.85rem 1rem 1.1rem;display:flex;flex-direction:column;gap:.55rem;">
+      ${quickAddSheetBody(spec.kind)}
+    </div>
+  `;
+  document.body.appendChild(panel);
+  panel.style.display = 'flex';
+  showBackdrop();
+  requestAnimationFrame(() => panel.classList.add('app-panel-open'));
+  // Focus first input
+  setTimeout(() => {
+    const f = panel.querySelector('input,select');
+    if (f) f.focus();
+  }, 240);
+}
+
+function quickAddSheetBody(kind) {
+  const inputCss =
+    "width:100%;font-size:.95rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;";
+  const btnCss =
+    "width:100%;padding:.7rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.95rem;cursor:pointer;margin-top:.3rem;";
+  if (kind === 'tx') {
+    return `
+      <select id="qa-cat" style="${inputCss}">
+        <option value="">Category…</option>
+        ${[...CATEGORIES]
+          .sort((a, b) => a.label.localeCompare(b.label))
+          .map((c) => `<option value="${c.key}">${c.emoji} ${c.label}</option>`)
+          .join('')}
+      </select>
+      <input type="text" id="qa-store" placeholder="Store" style="${inputCss}">
+      <input type="text" id="qa-item" placeholder="Item" style="${inputCss}">
+      <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <input type="date" id="qa-date" style="${inputCss}">
+      <button onclick="submitQuickAdd('tx')" style="${btnCss}">Save transaction</button>
+    `;
+  }
+  if (kind === 'travel') {
+    return `
+      <input type="text" id="qa-label" placeholder="What" style="${inputCss}">
+      <input type="text" id="qa-dest" placeholder="Trip / destination" list="qa-dest-list" style="${inputCss}">
+      <datalist id="qa-dest-list">
+        ${(state.travel?.items || []).map((i) => `<option value="${(i.label || '').replace(/"/g, '&quot;')}">`).join('')}
+      </datalist>
+      <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <button onclick="submitQuickAdd('travel')" style="${btnCss}">Log payment</button>
+    `;
+  }
+  if (kind === 'charity') {
+    return `
+      <input type="text" id="qa-label" placeholder="Charity name" style="${inputCss}">
+      <input type="date" id="qa-date" style="${inputCss}">
+      <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <button onclick="submitQuickAdd('charity')" style="${btnCss}">Log payment</button>
+    `;
+  }
+  if (kind === 'admin') {
+    return `
+      <input type="text" id="qa-label" placeholder="What" style="${inputCss}">
+      <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <button onclick="submitQuickAdd('admin')" style="${btnCss}">Log payment</button>
+    `;
+  }
+  return '';
+}
+
+async function submitQuickAdd(kind) {
+  const monthNum = currentMonthNum();
+  if (kind === 'tx') {
+    const cat = document.getElementById('qa-cat').value;
+    const store = document.getElementById('qa-store').value.trim();
+    const item = document.getElementById('qa-item').value.trim();
+    const amount = parseFloat(document.getElementById('qa-amount').value);
+    const date = document.getElementById('qa-date').value;
+    if (!cat || !amount || isNaN(amount)) {
+      toast('Fill in category and amount');
+      return;
+    }
+    const { data: txData, error } = await sb
+      .from('transactions')
+      .insert({
+        month_id: state.currentMonthId,
+        category: cat,
+        store: store || null,
+        item: item || null,
+        amount,
+        date: date || null,
+      })
+      .select()
+      .single();
+    if (error) {
+      toast('Error saving — try again');
+      return;
+    }
+    state.transactions.push(txData);
+    logChange(
+      'add',
+      'transaction',
+      txData.id,
+      `Added ${store || item || cat} ₪${amount} • ${cat}`,
+      null,
+      txData,
+      state.currentMonthId,
+    );
+    pushUndo({
+      label: 'add transaction',
+      undo: async () => {
+        await sb.from('transactions').delete().eq('id', txData.id);
+        await loadTransactions(state.currentMonthId);
+      },
+      redo: async () => {
+        await sb.from('transactions').insert(txData);
+        await loadTransactions(state.currentMonthId);
+      },
+    });
+    closeAllPanels();
+    renderApp();
+    toast('Transaction saved ✓');
+    return;
+  }
+  if (kind === 'travel') {
+    const label = document.getElementById('qa-label').value.trim();
+    const destination = document.getElementById('qa-dest').value.trim();
+    const amount = parseFloat(document.getElementById('qa-amount').value);
+    if (!label || !amount || isNaN(amount)) {
+      toast('Fill in what and amount');
+      return;
+    }
+    const { data, error } = await sb
+      .from('travel_payments')
+      .insert({ year: 2026, month_num: monthNum, label, destination, amount })
+      .select()
+      .single();
+    if (error) {
+      toast('Error saving');
+      return;
+    }
+    state.travel.payments.push(data);
+    state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+    closeAllPanels();
+    renderApp();
+    toast('Payment logged ✓');
+    return;
+  }
+  if (kind === 'charity') {
+    const label = document.getElementById('qa-label').value.trim();
+    const dateVal = document.getElementById('qa-date').value || null;
+    const amount = parseFloat(document.getElementById('qa-amount').value);
+    if (!label || !amount || isNaN(amount)) {
+      toast('Fill in name and amount');
+      return;
+    }
+    const { data, error } = await sb
+      .from('charity_payments')
+      .insert({ year: 2026, month_num: monthNum, label, amount, payment_date: dateVal })
+      .select()
+      .single();
+    if (error) {
+      toast('Error saving');
+      return;
+    }
+    state.charity.payments.push(data);
+    state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+    closeAllPanels();
+    renderApp();
+    toast('Payment logged ✓');
+    return;
+  }
+  if (kind === 'admin') {
+    const label = document.getElementById('qa-label').value.trim();
+    const amount = parseFloat(document.getElementById('qa-amount').value);
+    if (!label || !amount || isNaN(amount)) {
+      toast('Fill in what and amount');
+      return;
+    }
+    const { data, error } = await sb
+      .from('admin_payments')
+      .insert({ year: 2026, month_num: monthNum, label, amount })
+      .select()
+      .single();
+    if (error) {
+      toast('Error saving');
+      return;
+    }
+    state.admin.payments.push(data);
+    state.admin.payments.sort((a, b) => a.month_num - b.month_num);
+    closeAllPanels();
+    renderApp();
+    toast('Payment logged ✓');
+    return;
+  }
+}
+
+function currentMonthNum() {
+  const m = state.months.find((x) => x.id === state.currentMonthId);
+  return (m && m.month_num) || new Date().getMonth() + 1;
 }

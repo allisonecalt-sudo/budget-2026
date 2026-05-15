@@ -2218,6 +2218,60 @@ tr.collapsed {
   }
 }
 
+/* M2 — Quick-add bottom sheet (mobile-only sizing) */
+.app-panel-quickadd {
+  width: 380px;
+  max-width: 100vw;
+}
+@media (max-width: 600px) {
+  .app-panel-quickadd {
+    height: auto;
+    max-height: 78vh;
+  }
+}
+
+/* M2 — Sticky "+" FAB on mobile (hidden on desktop) */
+.mobile-fab {
+  display: none;
+}
+@media (max-width: 600px) {
+  .mobile-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 1rem;
+    /* Above any bottom-tab nav we add later; safe-area-aware */
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 2rem;
+    line-height: 1;
+    font-weight: 300;
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.25),
+      0 1px 3px rgba(0, 0, 0, 0.15);
+    z-index: 650;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease;
+  }
+  .mobile-fab:active {
+    transform: scale(0.94);
+    background: var(--abright);
+  }
+  .mobile-fab:focus-visible {
+    outline: 2px solid var(--abright);
+    outline-offset: 3px;
+  }
+}
+
 /* Reduced-motion: respect user preference everywhere we transition */
 @media (prefers-reduced-motion: reduce) {
   .app-panel,
