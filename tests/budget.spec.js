@@ -1151,8 +1151,8 @@ test('admin page — yearly expenses and payment log are linked', async ({ page 
     .catch(() => false);
   console.log(`Payment Log auto-generated: ${hasAutoNote}`);
 
-  // Spent card shows a value
-  await expect(page.locator('text=paid so far')).toBeVisible();
+  // Spent card shows a value (DA1 — sub-line is now "paid YTD")
+  await expect(page.locator('text=paid YTD')).toBeVisible();
 });
 
 // ─── Search Panel ───
