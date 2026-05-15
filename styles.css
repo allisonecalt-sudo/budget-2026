@@ -1588,6 +1588,43 @@ input:focus {
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-bottom: 0.25rem;
+    /* DM3 — hide scrollbar but keep scrollability */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .month-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  /* DM2 — month-chip touch targets bumped to 44px min height on mobile.
+     The 30h default fails Apple HIG and Material 44px minimum. */
+  .hdr-months .month-tabs .mtab {
+    min-height: 44px;
+    padding: 0.55rem 0.7rem !important;
+  }
+  /* DM2 — month nav chevrons matched to the chip height */
+  .month-nav-chev {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    width: 44px !important;
+    padding: 0.55rem 0 !important;
+    font-size: 1.25rem !important;
+  }
+  /* DM10 — Travel/Admin 5-card KPI strip: 2-2-1 leaves the Remaining card
+     orphaned on row 3. Force 3-2 by tightening the auto-fit min so 3 cards
+     fit on a 390px viewport. The first two cards on row 1, three on row 2,
+     OR three on row 1 and two on row 2 (auto-fit decides). The smaller
+     cards still meet legibility at the bumped V1 KPI display type. */
+  .tab-kpi-strip {
+    grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)) !important;
+    gap: 0.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+  .tab-kpi-strip > div {
+    padding: 0.7rem 0.55rem !important;
+  }
+  .tab-kpi-strip > div > div:nth-child(2) {
+    /* shrink the value font on mobile so 5-digit ₪ values stay on one line */
+    font-size: 1.1rem !important;
   }
   .tx-header,
   .tx-item {

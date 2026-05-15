@@ -4421,7 +4421,7 @@ function renderTravelTab() {
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
     <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
+    <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
@@ -5335,7 +5335,7 @@ function renderAdminTab() {
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
     <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
+    <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
