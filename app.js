@@ -4295,8 +4295,10 @@ function renderTravelTab() {
   // Pre-compute payment log HTML
   let payLogHtml = '';
   if (payments.length === 0) {
+    // DT5 — friendlier empty state: name what the user can do next instead of
+    // a flat "No payments yet" line. Aligns with fail-loud rule.
     payLogHtml =
-      '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>';
+      '<div style="color:var(--dim);font-size:.78rem;padding:.6rem 0;font-style:italic;">No payments logged yet — use the form above to add the first one.</div>';
   } else {
     const ps = localStorage.getItem('travelPaySort') || 'month';
     const sorted = [...payments].sort((a, b) => {
@@ -4394,15 +4396,19 @@ function renderTravelTab() {
         if (!groups[key]) groups[key] = [];
         groups[key].push(p);
       });
-      // Stable trip order: items first, then unknown, then unassigned
+      // Stable trip order: items first (INCLUDING items with no payments yet —
+      // see DT5 below), then unknown destinations, then unassigned.
       const itemNames = (items || []).map((it) => (it.label || '').trim()).filter(Boolean);
       const seen = new Set();
       const orderedKeys = [];
+      // DT5 — empty-state visibility: include EVERY known trip (even with zero
+      // payments) so trips that exist in Yearly Expenses but haven't seen a
+      // payment yet still appear with their "₪0 of ₪X" header. Without this,
+      // a trip with allocation but no log entries is silently invisible — you
+      // can't tell at a glance "Avital trip has nothing logged yet."
       itemNames.forEach((n) => {
-        if (groups[n]) {
-          orderedKeys.push(n);
-          seen.add(n);
-        }
+        orderedKeys.push(n);
+        seen.add(n);
       });
       Object.keys(groups).forEach((k) => {
         if (!seen.has(k) && k !== '(unassigned)') {
@@ -4425,6 +4431,12 @@ function renderTravelTab() {
             : '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
               ' spent</span>';
+          // DT5 — fail-loud empty state per trip. If a known trip has no payments
+          // logged yet, surface that explicitly instead of an empty section.
+          const bodyHtml =
+            ps.length === 0
+              ? '<div style="font-size:.7rem;color:var(--dim);font-style:italic;padding:.45rem .25rem;">No payments logged yet</div>'
+              : ps.map(renderPayRow).join('');
           return (
             '<div style="margin-bottom:.7rem;">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .25rem .25rem;border-bottom:1px solid var(--accent);margin-bottom:.15rem;">' +
@@ -4433,7 +4445,7 @@ function renderTravelTab() {
             '</span>' +
             headerNote +
             '</div>' +
-            ps.map(renderPayRow).join('') +
+            bodyHtml +
             '</div>'
           );
         })
