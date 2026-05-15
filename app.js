@@ -1701,6 +1701,14 @@ function renderApp() {
     state.months[state.months.length - 1];
   if (!state.currentMonthId) state.currentMonthId = current.id;
 
+  // Biz net for current month — Income modal displays this read-only.
+  // Single source of truth for income_private = biz_months net (set by saveBizField).
+  const _bizCur = (state.allBiz || []).find((b) => b.month_id === current.id) || {};
+  const bizNetCurrent =
+    (Number(_bizCur.confirmed_amount) || 0) -
+    (Number(_bizCur.accountant_fee) || 0) -
+    (Number(_bizCur.spending) || 0);
+
   const income = totalIncome(current);
   // Sync charity % from localStorage into state.budgets AND Supabase (quietly, no undo/log)
   const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
@@ -2532,7 +2540,7 @@ function renderApp() {
         <div style="display:flex;flex-direction:column;gap:.65rem;">
           <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
           <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
-          <div class="fg"><label>Private (Vivi)</label><input type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0"></div>
+          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${bizNetCurrent.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
           <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
           <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
         </div>
@@ -2924,10 +2932,12 @@ function closeModal() {
 }
 
 async function saveIncome() {
+  // income_private is intentionally NOT writable here — it's derived from
+  // biz_months net via saveBizField. Editing it from this modal would create
+  // drift between months.income_private and biz_months.
   const updates = {
     income_petachya: parseFloat(document.getElementById('inc-petachya').value) || 0,
     income_clalit: parseFloat(document.getElementById('inc-clalit').value) || 0,
-    income_private: parseFloat(document.getElementById('inc-private').value) || 0,
     income_other: parseFloat(document.getElementById('inc-other').value) || 0,
     savings_bank: parseFloat(document.getElementById('inc-savings').value) || 0,
   };
