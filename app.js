@@ -236,11 +236,44 @@ const status = (spent, budget) => {
   return 'ok';
 };
 
-function toast(msg) {
+let _toastTimer = null;
+function toast(msg, opts) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  if (!t) return;
+  // Backward compat: plain string with no action
+  if (!opts || !opts.action) {
+    t.textContent = msg;
+    t.classList.add('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+    return;
+  }
+  // Snackbar style with action button
+  t.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = msg;
+  span.className = 'toast-msg';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toast-action';
+  btn.textContent = opts.action;
+  btn.onclick = () => {
+    t.classList.remove('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    if (typeof opts.onAction === 'function') opts.onAction();
+  };
+  t.appendChild(span);
+  t.appendChild(btn);
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), opts.duration || 5000);
+}
+
+// Snackbar helper for delete actions: shows "Deleted: <label> ₪<amount> · UNDO"
+function toastDeleted(label, amount) {
+  const amt = amount != null ? ' ' + fmt(amount) : '';
+  const lbl = (label || 'item').toString().replace(/^\[auto\]\s*/, '');
+  toast('Deleted: ' + lbl + amt, { action: 'UNDO', onAction: doUndo, duration: 5000 });
 }
 
 function today() {
@@ -1596,7 +1629,7 @@ async function deleteTransaction(id) {
     },
   });
   renderApp();
-  toast('Deleted ✓');
+  toastDeleted(snap.store || snap.item || snap.category, snap.amount);
 }
 
 async function updateTx(id, field, value) {
@@ -2985,6 +3018,7 @@ async function deleteIncomeItem(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.amount);
 }
 
 function showEditIncome() {
@@ -3307,6 +3341,7 @@ async function deleteCharityItem(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.projected_amount);
 }
 
 async function addCharitySub(itemId) {
@@ -3455,6 +3490,7 @@ async function deleteCharityPayment(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.amount);
 }
 
 async function updateCharityPayment(id, field, value) {
@@ -3592,6 +3628,7 @@ async function deleteTravelItem(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.projected_amount);
 }
 
 async function addTravelSub(itemId) {
@@ -3740,6 +3777,7 @@ async function deleteTravelPayment(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.amount);
 }
 
 async function updateTravelPayment(id, field, value) {
@@ -5410,6 +5448,7 @@ async function deleteAdminItem(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.projected_amount);
 }
 
 async function addAdminSub(itemId) {
@@ -5562,6 +5601,7 @@ async function deleteAdminPayment(id) {
     },
   });
   renderApp();
+  toastDeleted(snap.label, snap.amount);
 }
 
 async function updateAdminPayment(id, field, value) {
@@ -5984,10 +6024,7 @@ async function syncPtOwedToCash() {
   }
   const existing = (state.cashAccounts || []).find((a) => a.name === 'PT clinical (auto)');
   if (existing) {
-    await sb
-      .from('cash_accounts')
-      .update({ amount: state.ptOwedTotal })
-      .eq('id', existing.id);
+    await sb.from('cash_accounts').update({ amount: state.ptOwedTotal }).eq('id', existing.id);
   } else {
     await sb.from('cash_accounts').insert({
       name: 'PT clinical (auto)',
