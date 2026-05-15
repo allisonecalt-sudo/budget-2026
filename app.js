@@ -3017,13 +3017,16 @@ async function loadBizData() {
   if (bizRows && bizRows.length > 0) {
     state.biz = bizRows[0];
   } else {
+    // Pre-populate with the recurring accountant fee + matching placeholder
+    // confirmed amount so net = 0. Allison overrides with real numbers when
+    // the month becomes active. Avoids a misleading −₪200 in future months.
     const { data: newBiz } = await sb
       .from('biz_months')
       .insert({
         month_id: state.currentMonthId,
-        accountant_fee: 0,
+        accountant_fee: 200,
         spending: 0,
-        confirmed_amount: 0,
+        confirmed_amount: 200,
       })
       .select()
       .single();
