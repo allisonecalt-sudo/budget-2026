@@ -2658,6 +2658,8 @@ function renderApp() {
   if (typeof applyScrollFadeListeners === 'function') applyScrollFadeListeners();
   // M2 — sticky "+" FAB on mobile, tab-aware
   if (typeof renderFab === 'function') renderFab();
+  // M3 — mobile bottom tab bar
+  if (typeof renderMobileTabBar === 'function') renderMobileTabBar();
 }
 
 async function saveSavingsField(field, value) {
@@ -8022,4 +8024,73 @@ async function submitQuickAdd(kind) {
 function currentMonthNum() {
   const m = state.months.find((x) => x.id === state.currentMonthId);
   return (m && m.month_num) || new Date().getMonth() + 1;
+}
+
+// ── M3 — Mobile bottom tab bar ─────────────────────────────────────────
+// 5 visible tabs (Budget / Travel / Charity / Cash / More). "More" opens a
+// sheet with Year / Admin / Biz. Desktop top pill row stays unchanged.
+const MOBILE_TABS_VISIBLE = [
+  { key: 'budget', label: 'Budget', icon: '🏠' },
+  { key: 'travel', label: 'Travel', icon: '✈️' },
+  { key: 'charity', label: 'Charity', icon: '💚' },
+  { key: 'cash', label: 'Cash', icon: '💰' },
+];
+const MOBILE_TABS_MORE = [
+  { key: 'year', label: 'Year', icon: '📊' },
+  { key: 'admin', label: 'Admin', icon: '📋' },
+  { key: 'biz', label: 'Biz', icon: '💼' },
+];
+
+function renderMobileTabBar() {
+  let bar = document.getElementById('mobile-tabbar');
+  if (!bar) {
+    bar = document.createElement('nav');
+    bar.id = 'mobile-tabbar';
+    bar.className = 'mobile-tabbar';
+    document.body.appendChild(bar);
+  }
+  const moreActive = MOBILE_TABS_MORE.some((t) => t.key === state.activeTab);
+  bar.innerHTML =
+    MOBILE_TABS_VISIBLE.map(
+      (t) =>
+        `<button class="mobile-tabbar-btn ${state.activeTab === t.key ? 'active' : ''}" onclick="switchTab('${t.key}')" aria-label="${t.label}">
+          <span class="mobile-tabbar-icon">${t.icon}</span>
+          <span class="mobile-tabbar-label">${t.label}</span>
+        </button>`,
+    ).join('') +
+    `<button class="mobile-tabbar-btn ${moreActive ? 'active' : ''}" onclick="openMoreSheet()" aria-label="More tabs">
+       <span class="mobile-tabbar-icon">⋯</span>
+       <span class="mobile-tabbar-label">More</span>
+     </button>`;
+}
+
+function openMoreSheet() {
+  closeAllPanels();
+  let panel = document.getElementById('more-sheet');
+  if (panel) panel.remove();
+  panel = document.createElement('div');
+  panel.id = 'more-sheet';
+  panel.className = 'app-panel app-panel-quickadd';
+  ensureBackdrop();
+  panel.innerHTML = `
+    <div class="app-panel-drag-handle" aria-hidden="true"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem .55rem;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-weight:700;font-size:.95rem;">More</span>
+      <button onclick="closeAllPanels()" aria-label="Close" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);padding:.25rem .5rem;">✕</button>
+    </div>
+    <div style="padding:.85rem 1rem 1.1rem;display:flex;flex-direction:column;gap:.4rem;">
+      ${MOBILE_TABS_MORE.map(
+        (t) => `
+        <button class="more-tab-btn ${state.activeTab === t.key ? 'active' : ''}" onclick="switchTab('${t.key}');closeAllPanels();">
+          <span style="font-size:1.2rem;">${t.icon}</span>
+          <span style="font-size:1rem;font-weight:600;">${t.label}</span>
+        </button>
+      `,
+      ).join('')}
+    </div>
+  `;
+  document.body.appendChild(panel);
+  panel.style.display = 'flex';
+  showBackdrop();
+  requestAnimationFrame(() => panel.classList.add('app-panel-open'));
 }
