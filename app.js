@@ -2666,6 +2666,8 @@ function renderApp() {
   // M4 — center active month chip on mobile so it's always visible
   if (typeof scrollActiveMonthIntoView === 'function')
     requestAnimationFrame(scrollActiveMonthIntoView);
+  // M5 — global Owed widget on every tab
+  if (typeof renderGlobalOwedWidget === 'function') renderGlobalOwedWidget();
 }
 
 async function saveSavingsField(field, value) {
@@ -8065,6 +8067,106 @@ async function submitQuickAdd(kind) {
 function currentMonthNum() {
   const m = state.months.find((x) => x.id === state.currentMonthId);
   return (m && m.month_num) || new Date().getMonth() + 1;
+}
+
+// ── M5 — Always-visible Owed widget (global, all tabs) ─────────────────
+// Computes Travel-gap + Admin-gap + Below-Threshold and shows them in a
+// compact widget near the toolbar. Click to expand into a popover with the
+// breakdown. Values match the Budget-tab Owed strip exactly.
+function computeOwed() {
+  const tProj = (state.travel?.items || []).reduce(
+    (s, i) => s + (Number(i.projected_amount) || 0),
+    0,
+  );
+  const tAlloc = Object.values(state.travel?.allocations || {}).reduce(
+    (s, a) => s + (Number(a.amount) || 0),
+    0,
+  );
+  const tGap = Math.max(0, tProj - tAlloc);
+  const aProj = (state.admin?.items || []).reduce(
+    (s, i) => s + (Number(i.projected_amount) || 0),
+    0,
+  );
+  const aAlloc = Object.values(state.admin?.allocations || {}).reduce(
+    (s, a) => s + (Number(a.amount) || 0),
+    0,
+  );
+  const aGap = Math.max(0, aProj - aAlloc);
+  const INVEST_THRESHOLD = 35000;
+  const accts = state.cashAccounts || [];
+  const liquidTotal = accts.reduce(
+    (s, a) => s + (typeof cashILS === 'function' ? cashILS(a) : 0),
+    0,
+  );
+  const below = Math.max(0, INVEST_THRESHOLD - liquidTotal);
+  return { tGap, aGap, below, total: tGap + aGap + below };
+}
+
+function renderGlobalOwedWidget() {
+  if (state.loading) return;
+  let widget = document.getElementById('global-owed-widget');
+  if (!widget) {
+    widget = document.createElement('button');
+    widget.id = 'global-owed-widget';
+    widget.type = 'button';
+    widget.className = 'global-owed-widget';
+    widget.onclick = toggleGlobalOwedPopover;
+    document.body.appendChild(widget);
+  }
+  const o = computeOwed();
+  const color = o.total > 0 ? 'var(--red)' : 'var(--green)';
+  widget.innerHTML = `
+    <span class="gow-label">Owed</span>
+    <span class="gow-amt" style="color:${color};">${o.total > 0 ? '-' : ''}${fmt(o.total)}</span>
+  `;
+  widget.setAttribute(
+    'aria-label',
+    `Owed elsewhere: ${o.total > 0 ? '-' : ''}${fmt(o.total)}. Click for breakdown.`,
+  );
+}
+
+function toggleGlobalOwedPopover() {
+  let pop = document.getElementById('global-owed-popover');
+  if (pop) {
+    pop.remove();
+    return;
+  }
+  const o = computeOwed();
+  pop = document.createElement('div');
+  pop.id = 'global-owed-popover';
+  pop.className = 'global-owed-popover';
+  const row = (emoji, val, tab, label) =>
+    `<button class="gow-row" onclick="document.getElementById('global-owed-popover')?.remove();switchTab('${tab}');">
+      <span class="gow-row-l">${emoji} ${label}</span>
+      <span class="gow-row-r" style="color:${val > 0 ? 'var(--red)' : 'var(--green)'};font-family:'DM Mono',monospace;">${val > 0 ? '-' : ''}${fmt(val)}</span>
+    </button>`;
+  pop.innerHTML = `
+    <div class="gow-pop-title">Owed elsewhere</div>
+    ${row('✈️', o.tGap, 'travel', 'Travel gap')}
+    ${row('📋', o.aGap, 'admin', 'Admin gap')}
+    ${row('💰', o.below, 'cash', 'Below threshold')}
+    <div class="gow-pop-total">
+      <span style="color:var(--muted);">Total</span>
+      <span style="color:${o.total > 0 ? 'var(--red)' : 'var(--green)'};font-family:'DM Mono',monospace;font-weight:700;">${o.total > 0 ? '-' : ''}${fmt(o.total)}</span>
+    </div>
+  `;
+  document.body.appendChild(pop);
+  // Position under the widget
+  const widget = document.getElementById('global-owed-widget');
+  if (widget) {
+    const r = widget.getBoundingClientRect();
+    pop.style.top = r.bottom + 6 + 'px';
+    pop.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  }
+  setTimeout(() => {
+    const handler = (e) => {
+      if (!pop.contains(e.target) && e.target !== widget) {
+        pop.remove();
+        document.removeEventListener('click', handler);
+      }
+    };
+    document.addEventListener('click', handler);
+  }, 0);
 }
 
 // ── M4 — Mobile month navigation: chevrons + swipe ─────────────────────

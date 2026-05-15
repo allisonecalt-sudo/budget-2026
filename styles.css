@@ -2398,6 +2398,107 @@ tr.collapsed {
   }
 }
 
+/* M5 — Always-visible Owed widget (global, top-right floating) */
+.global-owed-widget {
+  position: fixed;
+  top: 0.6rem;
+  right: 0.75rem;
+  z-index: 620;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.32rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow:
+    0 1px 3px rgba(26, 25, 21, 0.06),
+    0 0 0 1px rgba(26, 25, 21, 0.02);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.74rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.15s ease;
+}
+.global-owed-widget:hover {
+  box-shadow:
+    0 2px 8px rgba(26, 25, 21, 0.12),
+    0 0 0 1px rgba(26, 25, 21, 0.04);
+}
+.global-owed-widget .gow-label {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.global-owed-widget .gow-amt {
+  font-family: 'DM Mono', monospace;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+@media (max-width: 600px) {
+  .global-owed-widget {
+    top: auto;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0));
+    /* Lift above bottom-nav, sit on left to keep FAB clear on right */
+    right: auto;
+    left: 0.85rem;
+    padding: 0.28rem 0.6rem;
+  }
+  .global-owed-widget .gow-amt {
+    font-size: 0.78rem;
+  }
+}
+
+.global-owed-popover {
+  position: fixed;
+  z-index: 660;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  box-shadow:
+    0 8px 28px rgba(26, 25, 21, 0.18),
+    0 1px 3px rgba(26, 25, 21, 0.06);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+}
+.global-owed-popover .gow-pop-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 0.25rem 0.55rem 0.4rem;
+}
+.global-owed-popover .gow-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.85rem;
+}
+.global-owed-popover .gow-row:hover {
+  background: var(--surface2);
+}
+.global-owed-popover .gow-pop-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.55rem 0.6rem 0.35rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
 /* M2 — Sticky "+" FAB on mobile (hidden on desktop) */
 .mobile-fab {
   display: none;
