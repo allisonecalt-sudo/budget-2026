@@ -2230,6 +2230,22 @@ tr.collapsed {
   }
 }
 
+/* QA2 — Mobile name ellipsis on Admin/Travel/Charity item-name inputs */
+@media (max-width: 600px) {
+  input[placeholder='Item name'] {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  /* Admin payment-log "Item" + "What" columns already use ellipsis;
+     ensure Travel/Charity payment-log truncate the same way */
+  .pay-log-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 /* Toolbar overflow on mobile — hide 6 icons, show ⋯ button */
 .toolbar-overflow-btn {
   display: none !important;

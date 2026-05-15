@@ -5211,11 +5211,46 @@ function renderAdminTab() {
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">
             ${MONTH_NAMES.map((mn, i) => {
               const mnum = i + 1;
-              const val = allocs[mnum] ? allocs[mnum].amount : '';
+              const val = allocs[mnum] ? Number(allocs[mnum].amount) : 0;
               const isCurrent = mnum === currentMonthNum;
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent ? 'var(--gsoft)' : 'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent ? 'var(--accent)' : 'transparent'};">
-                <span style="font-size:.72rem;color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};font-weight:${isCurrent ? '700' : '600'};">${mn}</span>
-                <span style="width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent ? 'var(--accent)' : 'var(--text)'};font-weight:${isCurrent ? '600' : '400'};display:inline-block;" title="Set from Budget page">${val ? fmtA(val) : '₪0'}</span>
+              // QA6 — per-month status dot: green covered, amber under, red none
+              const paidForMonth = (state.admin.subItems || [])
+                .filter((s) => s.is_paid && Number(s.month_num) === mnum)
+                .reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+              let dotColor;
+              let dotTitle;
+              if (val === 0 && paidForMonth === 0) {
+                dotColor = 'var(--dim)';
+                dotTitle = 'No allocation, no payments';
+              } else if (val === 0 && paidForMonth > 0) {
+                dotColor = 'var(--red)';
+                dotTitle = `${fmtA(paidForMonth)} paid against ₪0 allocation`;
+              } else if (paidForMonth > val) {
+                dotColor = 'var(--red)';
+                dotTitle = `Over by ${fmtA(paidForMonth - val)}`;
+              } else if (paidForMonth === val) {
+                dotColor = 'var(--green)';
+                dotTitle = 'Fully spent against allocation';
+              } else if (paidForMonth > 0) {
+                dotColor = 'var(--amber)';
+                dotTitle = `${fmtA(paidForMonth)} of ${fmtA(val)} paid`;
+              } else {
+                dotColor = 'var(--green)';
+                dotTitle = `${fmtA(val)} allocated, none paid yet`;
+              }
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:${isCurrent ? 'var(--gsoft)' : 'var(--surface2)'};border-radius:6px;border:1px solid ${isCurrent ? 'var(--accent)' : 'transparent'};gap:.3rem;">
+                <span style="display:inline-flex;align-items:center;gap:.32rem;font-size:.72rem;color:${isCurrent ? 'var(--accent)' : 'var(--muted)'};font-weight:${isCurrent ? '700' : '600'};">
+                  <span class="adm-mo-dot" title="${dotTitle}" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
+                  ${mn}
+                </span>
+                <input type="number" min="0" step="1" value="${val || ''}" placeholder="0"
+                  onblur="saveAdminAllocation(${mnum}, this.value)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+                  style="width:70px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${isCurrent ? 'var(--accent)' : 'var(--text)'};font-weight:${isCurrent ? '600' : '400'};background:transparent;border:1px solid transparent;border-radius:4px;padding:.05rem .2rem;outline:none;"
+                  onfocus="this.style.borderColor='var(--accent)';this.style.background='var(--surface)';"
+                  onmouseout="if(document.activeElement!==this){this.style.borderColor='transparent';this.style.background='transparent';}"
+                  title="Edit allocation for ${mn}"
+                />
               </div>`;
             }).join('')}
           </div>
@@ -5265,7 +5300,7 @@ function renderAdminTab() {
             <div style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
               <span style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
               <span style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
-              <span style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc(s.label || '—')}</span>
+              <span style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
               <span style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
               <span style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
             </div>`;
@@ -5342,7 +5377,7 @@ async function saveAdminItem(id, field, value) {
             item_id: id,
             label: AUTO_SUB_LABEL,
             amount: Number(item.projected_amount),
-            month_num: new Date().getMonth() + 1,
+            month_num: currentMonthNum(),
             is_paid: true,
           })
           .select()
@@ -5464,7 +5499,7 @@ async function deleteAdminItem(id) {
 async function addAdminSub(itemId) {
   const { data, error } = await sb
     .from('admin_sub_items')
-    .insert({ item_id: itemId, label: '', amount: 0, month_num: new Date().getMonth() + 1 })
+    .insert({ item_id: itemId, label: '', amount: 0, month_num: currentMonthNum() })
     .select()
     .single();
   if (error) {
