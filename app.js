@@ -625,14 +625,95 @@ function editRecurringCell(label, monthNum, currentVal) {
     'Nov',
     'Dec',
   ];
-  const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
-  if (raw === null || raw.trim() === '') return;
-  const amount = raw.trim();
-  const isFuture = monthNum >= new Date().getMonth() + 1;
-  const forward =
-    isFuture &&
-    confirm('Apply ' + amount + ' to ' + MNAMES[monthNum - 1] + ' and all future months?');
-  saveRecurringFromMonth(label, monthNum, amount, forward);
+  // RG3 — Inline edit. Replace native prompt() (jarring on a polished app) with
+  // a real <input> overlaid on the cell. Enter saves; Esc cancels; blur saves.
+  // For future months we still need to ask "apply to all future" — we do that
+  // with a tiny inline confirm strip, NOT a native confirm dialog.
+  const td = window.event && window.event.currentTarget;
+  if (!td || !td.tagName) {
+    // Fallback (no event context — programmatic call): keep old behavior
+    const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
+    if (raw === null || raw.trim() === '') return;
+    const amount = raw.trim();
+    const isFuture = monthNum >= new Date().getMonth() + 1;
+    const forward =
+      isFuture &&
+      confirm('Apply ' + amount + ' to ' + MNAMES[monthNum - 1] + ' and all future months?');
+    saveRecurringFromMonth(label, monthNum, amount, forward);
+    return;
+  }
+  // Avoid double-edit if input already mounted in this cell
+  if (td.querySelector('input.rg-edit')) return;
+  const originalHtml = td.innerHTML;
+  const originalOnclick = td.getAttribute('onclick');
+  td.removeAttribute('onclick');
+  td.style.cursor = 'text';
+  td.innerHTML =
+    '<input type="number" inputmode="decimal" step="0.01" min="0" class="rg-edit" ' +
+    'style="width:100%;text-align:right;font-family:\'DM Mono\',monospace;font-size:.78rem;' +
+    "padding:.18rem .25rem;border:1px solid var(--accent);border-radius:3px;background:var(--surface);outline:none;\" " +
+    'value="' +
+    (currentVal || '') +
+    '">';
+  const input = td.querySelector('input.rg-edit');
+  input.focus();
+  input.select();
+  let committed = false;
+  const restore = () => {
+    td.innerHTML = originalHtml;
+    if (originalOnclick) td.setAttribute('onclick', originalOnclick);
+    td.style.cursor = 'pointer';
+  };
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    const raw = input.value.trim();
+    if (raw === '' || raw === String(currentVal || 0)) {
+      restore();
+      return;
+    }
+    const isFuture = monthNum >= new Date().getMonth() + 1;
+    if (isFuture) {
+      // Inline confirm strip in place of native confirm()
+      td.innerHTML =
+        '<div style="display:flex;gap:.2rem;align-items:center;justify-content:flex-end;font-size:.6rem;">' +
+        '<button class="rg-fwd-y" style="padding:.1rem .35rem;font-size:.6rem;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:3px;cursor:pointer;" title="Apply ' +
+        raw +
+        ' to ' +
+        MNAMES[monthNum - 1] +
+        ' and every future month">→ all future</button>' +
+        '<button class="rg-fwd-n" style="padding:.1rem .35rem;font-size:.6rem;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:3px;cursor:pointer;" title="Apply ' +
+        raw +
+        ' to ' +
+        MNAMES[monthNum - 1] +
+        ' only">just this month</button>' +
+        '</div>';
+      td.querySelector('.rg-fwd-y').addEventListener('click', () => {
+        saveRecurringFromMonth(label, monthNum, raw, true);
+      });
+      td.querySelector('.rg-fwd-n').addEventListener('click', () => {
+        saveRecurringFromMonth(label, monthNum, raw, false);
+      });
+    } else {
+      saveRecurringFromMonth(label, monthNum, raw, false);
+    }
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape' || e.key === 'Esc') {
+      e.preventDefault();
+      committed = true;
+      restore();
+    }
+  });
+  input.addEventListener('blur', () => {
+    // Allow click on the inline confirm buttons before treating blur as commit
+    setTimeout(() => {
+      if (!committed) commit();
+    }, 80);
+  });
 }
 
 // ── Housing grid (mirrors recurring grid) ──────────────────────────────────
