@@ -7563,6 +7563,84 @@ document.addEventListener(
 init();
 
 // ── History Panel ──────────────────────────────────────────────────────
+// M6 — Weekly digest builder. Aggregates the last 7 days of change_log entries
+// into a single auto-generated summary at the TOP of the History panel.
+// Lives INSIDE the panel (not on the main app surface) per the no-crowding rule.
+function buildWeeklyDigest(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return '';
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const recent = rows.filter((r) => {
+    const t = new Date(r.created_at).getTime();
+    return !isNaN(t) && t >= weekAgo;
+  });
+  if (recent.length === 0) return '';
+  let txAdds = 0;
+  let txAddSum = 0;
+  let txDeletes = 0;
+  let editsCount = 0;
+  const categoriesTouched = new Set();
+  const gapsClosedNotes = new Set();
+  recent.forEach((r) => {
+    if (r.entity_type === 'transaction' && r.action === 'add') {
+      txAdds++;
+      // Pull amount from new_value JSON
+      try {
+        const nv = typeof r.new_value === 'string' ? JSON.parse(r.new_value) : r.new_value;
+        if (nv && typeof nv.amount === 'number') txAddSum += nv.amount;
+        if (nv && nv.category) categoriesTouched.add(nv.category);
+      } catch (e) {
+        /* ignore */
+      }
+    } else if (r.entity_type === 'transaction' && r.action === 'delete') {
+      txDeletes++;
+    } else if (r.action === 'edit') {
+      editsCount++;
+    }
+    // Heuristic: payments to charity/travel/admin "close" gaps in those budgets
+    if (
+      r.action === 'add' &&
+      (r.entity_type === 'charity_payment' ||
+        r.entity_type === 'travel_payment' ||
+        r.entity_type === 'admin_payment')
+    ) {
+      const tab = r.entity_type.split('_')[0];
+      gapsClosedNotes.add(tab);
+    }
+  });
+  // Date label: "Week of <oldest date>"
+  const earliestT = recent.reduce(
+    (min, r) => Math.min(min, new Date(r.created_at).getTime()),
+    Infinity,
+  );
+  const weekLabel = new Date(earliestT).toLocaleDateString('en-IL', {
+    day: 'numeric',
+    month: 'short',
+  });
+  const fmtAmt = (n) => '₪' + Math.round(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
+  const parts = [];
+  if (txAdds > 0) parts.push(`<strong>${txAdds}</strong> tx added (${fmtAmt(txAddSum)})`);
+  if (txDeletes > 0) parts.push(`<strong>${txDeletes}</strong> deleted`);
+  if (editsCount > 0) parts.push(`<strong>${editsCount}</strong> edits`);
+  if (gapsClosedNotes.size > 0) {
+    const labels = [...gapsClosedNotes]
+      .map((t) => (t === 'charity' ? '💚 charity' : t === 'travel' ? '✈️ travel' : '📋 admin'))
+      .join(', ');
+    parts.push(`payments logged: ${labels}`);
+  }
+  if (parts.length === 0) return '';
+  return (
+    '<div class="weekly-digest" style="margin:.4rem .75rem .85rem;padding:.7rem .85rem;background:linear-gradient(180deg, var(--asoft) 0%, transparent 100%);border:1px solid var(--accent);border-radius:var(--r);">' +
+    '<div style="font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--accent);margin-bottom:.35rem;">📅 Week of ' +
+    weekLabel +
+    '</div>' +
+    '<div style="font-size:.78rem;color:var(--text);line-height:1.45;">' +
+    parts.join(' &nbsp;·&nbsp; ') +
+    '</div>' +
+    '</div>'
+  );
+}
+
 async function openHistoryPanel() {
   // Q5 — single-panel rule: opening one closes the other.
   closeOtherPanel('history-panel');
@@ -7625,30 +7703,36 @@ async function openHistoryPanel() {
       d.toLocaleTimeString('en-IL', { hour: '2-digit', minute: '2-digit' })
     );
   };
-  list.innerHTML = data
-    .map((r) => {
-      const canClick = r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
-      let clickHandler = '';
-      if (canClick) {
-        if (r.entity_type === 'budget_amount') {
-          const m = r.description.match(/Budget changed: (\S+)/);
-          if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
-        } else {
-          clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+  // M6 — Weekly digest at TOP of history list. Auto-generated rollup of the
+  // last 7 days of change_log entries.
+  const digestHtml = buildWeeklyDigest(data);
+  list.innerHTML =
+    digestHtml +
+    data
+      .map((r) => {
+        const canClick =
+          r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
+        let clickHandler = '';
+        if (canClick) {
+          if (r.entity_type === 'budget_amount') {
+            const m = r.description.match(/Budget changed: (\S+)/);
+            if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+          } else {
+            clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+          }
         }
-      }
-      const clickAttr = clickHandler
-        ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
-        : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
-      return `<div ${clickAttr}>
+        const clickAttr = clickHandler
+          ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
+          : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
+        return `<div ${clickAttr}>
       <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
         <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
       </div>
     </div>`;
-    })
-    .join('');
+      })
+      .join('');
 }
 
 // Auto-refresh history if panel is open
@@ -7672,31 +7756,34 @@ async function refreshHistoryIfOpen() {
         d.toLocaleTimeString('en-IL', { hour: '2-digit', minute: '2-digit' })
       );
     };
-    list.innerHTML = data
-      .map((r) => {
-        const canClick =
-          r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
-        let clickHandler = '';
-        if (canClick) {
-          if (r.entity_type === 'budget_amount') {
-            const m = r.description.match(/Budget changed: (\S+)/);
-            if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
-          } else {
-            clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+    const digestHtml2 = buildWeeklyDigest(data);
+    list.innerHTML =
+      digestHtml2 +
+      data
+        .map((r) => {
+          const canClick =
+            r.action !== 'delete' && (r.entity_id || r.entity_type === 'budget_amount');
+          let clickHandler = '';
+          if (canClick) {
+            if (r.entity_type === 'budget_amount') {
+              const m = r.description.match(/Budget changed: (\S+)/);
+              if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+            } else {
+              clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
+            }
           }
-        }
-        const clickAttr = clickHandler
-          ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
-          : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
-        return `<div ${clickAttr}>
+          const clickAttr = clickHandler
+            ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
+            : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
+          return `<div ${clickAttr}>
         <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
           <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
         </div>
       </div>`;
-      })
-      .join('');
+        })
+        .join('');
   }
 }
 
