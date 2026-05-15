@@ -4,6 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Budget 2026</title>
+    <!-- PWA: installable + offline-capable -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#2d6a4f" />
+    <meta name="application-name" content="Budget 2026" />
+    <!-- iOS / Safari -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Budget" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png" />
     <link rel="preconnect" href="https://hpiyvnfhoqnnnotrmwaz.supabase.co" crossorigin />
     <link rel="preconnect" href="https://fxpaacqnsbnbzbcabpvi.supabase.co" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,6 +27,34 @@
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="app.js" defer></script>
+    <script>
+      // PWA service worker registration (B4) — registers on load, no-op if unsupported.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('sw.js', { scope: './' })
+            .then((reg) => {
+              // Surface waiting / installing state for the offline-write indicator.
+              if (reg.waiting && navigator.serviceWorker.controller) {
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              }
+            })
+            .catch((err) => {
+              console.warn('[PWA] Service worker registration failed:', err);
+            });
+          // Listen for messages from SW (queue length updates, replay results)
+          navigator.serviceWorker.addEventListener('message', (e) => {
+            if (
+              e.data &&
+              e.data.type === 'queue-update' &&
+              typeof window.onQueueUpdate === 'function'
+            ) {
+              window.onQueueUpdate(e.data);
+            }
+          });
+        });
+      }
+    </script>
   </head>
   <body>
     <div class="toast" id="toast"></div>
