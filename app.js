@@ -2186,13 +2186,46 @@ function renderApp() {
           const groupBudget = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
           const groupSt = status(groupSpent, groupBudget);
           const singleCat = cats.length === 1;
+          // B2 narrowed — Leisure-only personal-average trend marker
+          let leisureTrend = '';
+          if (group.label === 'Leisure & Lifestyle' && state.yearData) {
+            try {
+              const todayMonthNum2 = new Date().getMonth() + 1;
+              const monthsSorted2 = [...state.months].sort((a, b) => a.month_num - b.month_num);
+              const past = monthsSorted2.filter((m) => m.month_num < todayMonthNum2);
+              if (past.length > 0) {
+                const leisureCatKeys = group.keys;
+                const totalSpent = past.reduce((acc, m) => {
+                  return (
+                    acc +
+                    (state.yearData.txns || [])
+                      .filter((t) => t.month_id === m.id && leisureCatKeys.includes(t.category))
+                      .reduce((s, t) => s + (Number(t.amount) || 0), 0)
+                  );
+                }, 0);
+                const avg = totalSpent / past.length;
+                if (avg > 0) {
+                  const arrow = groupSpent > avg * 1.05 ? '↗' : groupSpent < avg * 0.95 ? '↘' : '→';
+                  const arrowColor =
+                    arrow === '↗'
+                      ? 'var(--amber)'
+                      : arrow === '↘'
+                        ? 'var(--green)'
+                        : 'var(--muted)';
+                  leisureTrend = `<span style="font-size:.65rem;color:var(--muted);margin-left:.5rem;font-weight:400;" title="Personal average over last ${past.length} mo: ${fmt(avg)}. Up arrow = above avg, down = below.">avg ${fmt(avg)} <span style="color:${arrowColor};font-weight:700;">${arrow}</span></span>`;
+                }
+              }
+            } catch (e) {
+              /* trend marker is best-effort */
+            }
+          }
           return `
             <div class="group-block" id="group-${group.label.replace(/\s+/g, '-')}">
               ${
                 singleCat
                   ? ''
                   : `<div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g, '-')}')">
-                <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}</span>
+                <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}${leisureTrend}</span>
                 <span class="group-totals">
                   <span class="cat-spent-bold">${fmt(groupSpent)}</span>
                   ${groupBudget > 0 ? `<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>` : ''}
