@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget 2026 — Editorial mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      EDITORIAL DIRECTION
+      Mood: a financial publication, not a spreadsheet.
+      Confident type, considered whitespace, big numbers as design elements.
+      References: Stripe Press, Robinhood account hub, Linear's "Insights".
+      The number IS the headline. The label is the dek.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --paper: #faf8f3;
+        --ink: #14110c;
+        --ink-soft: #5b574e;
+        --rule: #e3dfd4;
+        --rule-strong: #14110c;
+        --accent: #1f4d3a;
+        --positive: #1f4d3a;
+        --negative: #8b2e1f;
+        --warning: #7a5210;
+        --hairline: rgba(20, 17, 12, 0.08);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Inter', sans-serif;
+        background: var(--paper);
+        color: var(--ink);
+        font-feature-settings: 'ss01', 'cv11';
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.4;
+        padding: 0 0 6rem 0;
+      }
+      .page { max-width: 1180px; margin: 0 auto; padding: 0 2.5rem; }
+
+      /* Masthead — newspaper-style */
+      .masthead {
+        border-bottom: 2px solid var(--rule-strong);
+        padding: 1.4rem 0 1.1rem;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 2rem;
+      }
+      .masthead-title {
+        font-family: 'Fraunces', serif;
+        font-weight: 400;
+        font-size: 1.6rem;
+        letter-spacing: -0.02em;
+        font-style: italic;
+      }
+      .masthead-meta {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--ink-soft);
+        font-weight: 600;
+      }
+
+      /* Tabs as a topical index */
+      .topics {
+        display: flex;
+        gap: 1.6rem;
+        padding: 0.7rem 0;
+        border-bottom: 1px solid var(--rule);
+        font-size: 0.78rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+      .topic { color: var(--ink-soft); cursor: pointer; padding-bottom: 0.2rem; }
+      .topic.active {
+        color: var(--ink);
+        border-bottom: 2px solid var(--ink);
+        margin-bottom: -1px;
+      }
+
+      /* HERO — the issue's headline numbers */
+      .hero {
+        padding: 3.2rem 0 2.4rem;
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 4rem;
+        border-bottom: 1px solid var(--rule);
+        align-items: end;
+      }
+      .hero-eyebrow {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: var(--ink-soft);
+        margin-bottom: 1rem;
+      }
+      .hero-number {
+        font-family: 'Fraunces', serif;
+        font-weight: 300;
+        font-size: 6.5rem;
+        line-height: 0.95;
+        letter-spacing: -0.045em;
+        font-feature-settings: 'lnum';
+      }
+      .hero-shekel {
+        font-weight: 300;
+        font-size: 4rem;
+        color: var(--ink-soft);
+        margin-right: 0.15em;
+        vertical-align: 0.05em;
+      }
+      .hero-cents {
+        font-size: 2.5rem;
+        color: var(--ink-soft);
+        font-weight: 300;
+        vertical-align: 0.55em;
+        letter-spacing: -0.02em;
+      }
+      .hero-deck {
+        margin-top: 1.4rem;
+        font-family: 'Fraunces', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 1.15rem;
+        color: var(--ink-soft);
+        line-height: 1.5;
+        max-width: 32ch;
+      }
+      .hero-deck strong { color: var(--ink); font-style: normal; font-weight: 500; }
+
+      /* Side rail — secondary KPIs */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 1.3rem;
+      }
+      .rail-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--rule);
+        gap: 1rem;
+      }
+      .rail-row:last-child { border-bottom: none; }
+      .rail-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--ink-soft);
+        font-weight: 600;
+      }
+      .rail-value {
+        font-family: 'Fraunces', serif;
+        font-weight: 400;
+        font-size: 1.85rem;
+        letter-spacing: -0.02em;
+      }
+      .rail-trend {
+        display: block;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--ink-soft);
+        margin-top: 0.15rem;
+        text-align: right;
+      }
+      .trend-up { color: var(--positive); }
+      .trend-down { color: var(--negative); }
+
+      /* Section heading */
+      .section-head {
+        margin: 3rem 0 1.4rem;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        border-bottom: 2px solid var(--rule-strong);
+        padding-bottom: 0.6rem;
+      }
+      .section-title {
+        font-family: 'Fraunces', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 1.45rem;
+      }
+      .section-meta {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--ink-soft);
+        font-weight: 600;
+      }
+
+      /* Category list — like a contents page */
+      .categories {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+      .cat {
+        display: grid;
+        grid-template-columns: 1.5rem 1fr auto auto auto;
+        align-items: baseline;
+        gap: 1.2rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .cat-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--ink-soft);
+        font-weight: 500;
+      }
+      .cat-name {
+        font-family: 'Inter', sans-serif;
+        font-size: 1rem;
+        font-weight: 500;
+      }
+      .cat-name small {
+        display: block;
+        font-size: 0.72rem;
+        color: var(--ink-soft);
+        font-weight: 400;
+        margin-top: 0.15rem;
+        font-family: 'Fraunces', serif;
+        font-style: italic;
+      }
+      .cat-spent {
+        font-family: 'Fraunces', serif;
+        font-size: 1.4rem;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        text-align: right;
+        min-width: 120px;
+      }
+      .cat-of {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        text-align: right;
+        min-width: 80px;
+      }
+      .cat-bar {
+        width: 110px;
+        height: 4px;
+        background: var(--rule);
+        position: relative;
+        align-self: center;
+      }
+      .cat-bar-fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        background: var(--ink);
+      }
+      .cat-bar-fill.over { background: var(--negative); }
+
+      /* Toolbar — like a contents-page byline strip */
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 2rem;
+        padding-top: 1.4rem;
+        border-top: 1px solid var(--rule);
+      }
+      .toolbar-left, .toolbar-right { display: flex; gap: 0.4rem; align-items: center; }
+      .tool-btn {
+        background: none;
+        border: 1px solid var(--rule);
+        padding: 0.55rem 0.9rem;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--ink);
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        border-radius: 0;
+        transition: background 60ms ease;
+      }
+      .tool-btn:hover { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+      .tool-btn svg { width: 14px; height: 14px; stroke-width: 1.5; }
+      .tool-btn.primary {
+        background: var(--ink);
+        color: var(--paper);
+        border-color: var(--ink);
+      }
+      .tool-btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+
+      /* Footnote — folio-style */
+      .colophon {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--rule);
+        font-family: 'Fraunces', serif;
+        font-style: italic;
+        font-size: 0.78rem;
+        color: var(--ink-soft);
+        text-align: center;
+      }
+
+      /* Mobile */
+      @media (max-width: 720px) {
+        .page { padding: 0 1.2rem; }
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 2.4rem;
+          padding: 2rem 0 1.8rem;
+        }
+        .hero-number { font-size: 4.2rem; }
+        .hero-shekel { font-size: 2.6rem; }
+        .hero-cents { font-size: 1.6rem; }
+        .cat { grid-template-columns: 1fr auto; gap: 0.4rem; padding: 0.8rem 0; }
+        .cat-num, .cat-bar, .cat-of { display: none; }
+        .cat-name { font-size: 0.92rem; }
+        .cat-spent { font-size: 1.1rem; }
+        .topics { gap: 0.9rem; font-size: 0.66rem; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="masthead-title">Budget &nbsp;·&nbsp; Twenty Twenty-Six</div>
+        <div class="masthead-meta">May Issue · Vol. V</div>
+      </header>
+
+      <nav class="topics">
+        <span class="topic active">Budget</span>
+        <span class="topic">Cash</span>
+        <span class="topic">Travel</span>
+        <span class="topic">Charity</span>
+        <span class="topic">Biz</span>
+        <span class="topic">Admin</span>
+        <span class="topic">Year</span>
+      </nav>
+
+      <section class="hero">
+        <div>
+          <div class="hero-eyebrow">Remaining this month</div>
+          <div class="hero-number">
+            <span class="hero-shekel">₪</span>15,016<span class="hero-cents">.00</span>
+          </div>
+          <p class="hero-deck">
+            Of <strong>₪22,190</strong> budgeted, you've spent <strong>₪7,174</strong>
+            with sixteen days remaining. Pace is comfortable; pacing is on track.
+          </p>
+        </div>
+
+        <aside class="rail">
+          <div class="rail-row">
+            <span class="rail-label">Budget</span>
+            <span>
+              <span class="rail-value">₪22,190</span>
+              <span class="rail-trend">monthly target</span>
+            </span>
+          </div>
+          <div class="rail-row">
+            <span class="rail-label">Allocated</span>
+            <span>
+              <span class="rail-value">₪18,955</span>
+              <span class="rail-trend trend-down">−₪3,235 gap</span>
+            </span>
+          </div>
+          <div class="rail-row">
+            <span class="rail-label">Spent</span>
+            <span>
+              <span class="rail-value">₪7,174</span>
+              <span class="rail-trend">32% of budget</span>
+            </span>
+          </div>
+        </aside>
+      </section>
+
+      <div class="section-head">
+        <h2 class="section-title">Categories</h2>
+        <span class="section-meta">By share of spend</span>
+      </div>
+
+      <div class="categories">
+        <div class="cat">
+          <span class="cat-num">01</span>
+          <span class="cat-name">
+            Housing
+            <small>arnona, rent, vaad bayit, mortgage</small>
+          </span>
+          <span class="cat-spent">₪3,840</span>
+          <span class="cat-of">/ 5,200</span>
+          <span class="cat-bar"><span class="cat-bar-fill" style="width:74%"></span></span>
+        </div>
+        <div class="cat">
+          <span class="cat-num">02</span>
+          <span class="cat-name">
+            Groceries
+            <small>shufersol, rami levi, makolet</small>
+          </span>
+          <span class="cat-spent">₪1,210</span>
+          <span class="cat-of">/ 1,800</span>
+          <span class="cat-bar"><span class="cat-bar-fill" style="width:67%"></span></span>
+        </div>
+        <div class="cat">
+          <span class="cat-num">03</span>
+          <span class="cat-name">
+            Transit
+            <small>rav-kav, gett, monit, fuel</small>
+          </span>
+          <span class="cat-spent">₪612</span>
+          <span class="cat-of">/ 800</span>
+          <span class="cat-bar"><span class="cat-bar-fill" style="width:77%"></span></span>
+        </div>
+        <div class="cat">
+          <span class="cat-num">04</span>
+          <span class="cat-name">
+            Eating out
+            <small>café, friends, shabbat dinners</small>
+          </span>
+          <span class="cat-spent">₪728</span>
+          <span class="cat-of">/ 600</span>
+          <span class="cat-bar"><span class="cat-bar-fill over" style="width:100%"></span></span>
+        </div>
+        <div class="cat">
+          <span class="cat-num">05</span>
+          <span class="cat-name">
+            Health
+            <small>therapy, supplements, mounjaro</small>
+          </span>
+          <span class="cat-spent">₪482</span>
+          <span class="cat-of">/ 700</span>
+          <span class="cat-bar"><span class="cat-bar-fill" style="width:69%"></span></span>
+        </div>
+        <div class="cat">
+          <span class="cat-num">06</span>
+          <span class="cat-name">
+            Subscriptions
+            <small>claude max, supabase, github</small>
+          </span>
+          <span class="cat-spent">₪302</span>
+          <span class="cat-of">/ 320</span>
+          <span class="cat-bar"><span class="cat-bar-fill" style="width:94%"></span></span>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="tool-btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+            Add transaction
+          </button>
+          <button class="tool-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            Search
+          </button>
+        </div>
+        <div class="toolbar-right">
+          <button class="tool-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M6 12h12M9 18h6"/></svg>
+            Sort
+          </button>
+          <button class="tool-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Snapshot
+          </button>
+          <button class="tool-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            History
+          </button>
+        </div>
+      </div>
+
+      <p class="colophon">
+        Set in Fraunces &amp; Inter. — Issued daily, by Allison, in Jerusalem.
+      </p>
+    </div>
+  </body>
+</html>

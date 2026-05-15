@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget 2026 — Soft Brutalism mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      SOFT BRUTALISM DIRECTION
+      Mood: a designer's personal money tracker. Chunky shadows, bold geometry,
+      near-comic confidence. Charming, opinionated, FUN to use daily.
+      References: Lunchmoney redesign, neobrutalist component libraries, Rauno's
+      experiments. Hard 2px borders, offset block-shadows, candy-but-not-cartoon palette.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #fff8e8;
+        --paper: #ffffff;
+        --ink: #14110c;
+        --ink-soft: #5b574e;
+        --border: #14110c;
+        --shadow-block: 4px 4px 0 var(--border);
+        --shadow-block-lg: 6px 6px 0 var(--border);
+        --shadow-block-xl: 8px 8px 0 var(--border);
+        --primary: #5b8def;
+        --primary-soft: #d8e4ff;
+        --positive: #2ec27e;
+        --positive-soft: #cdf3df;
+        --warning: #f4a259;
+        --warning-soft: #ffe4cd;
+        --danger: #ef476f;
+        --danger-soft: #ffd5e0;
+        --magenta: #c084fc;
+        --magenta-soft: #ecdcff;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Space Grotesk', sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.4;
+        padding: 0 0 6rem 0;
+        background-image:
+          radial-gradient(circle at 20% 10%, rgba(192, 132, 252, 0.06) 0, transparent 35%),
+          radial-gradient(circle at 80% 30%, rgba(91, 141, 239, 0.06) 0, transparent 40%);
+      }
+      .page { max-width: 1180px; margin: 0 auto; padding: 1.4rem 1.6rem 0; }
+
+      /* Header */
+      .topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.8rem 1.1rem;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 14px;
+        box-shadow: var(--shadow-block);
+      }
+      .brand {
+        display: flex; align-items: center; gap: 0.7rem;
+        font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em;
+      }
+      .brand-mark {
+        width: 32px; height: 32px;
+        background: var(--positive);
+        border: 2px solid var(--ink);
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700; font-size: 0.9rem;
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .month-chip {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        padding: 0.5rem 0.9rem;
+        background: var(--magenta-soft);
+        border: 2px solid var(--ink);
+        border-radius: 999px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        font-weight: 600;
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .month-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+
+      /* Tabs */
+      .tabs {
+        display: flex; gap: 0.5rem; padding: 1.2rem 0 0;
+        flex-wrap: wrap;
+      }
+      .tab {
+        padding: 0.5rem 1rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 60ms ease, box-shadow 60ms ease;
+      }
+      .tab:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+      .tab.active {
+        background: var(--ink);
+        color: var(--bg);
+        box-shadow: 3px 3px 0 var(--positive);
+      }
+
+      /* Hero KPI */
+      .hero {
+        margin-top: 1.4rem;
+        padding: 2rem 1.8rem 1.7rem;
+        background: var(--positive-soft);
+        border: 2px solid var(--ink);
+        border-radius: 18px;
+        box-shadow: var(--shadow-block-xl);
+        position: relative;
+        overflow: hidden;
+      }
+      .hero::after {
+        content: '';
+        position: absolute; right: -40px; top: -40px;
+        width: 180px; height: 180px;
+        border-radius: 50%;
+        background: var(--positive);
+        opacity: 0.18;
+      }
+      .hero-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--ink);
+      }
+      .hero-value {
+        margin-top: 0.6rem;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 4.4rem;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+      .hero-value .currency { font-weight: 500; color: var(--ink-soft); }
+      .hero-tag {
+        margin-top: 0.9rem;
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .hero-tag .arrow { color: var(--positive); font-weight: 700; }
+
+      /* Secondary KPIs */
+      .stats {
+        margin-top: 1.4rem;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.9rem;
+      }
+      .stat {
+        padding: 1.1rem 1.1rem;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 14px;
+        box-shadow: var(--shadow-block);
+      }
+      .stat.warn { background: var(--warning-soft); }
+      .stat.info { background: var(--primary-soft); }
+      .stat.purple { background: var(--magenta-soft); }
+      .stat-label {
+        font-size: 0.66rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--ink-soft);
+      }
+      .stat-value {
+        margin-top: 0.4rem;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.7rem;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+        line-height: 1.05;
+      }
+      .stat-value .currency { font-weight: 500; color: var(--ink-soft); font-size: 1.1rem; }
+      .stat-sub {
+        margin-top: 0.35rem;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--ink-soft);
+        font-weight: 500;
+      }
+
+      /* Categories */
+      .section-head {
+        margin: 2.2rem 0 0.9rem;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      .section-title {
+        font-size: 1.35rem; font-weight: 700; letter-spacing: -0.015em;
+      }
+      .section-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem; font-weight: 600; color: var(--ink-soft);
+      }
+      .cat-list {
+        display: grid;
+        gap: 0.7rem;
+      }
+      .cat {
+        display: grid;
+        grid-template-columns: 44px 1fr auto auto;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.95rem 1.2rem;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 14px;
+        box-shadow: var(--shadow-block);
+        transition: transform 60ms ease, box-shadow 60ms ease;
+      }
+      .cat:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: var(--shadow-block-lg);
+      }
+      .cat-emoji {
+        width: 42px; height: 42px;
+        background: var(--bg);
+        border: 2px solid var(--ink);
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem;
+      }
+      .cat-info { display: flex; flex-direction: column; gap: 0.15rem; }
+      .cat-name { font-size: 0.95rem; font-weight: 600; }
+      .cat-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem; color: var(--ink-soft); font-weight: 500;
+      }
+      .cat-amount {
+        text-align: right;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      .cat-amount .currency { font-weight: 500; color: var(--ink-soft); font-size: 0.85em; }
+      .cat-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.32rem 0.7rem;
+        border: 2px solid var(--ink);
+        border-radius: 999px;
+        min-width: 64px;
+        text-align: center;
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+      .cat-pill.ok { background: var(--positive-soft); }
+      .cat-pill.warn { background: var(--warning-soft); }
+      .cat-pill.over { background: var(--danger-soft); }
+
+      /* Toolbar */
+      .toolbar {
+        margin-top: 1.4rem;
+        padding: 0.85rem 1rem;
+        display: flex; align-items: center; justify-content: space-between;
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        border-radius: 14px;
+        box-shadow: var(--shadow-block);
+      }
+      .tb-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .tb-btn {
+        background: var(--paper);
+        border: 2px solid var(--ink);
+        color: var(--ink);
+        padding: 0.55rem 0.95rem;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 10px;
+        cursor: pointer;
+        display: flex; align-items: center; gap: 0.4rem;
+        box-shadow: 2px 2px 0 var(--ink);
+        transition: transform 50ms ease, box-shadow 50ms ease;
+      }
+      .tb-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ink); }
+      .tb-btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--ink); }
+      .tb-btn svg { width: 15px; height: 15px; stroke-width: 2; }
+      .tb-btn.primary { background: var(--positive); }
+      .tb-btn.add { background: var(--primary); color: var(--paper); }
+
+      /* Mobile */
+      @media (max-width: 720px) {
+        .page { padding: 1rem 0.9rem 0; }
+        .hero-value { font-size: 3rem; }
+        .stats { grid-template-columns: 1fr 1fr; }
+        .stat-value { font-size: 1.4rem; }
+        .cat { grid-template-columns: 36px 1fr auto; gap: 0.7rem; padding: 0.8rem 0.9rem; }
+        .cat-emoji { width: 36px; height: 36px; font-size: 1.05rem; }
+        .cat-pill { display: none; }
+        .cat-amount { font-size: 1.1rem; }
+        .tb-btn { padding: 0.5rem 0.7rem; font-size: 0.74rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">B</div>
+          Budget 2026
+        </div>
+        <div class="month-chip">
+          <span class="dot"></span>
+          MAY · DAY 15
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <span class="tab active">Budget</span>
+        <span class="tab">Cash</span>
+        <span class="tab">Travel</span>
+        <span class="tab">Charity</span>
+        <span class="tab">Biz</span>
+        <span class="tab">Admin</span>
+        <span class="tab">Year</span>
+      </nav>
+
+      <section class="hero">
+        <div class="hero-label">Remaining this month</div>
+        <div class="hero-value"><span class="currency">₪</span>15,016</div>
+        <div class="hero-tag">
+          <span class="arrow">↑</span> on track · 16 days left · ₪938/day pace
+        </div>
+      </section>
+
+      <section class="stats">
+        <div class="stat">
+          <div class="stat-label">Budget</div>
+          <div class="stat-value"><span class="currency">₪</span>22,190</div>
+          <div class="stat-sub">monthly target</div>
+        </div>
+        <div class="stat warn">
+          <div class="stat-label">Allocated</div>
+          <div class="stat-value"><span class="currency">₪</span>18,955</div>
+          <div class="stat-sub">−₪3,235 gap</div>
+        </div>
+        <div class="stat info">
+          <div class="stat-label">Spent</div>
+          <div class="stat-value"><span class="currency">₪</span>7,174</div>
+          <div class="stat-sub">32% of budget</div>
+        </div>
+        <div class="stat purple">
+          <div class="stat-label">Pace / day</div>
+          <div class="stat-value"><span class="currency">₪</span>478</div>
+          <div class="stat-sub">−₪38 vs april</div>
+        </div>
+      </section>
+
+      <div class="section-head">
+        <h2 class="section-title">Categories</h2>
+        <div class="section-meta">6 OF 14 · BY SPEND</div>
+      </div>
+
+      <div class="cat-list">
+        <div class="cat">
+          <div class="cat-emoji">🏠</div>
+          <div class="cat-info">
+            <div class="cat-name">Housing</div>
+            <div class="cat-meta">arnona · vaad · mortgage</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>3,840 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 5,200</span></div>
+          <div class="cat-pill ok">74%</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">🛒</div>
+          <div class="cat-info">
+            <div class="cat-name">Groceries</div>
+            <div class="cat-meta">shufersol · rami levi</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>1,210 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 1,800</span></div>
+          <div class="cat-pill ok">67%</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">🚌</div>
+          <div class="cat-info">
+            <div class="cat-name">Transit</div>
+            <div class="cat-meta">rav-kav · gett · monit</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>612 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 800</span></div>
+          <div class="cat-pill warn">77%</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">🍽️</div>
+          <div class="cat-info">
+            <div class="cat-name">Eating out</div>
+            <div class="cat-meta">café · friends · shabbat</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>728 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 600</span></div>
+          <div class="cat-pill over">+₪128</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">💊</div>
+          <div class="cat-info">
+            <div class="cat-name">Health</div>
+            <div class="cat-meta">therapy · supplements · mounjaro</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>482 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 700</span></div>
+          <div class="cat-pill ok">69%</div>
+        </div>
+        <div class="cat">
+          <div class="cat-emoji">📺</div>
+          <div class="cat-info">
+            <div class="cat-name">Subscriptions</div>
+            <div class="cat-meta">claude max · supabase · github</div>
+          </div>
+          <div class="cat-amount"><span class="currency">₪</span>302 <span style="color:var(--ink-soft); font-size:0.7em; font-weight:500;">/ 320</span></div>
+          <div class="cat-pill warn">94%</div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="tb-group">
+          <button class="tb-btn add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+            Add
+          </button>
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            Search
+          </button>
+        </div>
+        <div class="tb-group">
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M6 12h12M9 18h6"/></svg>
+            Sort
+          </button>
+          <button class="tb-btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Snapshot
+          </button>
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            History
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

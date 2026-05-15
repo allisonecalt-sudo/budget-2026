@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget 2026 — Dark Elevated mockup</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      DARK ELEVATED DIRECTION
+      Mood: Bloomberg Terminal × Copilot Money. Rich background, glassy surfaces,
+      electric mint accent, subtle bloom on hero numbers. Numbers feel "live."
+      References: Copilot Money dark mode, Cash App, Linear's dark theme.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-base: #0a0d12;
+        --bg-elevated: #11151c;
+        --bg-glass: rgba(255, 255, 255, 0.04);
+        --bg-glass-hover: rgba(255, 255, 255, 0.07);
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --text: #f1f3f6;
+        --muted: #8a93a3;
+        --dim: #5a6373;
+        --mint: #34e8a8;
+        --mint-soft: rgba(52, 232, 168, 0.12);
+        --mint-glow: rgba(52, 232, 168, 0.35);
+        --amber: #ffb547;
+        --red: #ff5d6c;
+        --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { background: var(--bg-base); }
+      body {
+        font-family: 'Inter', sans-serif;
+        color: var(--text);
+        font-feature-settings: 'ss01', 'cv11';
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.4;
+        min-height: 100vh;
+        background:
+          radial-gradient(800px 500px at 12% 0%, rgba(52, 232, 168, 0.05), transparent 60%),
+          radial-gradient(900px 600px at 95% 10%, rgba(80, 130, 255, 0.04), transparent 65%),
+          var(--bg-base);
+        background-attachment: fixed;
+        padding: 0 0 6rem 0;
+      }
+      .page { max-width: 1200px; margin: 0 auto; padding: 1.4rem 1.8rem 0; }
+
+      /* Header bar */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.6rem 0 1.4rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+      }
+      .brand-mark {
+        width: 26px; height: 26px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, var(--mint) 0%, #1aa37a 100%);
+        box-shadow: 0 0 24px var(--mint-glow);
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem; font-weight: 700; color: #04150e;
+      }
+      .brand-name {
+        font-weight: 600; font-size: 0.9rem; letter-spacing: -0.005em;
+      }
+      .brand-name .sub {
+        color: var(--muted); font-weight: 400; margin-left: 0.4rem;
+        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+      }
+      .month-pill {
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        padding: 0.4rem 0.85rem;
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+      }
+      .month-pill .live-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--mint); box-shadow: 0 0 8px var(--mint-glow);
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+      /* Tab strip */
+      .tabs {
+        display: flex; gap: 0.25rem; padding: 0.7rem 0;
+      }
+      .tab {
+        padding: 0.45rem 0.95rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--muted);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 80ms ease, color 80ms ease;
+      }
+      .tab:hover { background: var(--bg-glass); color: var(--text); }
+      .tab.active {
+        background: var(--bg-glass);
+        color: var(--text);
+        border: 1px solid var(--border);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+      }
+
+      /* Hero KPI strip */
+      .kpis {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr;
+        gap: 1rem;
+        margin-top: 1.2rem;
+      }
+      .kpi {
+        position: relative;
+        padding: 1.4rem 1.4rem 1.3rem;
+        background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0) 100%), var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .kpi.hero {
+        background:
+          radial-gradient(420px 260px at 0% 0%, rgba(52, 232, 168, 0.10), transparent 65%),
+          linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%),
+          var(--bg-elevated);
+        border-color: rgba(52, 232, 168, 0.18);
+      }
+      .kpi-label {
+        font-size: 0.66rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--muted);
+        margin-bottom: 0.7rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .kpi-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.55rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+      }
+      .kpi.hero .kpi-value {
+        font-size: 2.4rem;
+        background: linear-gradient(180deg, #ffffff 0%, #c8fde6 110%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        text-shadow: 0 0 28px rgba(52, 232, 168, 0.18);
+      }
+      .kpi-value .currency { color: var(--muted); font-weight: 500; }
+      .kpi-delta {
+        margin-top: 0.45rem;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        color: var(--muted);
+        display: flex; align-items: center; gap: 0.35rem;
+      }
+      .kpi-delta.up { color: var(--mint); }
+      .kpi-delta.down { color: var(--red); }
+      .kpi-delta.warn { color: var(--amber); }
+      .spark {
+        position: absolute;
+        right: 1rem; top: 1rem;
+        width: 60px; height: 24px;
+        opacity: 0.5;
+      }
+      .kpi.hero .spark { opacity: 0.85; }
+
+      /* Section heading */
+      .section {
+        margin-top: 2.4rem;
+      }
+      .section-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-bottom: 0.7rem; margin-bottom: 0.9rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .section-title {
+        font-size: 0.92rem; font-weight: 600; letter-spacing: -0.005em;
+      }
+      .section-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem; color: var(--muted);
+      }
+
+      /* Category rows */
+      .cat-table {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+      }
+      .cat-row {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr 90px 1fr 80px;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.95rem 1.2rem;
+        border-bottom: 1px solid var(--border);
+        transition: background 80ms ease;
+      }
+      .cat-row:last-child { border-bottom: none; }
+      .cat-row:hover { background: var(--bg-glass-hover); }
+      .cat-name {
+        display: flex; align-items: center; gap: 0.7rem;
+        font-size: 0.88rem; font-weight: 500;
+      }
+      .cat-icon {
+        width: 28px; height: 28px;
+        border-radius: 8px;
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--muted);
+      }
+      .cat-icon svg { width: 14px; height: 14px; stroke-width: 1.6; }
+      .cat-spent {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.95rem; font-weight: 600;
+        text-align: right;
+      }
+      .cat-of {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem; color: var(--muted);
+        text-align: right;
+      }
+      .cat-bar {
+        position: relative;
+        height: 6px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .cat-bar-fill {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        background: linear-gradient(90deg, var(--mint) 0%, #6df0bf 100%);
+        box-shadow: 0 0 12px var(--mint-glow);
+        border-radius: 3px;
+      }
+      .cat-bar-fill.over {
+        background: linear-gradient(90deg, var(--red) 0%, #ff8590 100%);
+        box-shadow: 0 0 12px rgba(255, 93, 108, 0.35);
+      }
+      .cat-bar-fill.warn {
+        background: linear-gradient(90deg, var(--amber) 0%, #ffd07e 100%);
+        box-shadow: 0 0 10px rgba(255, 181, 71, 0.3);
+      }
+      .cat-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.66rem;
+        text-align: right;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        display: inline-block;
+        justify-self: end;
+        background: var(--bg-glass);
+        color: var(--muted);
+        border: 1px solid var(--border);
+      }
+      .cat-tag.live { color: var(--mint); border-color: rgba(52, 232, 168, 0.25); }
+      .cat-tag.over { color: var(--red); border-color: rgba(255, 93, 108, 0.3); }
+
+      /* Toolbar */
+      .toolbar {
+        margin-top: 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.7rem 0.9rem;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: var(--shadow-card);
+      }
+      .tb-group { display: flex; gap: 0.3rem; }
+      .tb-btn {
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.5rem 0.85rem;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.78rem;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex; align-items: center; gap: 0.4rem;
+        transition: all 80ms ease;
+      }
+      .tb-btn:hover { background: var(--bg-glass-hover); border-color: var(--border-strong); }
+      .tb-btn svg { width: 15px; height: 15px; stroke-width: 1.6; }
+      .tb-btn.primary {
+        background: linear-gradient(180deg, var(--mint) 0%, #1bb786 100%);
+        color: #04150e;
+        border-color: transparent;
+        box-shadow: 0 0 18px rgba(52, 232, 168, 0.25), 0 1px 0 rgba(255,255,255,0.2) inset;
+        font-weight: 600;
+      }
+      .tb-btn.primary:hover { box-shadow: 0 0 28px rgba(52, 232, 168, 0.4), 0 1px 0 rgba(255,255,255,0.25) inset; }
+
+      /* Mobile */
+      @media (max-width: 720px) {
+        .page { padding: 1rem 1rem 0; }
+        .kpis {
+          grid-template-columns: 1fr 1fr;
+          grid-auto-rows: auto;
+        }
+        .kpi.hero { grid-column: 1 / -1; }
+        .kpi.hero .kpi-value { font-size: 2rem; }
+        .cat-row {
+          grid-template-columns: 1fr auto;
+          gap: 0.5rem;
+          padding: 0.8rem 0.9rem;
+        }
+        .cat-of, .cat-bar, .cat-tag { display: none; }
+        .tabs { overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark">B</div>
+          <div class="brand-name">Budget <span class="sub">2026</span></div>
+        </div>
+        <div class="month-pill">
+          <span class="live-dot"></span>
+          MAY · DAY 15 / 31
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <span class="tab active">Budget</span>
+        <span class="tab">Cash</span>
+        <span class="tab">Travel</span>
+        <span class="tab">Charity</span>
+        <span class="tab">Biz</span>
+        <span class="tab">Admin</span>
+        <span class="tab">Year</span>
+      </nav>
+
+      <section class="kpis">
+        <div class="kpi hero">
+          <svg class="spark" viewBox="0 0 60 24" fill="none">
+            <path d="M0 18 L8 14 L16 16 L24 10 L32 12 L40 6 L48 8 L60 4" stroke="#34e8a8" stroke-width="1.5"/>
+          </svg>
+          <div class="kpi-label">Remaining this month</div>
+          <div class="kpi-value"><span class="currency">₪</span>15,016</div>
+          <div class="kpi-delta up">▲ on track · 16 days left</div>
+        </div>
+        <div class="kpi">
+          <svg class="spark" viewBox="0 0 60 24" fill="none">
+            <path d="M0 12 L60 12" stroke="#8a93a3" stroke-width="1" stroke-dasharray="2 2"/>
+          </svg>
+          <div class="kpi-label">Budget</div>
+          <div class="kpi-value"><span class="currency">₪</span>22,190</div>
+          <div class="kpi-delta">target</div>
+        </div>
+        <div class="kpi">
+          <svg class="spark" viewBox="0 0 60 24" fill="none">
+            <path d="M0 14 L20 12 L40 13 L60 10" stroke="#ffb547" stroke-width="1.5"/>
+          </svg>
+          <div class="kpi-label">Allocated</div>
+          <div class="kpi-value"><span class="currency">₪</span>18,955</div>
+          <div class="kpi-delta warn">−₪3,235 gap</div>
+        </div>
+        <div class="kpi">
+          <svg class="spark" viewBox="0 0 60 24" fill="none">
+            <path d="M0 22 L12 18 L24 16 L36 12 L48 8 L60 6" stroke="#34e8a8" stroke-width="1.5"/>
+          </svg>
+          <div class="kpi-label">Spent</div>
+          <div class="kpi-value"><span class="currency">₪</span>7,174</div>
+          <div class="kpi-delta">32% used</div>
+        </div>
+        <div class="kpi">
+          <svg class="spark" viewBox="0 0 60 24" fill="none">
+            <path d="M0 6 L20 8 L40 10 L60 14" stroke="#34e8a8" stroke-width="1.5"/>
+          </svg>
+          <div class="kpi-label">Pace / day</div>
+          <div class="kpi-value"><span class="currency">₪</span>478</div>
+          <div class="kpi-delta up">−₪38 vs apr</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title">Categories</div>
+          <div class="section-meta">SORTED BY SPEND · 6 OF 14</div>
+        </div>
+        <div class="cat-table">
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg></div>
+              Housing
+            </div>
+            <div class="cat-spent">₪3,840</div>
+            <div class="cat-of">/ 5,200</div>
+            <div class="cat-bar"><div class="cat-bar-fill" style="width:74%"></div></div>
+            <span class="cat-tag live">74%</span>
+          </div>
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18M6 7v13h12V7M9 7V4h6v3"/></svg></div>
+              Groceries
+            </div>
+            <div class="cat-spent">₪1,210</div>
+            <div class="cat-of">/ 1,800</div>
+            <div class="cat-bar"><div class="cat-bar-fill" style="width:67%"></div></div>
+            <span class="cat-tag live">67%</span>
+          </div>
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg></div>
+              Transit
+            </div>
+            <div class="cat-spent">₪612</div>
+            <div class="cat-of">/ 800</div>
+            <div class="cat-bar"><div class="cat-bar-fill warn" style="width:77%"></div></div>
+            <span class="cat-tag">77%</span>
+          </div>
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 9V5h14v4M5 9v10h14V9M9 13h6"/></svg></div>
+              Eating out
+            </div>
+            <div class="cat-spent">₪728</div>
+            <div class="cat-of">/ 600</div>
+            <div class="cat-bar"><div class="cat-bar-fill over" style="width:100%"></div></div>
+            <span class="cat-tag over">+₪128</span>
+          </div>
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2v20M2 12h20"/></svg></div>
+              Health
+            </div>
+            <div class="cat-spent">₪482</div>
+            <div class="cat-of">/ 700</div>
+            <div class="cat-bar"><div class="cat-bar-fill" style="width:69%"></div></div>
+            <span class="cat-tag live">69%</span>
+          </div>
+          <div class="cat-row">
+            <div class="cat-name">
+              <div class="cat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></div>
+              Subscriptions
+            </div>
+            <div class="cat-spent">₪302</div>
+            <div class="cat-of">/ 320</div>
+            <div class="cat-bar"><div class="cat-bar-fill warn" style="width:94%"></div></div>
+            <span class="cat-tag">94%</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="toolbar">
+        <div class="tb-group">
+          <button class="tb-btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+            New transaction
+          </button>
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            Search
+          </button>
+        </div>
+        <div class="tb-group">
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M6 12h12M9 18h6"/></svg>
+            Sort
+          </button>
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            Snapshot
+          </button>
+          <button class="tb-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            History
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
