@@ -196,21 +196,21 @@ test('Ctrl+Z does not crash when undo stack is empty', async ({ page }) => {
 test('snapshot button exists', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  const snapshotBtn = page.locator('.mtab', { hasText: '📊' });
+  const snapshotBtn = page.locator('.mtab[title="Snapshot"]');
   await expect(snapshotBtn).toBeVisible();
 });
 
 test('collapse-all button exists', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  const collapseBtn = page.locator('.mtab', { hasText: '⊟' });
+  const collapseBtn = page.locator('.mtab[title="Collapse all"]');
   await expect(collapseBtn).toBeVisible();
 });
 
 test('history button exists', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  const historyBtn = page.locator('.mtab', { hasText: '🕐' });
+  const historyBtn = page.locator('.mtab[title="History log"]');
   await expect(historyBtn).toBeVisible();
 });
 
@@ -218,7 +218,7 @@ test('history button exists', async ({ page }) => {
 test('clicking history button opens the history panel', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  const historyBtn = page.locator('.mtab', { hasText: '🕐' });
+  const historyBtn = page.locator('.mtab[title="History log"]');
   await historyBtn.click();
   const panel = page.locator('#history-panel');
   await expect(panel).toBeVisible({ timeout: 5000 });
@@ -228,17 +228,17 @@ test('clicking history button opens the history panel', async ({ page }) => {
 test('history panel has a close button that removes it', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  await page.locator('.mtab', { hasText: '🕐' }).click();
+  await page.locator('.mtab[title="History log"]').click();
   await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
-  // Click the close button
+  // Click the close button (unified panel-system hides via display:none, not detach)
   await page.locator('#history-panel button:has-text("✕")').click();
-  await expect(page.locator('#history-panel')).not.toBeAttached();
+  await expect(page.locator('#history-panel')).toBeHidden({ timeout: 2000 });
 });
 
 test('history panel shows loading or content after opening', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.mtab', { timeout: 10000 });
-  await page.locator('.mtab', { hasText: '🕐' }).click();
+  await page.locator('.mtab[title="History log"]').click();
   const list = page.locator('#history-list');
   await expect(list).toBeVisible({ timeout: 5000 });
   // Should show either loading, entries, empty message, or error (all valid states)
@@ -353,7 +353,7 @@ test.skip('inline add transaction appears in history log', async ({ page }) => {
   await page.waitForTimeout(1500);
 
   // Open history panel
-  await page.locator('.mtab', { hasText: '🕐' }).click();
+  await page.locator('.mtab[title="History log"]').click();
   await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
   await page.waitForTimeout(2000);
 
@@ -465,7 +465,7 @@ test('savings spent equals savings budget in snapshot modal', async ({ page }) =
   await page.waitForSelector('.mtab', { timeout: 10000 });
 
   // Open snapshot modal
-  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.locator('.mtab[title="Snapshot"]').click();
   await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
   await page.waitForTimeout(1000);
 
@@ -592,7 +592,7 @@ test('budget page totals match year view for each month', async ({ page }) => {
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
   // Collect budget page values for each past month (Jan-Mar at minimum)
-  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
   const monthCount = await monthTabs.count();
   const budgetPageValues = {};
 
@@ -609,8 +609,11 @@ test('budget page totals match year view for each month', async ({ page }) => {
     let budgeted = null;
     let spent = null;
     for (let s = 0; s < statCount; s++) {
-      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
-      const val = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+      const stat = ribbonStats.nth(s);
+      const valLoc = stat.locator('.ribbon-val');
+      if ((await valLoc.count()) === 0) continue;
+      const label = await stat.locator('.ribbon-label').textContent();
+      const val = await valLoc.first().textContent();
       if (label.includes('Budgeted')) budgeted = val.replace(/[₪,~]/g, '').trim();
       if (label === 'Spent') spent = val.replace(/[₪,~]/g, '').trim();
     }
@@ -671,7 +674,7 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
   await page.goto('/');
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
   const monthCount = await monthTabs.count();
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
@@ -684,8 +687,11 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
     const ribbonStats = page.locator('.ribbon-stat');
     const statCount = await ribbonStats.count();
     for (let s = 0; s < statCount; s++) {
-      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
-      const raw = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+      const stat = ribbonStats.nth(s);
+      const valLoc = stat.locator('.ribbon-val');
+      if ((await valLoc.count()) === 0) continue; // owed-strip has segments not val when open
+      const label = await stat.locator('.ribbon-label').textContent();
+      const raw = await valLoc.first().textContent();
       const num = parseFloat(raw.replace(/[₪,~]/g, ''));
       if (label.includes('Income')) vals.income = num;
       if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
@@ -737,7 +743,7 @@ test('snapshot modal: group budgets sum to total budgeted', async ({ page }) => 
   await page.waitForSelector('.mtab', { timeout: 10000 });
 
   // Open snapshot
-  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.locator('.mtab[title="Snapshot"]').click();
   await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
   await page.waitForTimeout(1000);
 
@@ -800,8 +806,11 @@ test('category spent amounts sum to total spent in ribbon', async ({ page }) => 
   const ribbonStats = page.locator('.ribbon-stat');
   const statCount = await ribbonStats.count();
   for (let s = 0; s < statCount; s++) {
-    const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
-    const raw = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
+    const stat = ribbonStats.nth(s);
+    const valLoc = stat.locator('.ribbon-val');
+    if ((await valLoc.count()) === 0) continue; // owed-strip has segments not val when open
+    const label = await stat.locator('.ribbon-label').textContent();
+    const raw = await valLoc.first().textContent();
     if (label === 'Spent') ribbonSpent = parseFloat(raw.replace(/[₪,~]/g, ''));
     if (label.includes('Saved')) ribbonSaved = parseFloat(raw.replace(/[₪,~]/g, ''));
   }
@@ -923,7 +932,7 @@ test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) 
   await page.waitForSelector('.mtab', { timeout: 10000 });
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
 
   for (let mi = 0; mi < 2; mi++) {
     await monthTabs.nth(mi).click();
@@ -998,7 +1007,7 @@ test('snapshot renders correctly at mobile viewport', async ({ page }) => {
   await page.waitForSelector('.mtab', { timeout: 10000 });
 
   // Open snapshot modal
-  await page.locator('.mtab', { hasText: '📊' }).click();
+  await page.locator('.mtab[title="Snapshot"]').click();
   await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
   await page.waitForTimeout(1000);
 
@@ -1244,7 +1253,7 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
   await page.waitForSelector('.mtab', { timeout: 10000 });
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
   const monthCount = await monthTabs.count();
   const pageValues = {};
 
@@ -1258,12 +1267,13 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
     const statCount = await ribbonStats.count();
     let leftToBudget = null;
     for (let s = 0; s < statCount; s++) {
-      const label = await ribbonStats.nth(s).locator('.ribbon-label').textContent();
+      const stat = ribbonStats.nth(s);
+      const valLoc = stat.locator('.ribbon-val');
+      if ((await valLoc.count()) === 0) continue;
+      const label = await stat.locator('.ribbon-label').textContent();
       if (label.includes('Left to Budget')) {
-        const val = await ribbonStats.nth(s).locator('.ribbon-val').textContent();
-        leftToBudget = parseFloat(
-          val.replace(/[₪,~\u2212]/g, (m) => (m === '\u2212' ? '-' : '')).trim(),
-        );
+        const val = await valLoc.first().textContent();
+        leftToBudget = parseFloat(val.replace(/[₪,~−]/g, (m) => (m === '−' ? '-' : '')).trim());
       }
     }
     pageValues[monthName] = leftToBudget;
@@ -1320,7 +1330,7 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     return isNaN(val) ? 0 : val;
   };
 
-  const monthTabs = page.locator('.hdr-months .mtab');
+  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
   const monthCount = await monthTabs.count();
   const allMonthData = {};
   let errors = [];
