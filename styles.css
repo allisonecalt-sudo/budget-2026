@@ -538,7 +538,11 @@ textarea {
   align-items: center;
   padding: 0.5rem 0.75rem;
   background: var(--surface2);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast) var(--ease-out);
+}
+.income-row:hover {
+  background: var(--surface-elevated);
 }
 .income-source {
   font-size: 0.82rem;
@@ -556,11 +560,17 @@ textarea {
   width: 110px;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text);
   text-align: right;
   outline: none;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+.income-input:hover {
+  border-color: #cfcdc5;
 }
 .income-input:focus {
   border-color: var(--accent);
@@ -1285,19 +1295,29 @@ input[type='number'],
 input[type='date'] {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   font-family: 'DM Sans', sans-serif;
   font-size: 0.875rem;
-  background: var(--surface2);
+  background: var(--surface);
   color: var(--text);
   outline: none;
-  transition: border-color 0.2s;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out),
+    background var(--t-fast) var(--ease-out);
   width: 100%;
+}
+select:hover,
+input[type='text']:hover,
+input[type='number']:hover,
+input[type='date']:hover {
+  border-color: #cfcdc5;
 }
 select:focus,
 input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--asoft);
+  background: var(--surface);
 }
 .btn {
   padding: 0.6rem 1.2rem;
@@ -1456,8 +1476,12 @@ input:focus {
   align-items: center;
   padding: 0.5rem 0.75rem;
   background: var(--surface2);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   margin-bottom: 0.4rem;
+  transition: background var(--t-fast) var(--ease-out);
+}
+.biz-row:hover {
+  background: var(--surface-elevated);
 }
 .biz-row:last-child {
   margin-bottom: 0;
@@ -1484,11 +1508,17 @@ input:focus {
   width: 110px;
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text);
   text-align: right;
   outline: none;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+.biz-input:hover {
+  border-color: #cfcdc5;
 }
 .biz-input:focus {
   border-color: var(--accent);
