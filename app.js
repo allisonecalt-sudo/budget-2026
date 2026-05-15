@@ -2438,7 +2438,7 @@ function renderApp() {
                               onclick="event.stopPropagation()"
                               onchange="saveBudget('${c.key}', this.value)"
                               onkeydown="if(event.key==='Enter'){this.blur()}"
-                              style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 90}px">
+                              style="width:${b > 0 ? Math.max(80, String(Math.round(b)).length * 10 + 30) : 110}px">
                             ${c.hasLines ? `<button style="background:none;border:none;font-size:.65rem;color:var(--dim);cursor:pointer;padding:0 .3rem;" onclick="event.stopPropagation();addBudgetItem('${c.key}')" title="Add line items">+ lines</button>` : ''}`
                         }`
                         }
