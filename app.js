@@ -6704,6 +6704,27 @@ function renderCashTab() {
   } catch (e) {
     /* runway is best-effort, never block the tab */
   }
+  // DC3 — guarantee the runway widget appears on BOTH desktop + mobile, even
+  // when past-month savings data isn't loaded yet. The widget was reportedly
+  // missing on desktop in the first-pass tour; adding a deterministic fallback
+  // ensures it renders the moment liquid totals are known. Velocity sub-line
+  // omitted in the fallback (no past data) but the threshold-position line
+  // is the most load-bearing read anyway.
+  if (!runwayHtml) {
+    let fallbackLine = '';
+    if (totalLiquid >= INVEST_THRESHOLD) {
+      fallbackLine = 'Above threshold by ₪' + n(totalLiquid - INVEST_THRESHOLD);
+    } else {
+      fallbackLine = 'Below threshold by ₪' + n(INVEST_THRESHOLD - totalLiquid);
+    }
+    runwayHtml =
+      '<div class="cash-runway" style="margin-bottom:1rem;padding:.7rem .9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:.8rem;color:var(--text);display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;">' +
+      '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">📈 Runway</span>' +
+      '<span>' +
+      fallbackLine +
+      '</span>' +
+      '</div>';
+  }
 
   return `<div style="max-width:800px;margin:1.5rem auto;padding:0 1rem;">
     ${runwayHtml}
