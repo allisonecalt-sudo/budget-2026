@@ -2060,3 +2060,106 @@ tr.collapsed {
     mask-image: none;
   }
 }
+
+/* ── Unified panel system (Q5 + Q6 + M1) ─────────────────────────────── */
+.app-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 700;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.app-panel.app-panel-open {
+  transform: translateX(0);
+}
+.app-panel-history {
+  width: 360px;
+  max-width: 100vw;
+}
+.app-panel-search {
+  width: 420px;
+  max-width: 100vw;
+}
+.app-panel-drag-handle {
+  display: none; /* desktop: no drag handle */
+}
+/* Backdrop — desktop is subtle (no full overlay so app stays visible),
+   mobile is a darker scrim because the bottom-sheet covers most content. */
+.app-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  z-index: 690;
+  display: none;
+  transition: background 0.2s ease-out;
+  pointer-events: none;
+}
+.app-panel-backdrop.visible {
+  display: block;
+  pointer-events: auto;
+}
+.app-panel-backdrop.app-panel-backdrop-open {
+  background: rgba(0, 0, 0, 0.05); /* desktop: barely there, just for click-to-close */
+}
+@media (max-width: 600px) {
+  .app-panel-backdrop.app-panel-backdrop-open {
+    background: rgba(0, 0, 0, 0.4);
+  }
+  /* M1 — Bottom-sheet on mobile: full-width, slides up from bottom */
+  .app-panel,
+  .app-panel-history,
+  .app-panel-search {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100% !important;
+    max-width: 100vw;
+    height: 85vh;
+    max-height: 85vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.25);
+    transform: translateY(100%);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .app-panel.app-panel-open {
+    transform: translateY(0);
+  }
+  .app-panel-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    flex-shrink: 0;
+    cursor: grab;
+  }
+  .app-panel-drag-handle::after {
+    content: '';
+    display: block;
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+}
+
+/* Reduced-motion: respect user preference everywhere we transition */
+@media (prefers-reduced-motion: reduce) {
+  .app-panel,
+  .app-panel-backdrop,
+  .group-chevron,
+  .progress-fill,
+  .owed-chev {
+    transition: none !important;
+  }
+}

@@ -7000,32 +7000,143 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     doRedo();
   }
+  // Q6 — Esc closes any open panel + the snapshot modal.
+  if (e.key === 'Escape' || e.key === 'Esc') {
+    const snap = document.getElementById('snapshot-modal');
+    if (snap && snap.style.display !== 'none' && snap.style.display !== '') {
+      snap.style.display = 'none';
+      e.preventDefault();
+      return;
+    }
+    if (anyPanelOpen()) {
+      closeAllPanels();
+      e.preventDefault();
+    }
+  }
 });
+
+// ── Unified panel system (Q5/Q6/M1) ────────────────────────────────────
+// One backdrop element, shared across History + Search panels. Click on
+// backdrop OR press Esc closes the active panel. Mobile (<=600px) renders
+// the panels as bottom-sheets via the .app-panel CSS rules.
+function ensureBackdrop() {
+  let bd = document.getElementById('app-panel-backdrop');
+  if (!bd) {
+    bd = document.createElement('div');
+    bd.id = 'app-panel-backdrop';
+    bd.className = 'app-panel-backdrop';
+    bd.addEventListener('click', closeAllPanels);
+    document.body.appendChild(bd);
+  }
+  return bd;
+}
+function showBackdrop() {
+  const bd = ensureBackdrop();
+  // Two-step add so the CSS transition kicks in
+  bd.classList.add('visible');
+  requestAnimationFrame(() => bd.classList.add('app-panel-backdrop-open'));
+}
+function hideBackdrop() {
+  const bd = document.getElementById('app-panel-backdrop');
+  if (!bd) return;
+  bd.classList.remove('app-panel-backdrop-open');
+  setTimeout(() => bd.classList.remove('visible'), 200);
+}
+function anyPanelOpen() {
+  return !!document.querySelector('.app-panel.app-panel-open');
+}
+function closeOtherPanel(keepId) {
+  document.querySelectorAll('.app-panel').forEach((p) => {
+    if (p.id !== keepId && p.classList.contains('app-panel-open')) {
+      p.classList.remove('app-panel-open');
+      setTimeout(() => {
+        p.style.display = 'none';
+      }, 220);
+    }
+  });
+}
+function closeAllPanels() {
+  document.querySelectorAll('.app-panel.app-panel-open').forEach((p) => {
+    p.classList.remove('app-panel-open');
+    setTimeout(() => {
+      p.style.display = 'none';
+    }, 220);
+  });
+  // Reset desktop layout shift
+  const root = document.getElementById('root');
+  if (root) root.style.marginRight = '';
+  hideBackdrop();
+}
+
+// Mobile bottom-sheet drag-to-dismiss. Touch the drag handle and pull down
+// past 80px to close. Only active on viewports <= 600px.
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    const handle = e.target.closest && e.target.closest('.app-panel-drag-handle');
+    if (!handle || window.innerWidth > 600) return;
+    const panel = handle.closest('.app-panel');
+    if (!panel) return;
+    const startY = e.touches[0].clientY;
+    let dy = 0;
+    const onMove = (ev) => {
+      dy = Math.max(0, ev.touches[0].clientY - startY);
+      panel.style.transform = 'translateY(' + dy + 'px)';
+      panel.style.transition = 'none';
+    };
+    const onEnd = () => {
+      panel.style.transition = '';
+      panel.style.transform = '';
+      if (dy > 80) closeAllPanels();
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+    document.addEventListener('touchmove', onMove, { passive: true });
+    document.addEventListener('touchend', onEnd, { passive: true });
+  },
+  { passive: true },
+);
 init();
 
 // ── History Panel ──────────────────────────────────────────────────────
 async function openHistoryPanel() {
+  // Q5 — single-panel rule: opening one closes the other.
+  closeOtherPanel('history-panel');
   let panel = document.getElementById('history-panel');
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'history-panel';
-    panel.style.cssText =
-      'position:fixed;top:0;right:0;width:360px;max-width:100vw;height:100vh;background:var(--card);border-left:1px solid var(--border);z-index:700;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.2);';
-    document.getElementById('root').style.marginRight = '360px';
+    panel.className = 'app-panel app-panel-history';
+    ensureBackdrop();
+    if (window.innerWidth > 600) {
+      document.getElementById('root').style.marginRight = '360px';
+    }
     panel.innerHTML = `
+      <div class="app-panel-drag-handle" aria-hidden="true"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
         <span style="font-weight:700;font-size:.95rem;">🕐 History Log</span>
-        <button onclick="document.getElementById('history-panel').remove();document.getElementById('root').style.marginRight='';" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">✕</button>
+        <button onclick="closeAllPanels()" aria-label="Close history" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">✕</button>
       </div>
       <div id="history-list" style="flex:1;overflow-y:auto;padding:.5rem 0;">
         <div style="padding:1rem;color:var(--muted);font-size:.82rem;">Loading…</div>
       </div>`;
     document.body.appendChild(panel);
+    showBackdrop();
+    requestAnimationFrame(() => panel.classList.add('app-panel-open'));
   } else {
-    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-    document.getElementById('root').style.marginRight =
-      panel.style.display === 'none' ? '' : '360px';
-    if (panel.style.display === 'none') return;
+    const wasHidden = panel.style.display === 'none' || !panel.classList.contains('app-panel-open');
+    if (wasHidden) {
+      panel.style.display = 'flex';
+      ensureBackdrop();
+      showBackdrop();
+      if (window.innerWidth > 600) {
+        document.getElementById('root').style.marginRight = '360px';
+      }
+      requestAnimationFrame(() => panel.classList.add('app-panel-open'));
+    } else {
+      closeAllPanels();
+      return;
+    }
   }
   const list = document.getElementById('history-list');
   const { data, error } = await sb
@@ -7250,25 +7361,37 @@ async function jumpToHistoryEntry(entityType, entityId) {
 
 // ── Search Panel ─────────────────────────────────────────────────────
 async function openSearchPanel() {
+  // Q5 \u2014 single-panel rule: opening one closes the other.
+  closeOtherPanel('search-panel');
   let panel = document.getElementById('search-panel');
   if (panel) {
-    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-    document.getElementById('root').style.marginRight =
-      panel.style.display === 'none' ? '' : '420px';
-    if (panel.style.display !== 'none') {
+    const wasHidden = panel.style.display === 'none' || !panel.classList.contains('app-panel-open');
+    if (wasHidden) {
+      panel.style.display = 'flex';
+      ensureBackdrop();
+      showBackdrop();
+      if (window.innerWidth > 600) {
+        document.getElementById('root').style.marginRight = '420px';
+      }
+      requestAnimationFrame(() => panel.classList.add('app-panel-open'));
       setTimeout(() => document.getElementById('search-input').focus(), 50);
+    } else {
+      closeAllPanels();
     }
     return;
   }
   panel = document.createElement('div');
   panel.id = 'search-panel';
-  panel.style.cssText =
-    'position:fixed;top:0;right:0;width:420px;max-width:100vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:700;display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.2);';
-  document.getElementById('root').style.marginRight = '420px';
+  panel.className = 'app-panel app-panel-search';
+  ensureBackdrop();
+  if (window.innerWidth > 600) {
+    document.getElementById('root').style.marginRight = '420px';
+  }
   panel.innerHTML = `
+    <div class="app-panel-drag-handle" aria-hidden="true"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
       <span style="font-weight:700;font-size:.95rem;">\u{1F50D} Search Transactions</span>
-      <button onclick="document.getElementById('search-panel').style.display='none';document.getElementById('root').style.marginRight='';" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">\u2715</button>
+      <button onclick="closeAllPanels()" aria-label="Close search" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">\u2715</button>
     </div>
     <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
       <input id="search-input" type="text" placeholder="Search store or item name\u2026" style="width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--r);font-size:.9rem;background:var(--surface2);color:var(--text);outline:none;font-family:inherit;" />
@@ -7282,6 +7405,8 @@ async function openSearchPanel() {
       <div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Type to search across all your transactions</div>
     </div>`;
   document.body.appendChild(panel);
+  showBackdrop();
+  requestAnimationFrame(() => panel.classList.add('app-panel-open'));
 
   let debounceTimer;
   const input = document.getElementById('search-input');
@@ -7533,12 +7658,8 @@ async function searchJumpToTx(txId, monthId) {
   if (monthId && monthId !== state.currentMonthId) {
     await switchMonth(monthId);
   }
-  // Close search panel
-  const panel = document.getElementById('search-panel');
-  if (panel) {
-    panel.style.display = 'none';
-    document.getElementById('root').style.marginRight = '';
-  }
+  // Close search panel (uses unified panel close so backdrop & layout reset cleanly)
+  closeAllPanels();
   // Make sure we're on the budget tab
   if (state.activeTab !== 'budget') {
     state.activeTab = 'budget';
