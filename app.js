@@ -4294,9 +4294,11 @@ function renderTravelTab() {
 
   // Pre-compute payment log HTML
   let payLogHtml = '';
-  if (payments.length === 0) {
-    // DT5 — friendlier empty state: name what the user can do next instead of
-    // a flat "No payments yet" line. Aligns with fail-loud rule.
+  // DT8 — show grouped per-trip view even when ZERO payments exist anywhere,
+  // so trips with allocation-but-no-log still surface ("No payments logged
+  // yet" placeholder per trip). Only fall back to the flat empty state when
+  // there are no trips defined at all.
+  if (payments.length === 0 && (!items || items.length === 0)) {
     payLogHtml =
       '<div style="color:var(--dim);font-size:.78rem;padding:.6rem 0;font-style:italic;">No payments logged yet — use the form above to add the first one.</div>';
   } else {
@@ -4390,25 +4392,36 @@ function renderTravelTab() {
       (items || []).forEach((it) => {
         allocByTrip[(it.label || '').trim().toLowerCase()] = Number(it.projected_amount) || 0;
       });
+      // DT8 — case/whitespace-insensitive grouping. Previously the group key
+      // used the raw `destination` value, so a payment "erin- north cascade"
+      // and an item label "Erin- North Cascade" produced TWO cards for the
+      // same trip. Normalize the bucket key (lowercase, trimmed) but keep
+      // a display name per bucket (prefer the item label when available).
+      const norm = (s) => (s || '').trim().toLowerCase();
       const groups = {};
+      const displayNames = {}; // norm key -> presentation string
       filtered.forEach((p) => {
-        const key = (p.destination || '').trim() || '(unassigned)';
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(p);
+        const k = norm(p.destination) || '(unassigned)';
+        if (!groups[k]) groups[k] = [];
+        groups[k].push(p);
+        if (!displayNames[k]) displayNames[k] = (p.destination || '').trim() || '(unassigned)';
       });
-      // Stable trip order: items first (INCLUDING items with no payments yet —
-      // see DT5 below), then unknown destinations, then unassigned.
-      const itemNames = (items || []).map((it) => (it.label || '').trim()).filter(Boolean);
+      // Stable trip order: items first (INCLUDING items with no payments yet),
+      // then unknown destinations from payments, then unassigned. Match items
+      // to payment buckets by normalized key so casing variants don't split.
+      const itemEntries = (items || [])
+        .map((it) => ({ raw: (it.label || '').trim(), key: norm(it.label) }))
+        .filter((e) => e.raw);
       const seen = new Set();
       const orderedKeys = [];
-      // DT5 — empty-state visibility: include EVERY known trip (even with zero
-      // payments) so trips that exist in Yearly Expenses but haven't seen a
-      // payment yet still appear with their "₪0 of ₪X" header. Without this,
-      // a trip with allocation but no log entries is silently invisible — you
-      // can't tell at a glance "Avital trip has nothing logged yet."
-      itemNames.forEach((n) => {
-        orderedKeys.push(n);
-        seen.add(n);
+      // DT5 + DT8 — empty-state visibility: include EVERY known trip (even with
+      // zero payments) so trips that exist in Yearly Expenses but haven't seen
+      // a payment yet still appear with their "₪0 of ₪X" header. Item label
+      // wins for display so the user sees the canonical trip name.
+      itemEntries.forEach((e) => {
+        orderedKeys.push(e.key);
+        seen.add(e.key);
+        displayNames[e.key] = e.raw; // item label is canonical
       });
       Object.keys(groups).forEach((k) => {
         if (!seen.has(k) && k !== '(unassigned)') {
@@ -4418,10 +4431,11 @@ function renderTravelTab() {
       });
       if (groups['(unassigned)']) orderedKeys.push('(unassigned)');
       groupedHtml = orderedKeys
-        .map((tripName) => {
-          const ps = groups[tripName] || [];
+        .map((tripKey) => {
+          const tripName = displayNames[tripKey] || tripKey;
+          const ps = groups[tripKey] || [];
           const tripSpent = ps.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-          const tripAlloc = allocByTrip[tripName.toLowerCase()] || 0;
+          const tripAlloc = allocByTrip[tripKey] || 0;
           const headerNote = tripAlloc
             ? '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
