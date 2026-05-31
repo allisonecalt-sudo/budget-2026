@@ -1546,9 +1546,9 @@ function spentByCategory() {
     totals['travel'] += (state.travel.payments || [])
       .filter((p) => p.month_num === mn)
       .reduce((s, p) => s + Number(p.amount), 0);
-    totals['admin'] += (state.admin.payments || [])
-      .filter((p) => p.month_num === mn)
-      .reduce((s, p) => s + Number(p.amount), 0);
+    totals['admin'] += (state.admin.subItems || [])
+      .filter((s) => s.is_paid && s.month_num === mn)
+      .reduce((s, x) => s + Number(x.amount), 0);
     totals['charity'] += (state.charity.payments || [])
       .filter((p) => p.month_num === mn)
       .reduce((s, p) => s + Number(p.amount), 0);
@@ -3455,13 +3455,6 @@ async function loadAdminData() {
     state.admin.allocations[a.month_num] = a;
   });
 
-  const { data: payments } = await sb
-    .from('admin_payments')
-    .select('*')
-    .eq('year', 2026)
-    .order('month_num,created_at');
-  state.admin.payments = payments || [];
-
   const { data: subs } = await sb.from('admin_sub_items').select('*').order('created_at');
   state.admin.subItems = subs || [];
 }
@@ -5188,7 +5181,6 @@ function renderAdminTab() {
   const allocs = state.admin.allocations || {};
   const currentMonthObj = state.months.find((m) => m.id === state.currentMonthId);
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
-  const payments = state.admin.payments || [];
 
   const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
   const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
@@ -6008,104 +6000,6 @@ async function saveAdminAllocation(monthNum, value) {
         await sb.from('admin_allocations').update({ amount: num }).eq('id', ex.id);
         ex.amount = num;
       }
-      renderApp();
-    },
-  });
-  renderApp();
-}
-
-async function addAdminPayment() {
-  const monthNum = parseInt(document.getElementById('ap-month').value);
-  const label = document.getElementById('ap-label').value.trim();
-  const amount = parseFloat(document.getElementById('ap-amount').value);
-  if (!label || !amount || isNaN(amount)) {
-    toast('Fill in what and amount');
-    return;
-  }
-  const { data, error } = await sb
-    .from('admin_payments')
-    .insert({ year: 2026, month_num: monthNum, label, amount })
-    .select()
-    .single();
-  if (error) {
-    toast('Error saving');
-    return;
-  }
-  state.admin.payments.push(data);
-  state.admin.payments.sort((a, b) => a.month_num - b.month_num);
-  document.getElementById('ap-label').value = '';
-  document.getElementById('ap-amount').value = '';
-  renderApp();
-  toast('Payment logged ✓');
-}
-
-async function deleteAdminPayment(id) {
-  const snap = { ...state.admin.payments.find((p) => p.id === id) };
-  await sb.from('admin_payments').delete().eq('id', id);
-  state.admin.payments = state.admin.payments.filter((p) => p.id !== id);
-  logChange(
-    'delete',
-    'admin_payment',
-    id,
-    `Deleted admin payment: ${snap.label} ₪${snap.amount}`,
-    snap,
-    null,
-  );
-  pushUndo({
-    label: 'delete payment',
-    undo: async () => {
-      const { data } = await sb.from('admin_payments').insert(snap).select().single();
-      if (data) {
-        state.admin.payments.push(data);
-        state.admin.payments.sort((a, b) => a.month_num - b.month_num);
-      }
-      renderApp();
-    },
-    redo: async () => {
-      await sb.from('admin_payments').delete().eq('id', id);
-      state.admin.payments = state.admin.payments.filter((p) => p.id !== id);
-      renderApp();
-    },
-  });
-  renderApp();
-  toastDeleted(snap.label, snap.amount);
-}
-
-async function updateAdminPayment(id, field, value) {
-  const p = state.admin.payments.find((p) => p.id === id);
-  if (!p) return;
-  const oldVal = p[field];
-  const val =
-    field === 'amount' ? parseFloat(value) || 0 : field === 'is_estimate' ? Boolean(value) : value;
-  await sb
-    .from('admin_payments')
-    .update({ [field]: val })
-    .eq('id', id);
-  p[field] = val;
-  logChange(
-    'edit',
-    'admin_payment',
-    id,
-    `Admin payment changed: ${p.label} ${field} ${oldVal} → ${val}`,
-    { [field]: oldVal },
-    { [field]: val },
-  );
-  pushUndo({
-    label: 'edit payment',
-    undo: async () => {
-      await sb
-        .from('admin_payments')
-        .update({ [field]: oldVal })
-        .eq('id', id);
-      p[field] = oldVal;
-      renderApp();
-    },
-    redo: async () => {
-      await sb
-        .from('admin_payments')
-        .update({ [field]: val })
-        .eq('id', id);
-      p[field] = val;
       renderApp();
     },
   });
@@ -8747,17 +8641,50 @@ async function submitQuickAdd(kind) {
       toast('Fill in what and amount');
       return;
     }
+    // Single source of truth: quick-adds land in the sub-item ledger (the same one
+    // the Admin tab Payment Log and the dashboard read), under a catch-all item.
+    let parent = (state.admin.items || []).find((i) => i.label === 'Quick Payments');
+    if (!parent) {
+      const { data: newItem, error: itemErr } = await sb
+        .from('admin_items')
+        .insert({
+          year: 2026,
+          label: 'Quick Payments',
+          projected_amount: 0,
+          category: 'Admin',
+          is_logged: true,
+        })
+        .select()
+        .single();
+      if (itemErr) {
+        toast('Error saving');
+        return;
+      }
+      parent = newItem;
+      state.admin.items.push(parent);
+    }
     const { data, error } = await sb
-      .from('admin_payments')
-      .insert({ year: 2026, month_num: monthNum, label, amount })
+      .from('admin_sub_items')
+      .insert({
+        item_id: parent.id,
+        label,
+        amount,
+        month_num: monthNum,
+        is_paid: true,
+        is_estimate: false,
+      })
       .select()
       .single();
     if (error) {
       toast('Error saving');
       return;
     }
-    state.admin.payments.push(data);
-    state.admin.payments.sort((a, b) => a.month_num - b.month_num);
+    state.admin.subItems.push(data);
+    // Keep the catch-all's projected in step with its paid total so it never reads
+    // as over/under budget in Yearly Expenses.
+    const newProj = Number(parent.projected_amount || 0) + amount;
+    await sb.from('admin_items').update({ projected_amount: newProj }).eq('id', parent.id);
+    parent.projected_amount = newProj;
     closeAllPanels();
     renderApp();
     toast('Payment logged ✓');
@@ -8805,7 +8732,7 @@ function computeOwed() {
 
 // ── B3 — Pending decisions surface ─────────────────────────────────────
 // Auto-collects:
-//   - Estimates (is_estimate=true) on charity_payments, travel_payments, admin_payments
+//   - Estimates (is_estimate=true) on charity_payments, travel_payments, admin sub-items
 //   - YEARLY allocation gaps: Travel gap, Admin gap, Below threshold (one line each)
 // Does NOT collect: receipts, per-month admin gaps, per-trip travel gaps.
 // (Per reference_budget_workflow.md — Allison's narrowed spec.)
@@ -8832,7 +8759,7 @@ function computePending() {
   };
   collectEstimates(state.charity?.payments, 'Charity', 'charity', '💚');
   collectEstimates(state.travel?.payments, 'Travel', 'travel', '✈️');
-  collectEstimates(state.admin?.payments, 'Admin', 'admin', '📋');
+  collectEstimates(state.admin?.subItems, 'Admin', 'admin', '📋');
 
   // Yearly allocation gaps — ONE per category line (no per-trip / per-month breakdown)
   const owed = computeOwed();
