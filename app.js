@@ -1512,7 +1512,6 @@ async function switchMonth(monthId) {
     loadBudgetItems(monthId).then(() => seedBudgetItemsFromTemplate(monthId)),
   ];
   // Load year-level data in background, re-render when done
-  // Cash data needed for the Budget-tab Owed KPI (below-threshold)
   Promise.all([loadAdminData(), loadTravelData(), loadCharityData(), loadCashData()]).then(() =>
     renderApp(),
   );
@@ -2083,12 +2082,7 @@ function renderApp() {
               0,
             );
             const aGap = Math.max(0, aProj - aAlloc);
-            // Below threshold: Cash invest threshold − total liquid
-            const INVEST_THRESHOLD = 35000;
-            const accts = state.cashAccounts || [];
-            const liquidTotal = accts.reduce((s, a) => s + cashILS(a), 0);
-            const below = Math.max(0, INVEST_THRESHOLD - liquidTotal);
-            const totalOwed = tGap + aGap + below;
+            const totalOwed = tGap + aGap;
             const seg = (emoji, val, tab, label) =>
               val > 0
                 ? `<span class="owed-seg" title="${label}: -${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`
@@ -2103,8 +2097,6 @@ function renderApp() {
                 ${seg('✈️', tGap, 'travel', 'Travel gap')}
                 <span class="owed-sep">·</span>
                 ${seg('📋', aGap, 'admin', 'Admin gap')}
-                <span class="owed-sep">·</span>
-                ${seg('💰', below, 'cash', 'Below threshold')}
               </div>
               ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? '-' : ''}${fmt(totalOwed)}</div>` : ''}
             </div>`;
@@ -6443,7 +6435,6 @@ function renderCashTab() {
   const accounts = state.cashAccounts || [];
   const n = (v) =>
     Number(v || 0).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  const INVEST_THRESHOLD = 35000;
 
   // Split into holdings vs owed
   const holdings = accounts.filter((a) => !a.is_owed);
@@ -6451,7 +6442,6 @@ function renderCashTab() {
   const totalHoldings = holdings.reduce((s, a) => s + cashILS(a), 0);
   const totalOwed = owed.reduce((s, a) => s + cashILS(a), 0);
   const totalLiquid = totalHoldings + totalOwed;
-  const investable = totalLiquid - INVEST_THRESHOLD;
 
   const renderRow = (a) => {
     const ilsVal = cashILS(a);
@@ -6481,148 +6471,7 @@ function renderCashTab() {
   const holdingsRows = holdings.map(renderRow).join('');
   const owedRows = owed.map(renderRow).join('');
 
-  // B1 — Projected runway: months-to-threshold + holdings sparkline
-  // Uses past months' savings (bank + invested) to estimate avg savings velocity.
-  const todayMonthNum = new Date().getMonth() + 1;
-  let runwayHtml = '';
-  let sparklineHtml = '';
-  try {
-    const yd = state.yearData;
-    if (yd && state.months && state.months.length) {
-      const monthsSorted = [...state.months].sort((a, b) => a.month_num - b.month_num);
-      const budgetMap = {};
-      (yd.allBudgets || []).forEach((b) => {
-        if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {};
-        budgetMap[b.month_id][b.category] = b.amount;
-      });
-      const savingsFor = (m) =>
-        (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0);
-      // Past = months with month_num < currentMonthNum (current month not yet "done")
-      const past = monthsSorted.filter((m) => m.month_num < todayMonthNum);
-      const past6 = past.slice(-6);
-      if (past6.length > 0) {
-        const totalSav = past6.reduce((s, m) => s + savingsFor(m), 0);
-        const avgSav = totalSav / past6.length;
-        // Runway logic
-        let runwayLine = '';
-        if (totalLiquid >= INVEST_THRESHOLD) {
-          const above = totalLiquid - INVEST_THRESHOLD;
-          runwayLine =
-            'Above threshold by ₪' +
-            n(above) +
-            ' · saving ~₪' +
-            n(avgSav) +
-            '/mo (last ' +
-            past6.length +
-            ' mo avg)';
-        } else if (avgSav > 0) {
-          const monthsToThr = (INVEST_THRESHOLD - totalLiquid) / avgSav;
-          runwayLine =
-            'Months to threshold: <strong style="color:var(--accent);">' +
-            monthsToThr.toFixed(1) +
-            '</strong> at current ~₪' +
-            n(avgSav) +
-            '/mo savings (last ' +
-            past6.length +
-            ' mo avg)';
-        } else {
-          runwayLine =
-            'Below threshold by ₪' +
-            n(INVEST_THRESHOLD - totalLiquid) +
-            ' · savings flat or negative across last ' +
-            past6.length +
-            ' mo';
-        }
-        runwayHtml =
-          '<div class="cash-runway" style="margin-bottom:1rem;padding:.7rem .9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:.8rem;color:var(--text);display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;">' +
-          '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">📈 Runway</span>' +
-          '<span>' +
-          runwayLine +
-          '</span>' +
-          '</div>';
-        // Sparkline: 6 bars of savings amount per past month (relative to max)
-        const maxSav = Math.max(1, ...past6.map((m) => savingsFor(m)));
-        const barH = 28;
-        const barW = 14;
-        const barGap = 4;
-        const svgW = past6.length * (barW + barGap);
-        const bars = past6
-          .map((m, i) => {
-            const v = savingsFor(m);
-            const h = Math.max(2, (v / maxSav) * barH);
-            const x = i * (barW + barGap);
-            const y = barH - h;
-            const fill = v >= avgSav ? 'var(--green)' : v > 0 ? 'var(--accent)' : 'var(--dim)';
-            return (
-              '<rect x="' +
-              x +
-              '" y="' +
-              y +
-              '" width="' +
-              barW +
-              '" height="' +
-              h +
-              '" rx="2" fill="' +
-              fill +
-              '"><title>' +
-              m.month_name.slice(0, 3) +
-              ': ₪' +
-              n(v) +
-              '</title></rect>'
-            );
-          })
-          .join('');
-        sparklineHtml =
-          '<svg viewBox="0 0 ' +
-          svgW +
-          ' ' +
-          barH +
-          '" width="' +
-          svgW +
-          '" height="' +
-          barH +
-          '" style="display:inline-block;vertical-align:middle;">' +
-          bars +
-          '</svg>' +
-          '<span style="font-size:.62rem;color:var(--dim);margin-left:.55rem;">last ' +
-          past6.length +
-          ' mo savings</span>';
-        // Inject sparkline into runway box
-        runwayHtml = runwayHtml.replace(
-          '</div>',
-          '<span style="margin-left:auto;display:inline-flex;align-items:center;">' +
-            sparklineHtml +
-            '</span></div>',
-        );
-      }
-    }
-  } catch (e) {
-    /* runway is best-effort, never block the tab */
-  }
-  // DC3 — guarantee the runway widget appears on BOTH desktop + mobile, even
-  // when past-month savings data isn't loaded yet. The widget was reportedly
-  // missing on desktop in the first-pass tour; adding a deterministic fallback
-  // ensures it renders the moment liquid totals are known. Velocity sub-line
-  // omitted in the fallback (no past data) but the threshold-position line
-  // is the most load-bearing read anyway.
-  if (!runwayHtml) {
-    let fallbackLine = '';
-    if (totalLiquid >= INVEST_THRESHOLD) {
-      fallbackLine = 'Above threshold by ₪' + n(totalLiquid - INVEST_THRESHOLD);
-    } else {
-      fallbackLine = 'Below threshold by ₪' + n(INVEST_THRESHOLD - totalLiquid);
-    }
-    runwayHtml =
-      '<div class="cash-runway" style="margin-bottom:1rem;padding:.7rem .9rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:.8rem;color:var(--text);display:flex;align-items:center;gap:.85rem;flex-wrap:wrap;">' +
-      '<span style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">📈 Runway</span>' +
-      '<span>' +
-      fallbackLine +
-      '</span>' +
-      '</div>';
-  }
-
   return `<div style="max-width:800px;margin:1.5rem auto;padding:0 1rem;">
-    ${runwayHtml}
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
       <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
@@ -6631,8 +6480,6 @@ function renderCashTab() {
           ? `<div style="font-size:.6rem;color:var(--amber);margin-top:.2rem;font-weight:600;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;" title="PT shows ₪${n(state.ptOwedTotal)} in unpaid sessions. Cash row shows ₪${n(totalOwed)}. Click Sync to add/update a 'PT clinical (auto)' row.">⚠ PT: ₪${n(state.ptOwedTotal)} (drift ₪${n(state.ptOwedTotal - totalOwed > 0 ? state.ptOwedTotal - totalOwed : totalOwed - state.ptOwedTotal)})<button onclick="syncPtOwedToCash()" style="font-size:.6rem;padding:.15rem .4rem;border:1px solid var(--amber);background:var(--ambersoft);color:var(--amber);border-radius:.25rem;cursor:pointer;font-weight:700;">Sync →</button></div>`
           : ''
       }</div>
-      <div class="year-sum-card"><div class="year-sum-label">Invest Threshold</div><div class="year-sum-val">₪${n(INVEST_THRESHOLD)}</div></div>
-      <div class="year-sum-card${investable < 0 ? ' below-threshold' : ''}"><div class="year-sum-label">${investable >= 0 ? 'Investable' : 'Below Threshold'}</div><div class="year-sum-val" style="color:${investable >= 0 ? 'var(--green)' : 'var(--red)'};">${investable >= 0 ? '₪' + n(investable) : '-₪' + n(Math.abs(investable))}</div></div>
     </div>
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
@@ -6680,7 +6527,7 @@ function renderCashTab() {
     </div>
 
     <div style="margin-top:1.5rem;font-size:.65rem;color:var(--dim);text-align:center;">
-      USD rate: $1 = ₪${(state.usdRate || 3.13).toFixed(4)} (live) &nbsp;·&nbsp; Invest threshold: ₪${n(INVEST_THRESHOLD)} &nbsp;·&nbsp; Updated on load
+      USD rate: $1 = ₪${(state.usdRate || 3.13).toFixed(4)} (live) &nbsp;·&nbsp; Updated on load
     </div>
   </div>`;
 }
@@ -7607,7 +7454,7 @@ async function loadFresh() {
     loadAdminData(),
     loadTravelData(),
     loadCharityData(),
-    loadCashData(), // Needed for the Owed KPI on Budget tab — shows below-threshold delta
+    loadCashData(), // Cash tab data
   ]);
   const tab = state.activeTab;
   if (tab === 'biz') await loadBizData();
@@ -8720,20 +8567,13 @@ function computeOwed() {
     0,
   );
   const aGap = Math.max(0, aProj - aAlloc);
-  const INVEST_THRESHOLD = 35000;
-  const accts = state.cashAccounts || [];
-  const liquidTotal = accts.reduce(
-    (s, a) => s + (typeof cashILS === 'function' ? cashILS(a) : 0),
-    0,
-  );
-  const below = Math.max(0, INVEST_THRESHOLD - liquidTotal);
-  return { tGap, aGap, below, total: tGap + aGap + below };
+  return { tGap, aGap, total: tGap + aGap };
 }
 
 // ── B3 — Pending decisions surface ─────────────────────────────────────
 // Auto-collects:
 //   - Estimates (is_estimate=true) on charity_payments, travel_payments, admin sub-items
-//   - YEARLY allocation gaps: Travel gap, Admin gap, Below threshold (one line each)
+//   - YEARLY allocation gaps: Travel gap, Admin gap (one line each)
 // Does NOT collect: receipts, per-month admin gaps, per-trip travel gaps.
 // (Per reference_budget_workflow.md — Allison's narrowed spec.)
 function computePending() {
@@ -8781,16 +8621,6 @@ function computePending() {
       tab: 'admin',
       label: 'Admin gap',
       amount: owed.aGap,
-    });
-  }
-  if (owed.below > 0) {
-    items.push({
-      type: 'gap',
-      kind: 'cash',
-      emoji: '💰',
-      tab: 'cash',
-      label: 'Below threshold',
-      amount: owed.below,
     });
   }
 
