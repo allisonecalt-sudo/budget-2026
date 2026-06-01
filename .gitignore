@@ -1,3 +1,6 @@
 node_modules/
 test-results/
 playwright-report/
+
+# Local financial data export — never commit to this PUBLIC repo
+budget-data.txt
