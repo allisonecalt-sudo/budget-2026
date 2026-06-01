@@ -1,13 +1,15 @@
 // Budget 2026 — service worker
 // Strategy:
-//   - App shell (this scope's HTML/CSS/JS/icons/manifest): cache-first.
+//   - App shell (this scope's HTML/CSS/JS/icons/manifest): network-first, cache
+//     fallback. Online users always get the freshest build; a broken/stale cached
+//     shell can never permanently strand the app (was cache-first → hung spinner).
 //   - Supabase REST GET: network-first, fall back to cache, fall back to empty array.
 //   - Supabase REST POST/PATCH/DELETE: when offline, enqueue in IndexedDB and return
 //     a synthetic 200 OK so Supabase JS reports success. Drain the queue on next
 //     successful network call or 'online'-style replay tick.
 //   - Each queued write gets a UUID 'op_id' to guard against double-flush.
 
-const VERSION = 'budget-2026-v3';
+const VERSION = 'budget-2026-v4';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const SHELL_ASSETS = [
@@ -210,21 +212,16 @@ self.addEventListener('fetch', (event) => {
 
 async function handleShell(request) {
   const cache = await caches.open(SHELL_CACHE);
-  const cached = await cache.match(request, { ignoreSearch: false });
-  if (cached) {
-    // Refresh in background.
-    fetch(request)
-      .then((res) => {
-        if (res && res.ok) cache.put(request, res.clone());
-      })
-      .catch(() => {});
-    return cached;
-  }
   try {
+    // Network-first: always prefer the freshest shell when online, and refresh
+    // the cache so the offline fallback stays current.
     const res = await fetch(request);
     if (res && res.ok) cache.put(request, res.clone());
     return res;
   } catch (err) {
+    // Offline (or fetch failed): serve the cached shell.
+    const cached = await cache.match(request, { ignoreSearch: false });
+    if (cached) return cached;
     // Final fallback for navigations: serve cached index.
     if (request.mode === 'navigate') {
       const fallback = await cache.match('./index.html');
