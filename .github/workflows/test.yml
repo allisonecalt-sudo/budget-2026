@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, master]
 
+# Allow the Pages deploy job to publish.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -17,6 +23,8 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
+      # Type-check (also produces dist/, proving the strict build compiles).
+      - run: npm run build
 
   test:
     runs-on: ubuntu-latest
@@ -27,7 +35,38 @@ jobs:
         with:
           node-version: 20
       - run: npm ci
+      # The app loads dist/app.js, so the suite needs a fresh build first.
+      - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
         env:
           BUDGET_TEST_PASSWORD: ${{ secrets.BUDGET_TEST_PASSWORD }}
+
+  # Build dist/ and publish the static app to GitHub Pages. Only on master,
+  # only after lint+test pass. Pages source must be set to "GitHub Actions".
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    # Don't let overlapping deploys race.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      # Drop node_modules so the published artifact is just the static app.
+      - run: rm -rf node_modules
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - id: deployment
+        uses: actions/deploy-pages@v4
