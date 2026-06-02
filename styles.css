@@ -56,6 +56,15 @@
   --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
   --t-fast: 120ms;
   --t-base: 160ms;
+  /* Estimate (~EST) ribbon labels — amber pair (was hardcoded in app.js templates) */
+  --est: #b45309;
+  --est-val: #d97706;
+  --est-tilde: #c4a35a;
+  /* History / change-log action dots (was hardcoded in app.js templates) */
+  --log-add: #22c55e;
+  --log-delete: #ef4444;
+  --log-edit: #f59e0b;
+  --log-default: #94a3b8;
 }
 
 /* V6 — global focus-visible: clean muted-teal ring on every keyboard-focused
@@ -619,6 +628,32 @@ textarea {
   border-color: #e5c97a;
   color: var(--text);
   background: #fdfaf2;
+}
+/* Consolidated inline-input styles (was repeated inline style="..." in app.js).
+   .adder-input = sidebar transaction adder; .inline-add-input = per-category
+   inline budget add. :focus replaces the old inline onfocus/onblur border toggle. */
+.adder-input {
+  width: 100%;
+  font-size: 0.74rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface2);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+}
+.adder-input:focus {
+  border-color: var(--accent);
+}
+.inline-add-input {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
 }
 .est-pill {
   font-size: 0.6rem;
@@ -1752,8 +1787,11 @@ input:focus {
     flex-wrap: nowrap;
     width: max-content;
   }
-  /* Bigger tap targets on mobile */
+  /* Bigger tap targets on mobile — 44px min height (Apple HIG / Material) */
   .ptab {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     padding: 0.48rem 0.7rem !important;
     font-size: 0.82rem !important;
   }
@@ -2976,8 +3014,9 @@ tr.collapsed {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 32px;
-    min-width: 32px;
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0.4rem 0 !important;
     font-size: 1.1rem !important;
     line-height: 1;

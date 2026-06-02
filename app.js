@@ -2194,7 +2194,7 @@ function renderApp() {
 
       return `<div class="ribbon-panel">
         <div class="ribbon">
-          <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:#b45309;font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:#d97706;' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
+          <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:var(--est);font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
@@ -2321,10 +2321,10 @@ function renderApp() {
                 .map((c) => `<option value="${c.key}">${c.emoji} ${c.label}</option>`)
                 .join('')}
             </select>
-            <input type="text" id="sb-store" placeholder="Store" list="sb-store-list" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
-            <input type="text" id="sb-item" placeholder="Item" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
-            <input type="number" id="sb-amount" placeholder="Amount ₪" min="0" step="0.01" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
-            <input type="date" id="sb-date" style="width:100%;font-size:.74rem;padding:.3rem .45rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="text" id="sb-store" class="adder-input" placeholder="Store" list="sb-store-list" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="text" id="sb-item" class="adder-input" placeholder="Item" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="number" id="sb-amount" class="adder-input" placeholder="Amount ₪" min="0" step="0.01" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
+            <input type="date" id="sb-date" class="adder-input" onkeydown="if(event.key==='Enter')addTransactionSidebar()">
             <button id="sb-btn" onclick="addTransactionSidebar()" style="width:100%;padding:.4rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.77rem;cursor:pointer;">Save →</button>
           </div>
         </div>
@@ -2380,7 +2380,7 @@ function renderApp() {
       <div class="card">
         <div class="card-title">
           <span>Income Breakdown</span>
-          ${isAnyEstimated(state.currentMonthId) ? '<span style="font-size:.8rem;color:#c4a35a;" title="Some values are estimated">~</span>' : ''}
+          ${isAnyEstimated(state.currentMonthId) ? '<span style="font-size:.8rem;color:var(--est-tilde);" title="Some values are estimated">~</span>' : ''}
         </div>
         <div class="income-grid">
           ${(() => {
@@ -2789,10 +2789,10 @@ function renderApp() {
                                 const _dlId = 'inline-stores-' + c.key;
                                 return `<datalist id="${_dlId}">${_ps.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('')}</datalist>
                           <div class="inline-add-form" style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
-                            <input id="inline-store-${c.key}" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
-                            <input id="inline-item-${c.key}" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
-                            <input id="inline-amount-${c.key}" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
-                            <input id="inline-date-${c.key}" type="date" onclick="event.stopPropagation()" style="font-size:.72rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;">
+                            <input id="inline-store-${c.key}" class="inline-add-input" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                            <input id="inline-item-${c.key}" class="inline-add-input" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                            <input id="inline-amount-${c.key}" class="inline-add-input" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                            <input id="inline-date-${c.key}" class="inline-add-input" type="date" onclick="event.stopPropagation()">
                             <button onclick="event.stopPropagation();saveInlineAdd('${c.key}')" style="font-size:.7rem;padding:.25rem .4rem;background:var(--accent);color:white;border:none;border-radius:4px;cursor:pointer;font-family:'DM Sans',sans-serif;">Save</button>
                             <button onclick="event.stopPropagation();state.inlineAddCat=null;renderApp()" style="font-size:.8rem;background:none;border:none;cursor:pointer;color:var(--dim);">×</button>
                           </div>`;
@@ -7884,14 +7884,18 @@ async function openHistoryPanel() {
     .order('created_at', { ascending: false })
     .limit(200);
   if (error || !data) {
-    list.innerHTML = `<div style="padding:1rem;color:#ef4444;font-size:.82rem;">Could not load history. Make sure the change_log table exists in Supabase.</div>`;
+    list.innerHTML = `<div style="padding:1rem;color:var(--log-delete);font-size:.82rem;">Could not load history. Make sure the change_log table exists in Supabase.</div>`;
     return;
   }
   if (data.length === 0) {
     list.innerHTML = `<div style="padding:1rem;color:var(--muted);font-size:.82rem;">No history yet — changes will appear here as you use the app.</div>`;
     return;
   }
-  const colors = { add: '#22c55e', delete: '#ef4444', edit: '#f59e0b' };
+  const colors = {
+    add: 'var(--log-add)',
+    delete: 'var(--log-delete)',
+    edit: 'var(--log-edit)',
+  };
   const fmtDate = (iso) => {
     const d = new Date(iso);
     return (
@@ -7922,7 +7926,7 @@ async function openHistoryPanel() {
           ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
           : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
         return `<div ${clickAttr}>
-      <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
+      <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
         <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
@@ -7944,7 +7948,11 @@ async function refreshHistoryIfOpen() {
       .order('created_at', { ascending: false })
       .limit(200);
     if (!data) return;
-    const colors = { add: '#22c55e', delete: '#ef4444', edit: '#f59e0b' };
+    const colors = {
+      add: 'var(--log-add)',
+      delete: 'var(--log-delete)',
+      edit: 'var(--log-edit)',
+    };
     const fmtDate = (iso) => {
       const d = new Date(iso);
       return (
@@ -7973,7 +7981,7 @@ async function refreshHistoryIfOpen() {
             ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
             : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
           return `<div ${clickAttr}>
-        <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
           <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
@@ -8915,13 +8923,13 @@ function openToolbarOverflow(ev) {
   }, 0);
 }
 
-// After every render, scroll active month chip into view (mobile only)
+// After every render, center the active month chip WITHIN the .month-tabs
+// horizontal scroll container — without scrolling the whole page (which
+// element.scrollIntoView() would do).
 function scrollActiveMonthIntoView() {
-  if (window.innerWidth > 600) return;
-  const active = document.querySelector('.hdr-months .month-tabs .mtab.active');
-  if (active && typeof active.scrollIntoView === 'function') {
-    active.scrollIntoView({ behavior: 'auto', inline: 'center', block: 'nearest' });
-  }
+  const c = document.querySelector('.hdr-months .month-tabs');
+  const a = c && c.querySelector('.mtab.active');
+  if (c && a) c.scrollLeft = a.offsetLeft - c.clientWidth / 2 + a.clientWidth / 2;
 }
 
 // ── M3 — Mobile bottom tab bar ─────────────────────────────────────────
