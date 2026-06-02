@@ -2293,7 +2293,7 @@ function renderApp() {
                 ${MONTHS.map((m, i) => `<option value="${i + 1}" ${i === 1 ? 'selected' : ''}>${m}</option>`).join('')}
               </select>
             </div>
-            <button class="btn btn-primary" onclick="createMonth(parseInt(byId('setup-month').value))">
+            <button class="btn btn-primary" onclick="createMonth(parseInt(document.getElementById('setup-month').value))">
               Start this month →
             </button>
           </div>
@@ -3314,7 +3314,7 @@ function renderApp() {
           <h3 style="font-size:1rem;font-weight:700;">📊 Snapshot</h3>
           <div style="display:flex;gap:.5rem;">
             <button class="btn btn-primary" onclick="window.print()" style="font-size:.8rem;padding:.4rem .9rem;">🖨️ Print / PDF</button>
-            <button class="mtab" onclick="byId('snapshot-modal').style.display='none'">✕ Close</button>
+            <button class="mtab" onclick="document.getElementById('snapshot-modal').style.display='none'">✕ Close</button>
           </div>
         </div>
         <div id="snapshot-body"></div>
