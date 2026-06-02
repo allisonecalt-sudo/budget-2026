@@ -276,6 +276,19 @@ function toast(msg, opts) {
   _toastTimer = setTimeout(() => t.classList.remove('show'), opts.duration || 5000);
 }
 
+// HTML-escape user-supplied free text before interpolating into innerHTML.
+// Escapes all five HTML-significant chars so it is safe in both element text
+// and double/single-quoted attribute contexts. Use for ANY user free-text
+// (store, item, label, query) — never for numbers or app-controlled constants.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // V5 — Thin-stroke chrome icons (Lucide-inspired, stroke-width 1.6) for the
 // persistent toolbar. Emoji stays at content level (tabs, categories) — chrome
 // gets monotone line icons that read as professional restraint.
@@ -536,7 +549,7 @@ function renderRecurringGrid() {
       '</td>';
     return (
       '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">' +
-      label +
+      esc(label) +
       '</td>' +
       cells +
       annualCell +
@@ -919,7 +932,7 @@ function renderHousingGrid() {
       .join('');
     return (
       '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;">' +
-      label +
+      esc(label) +
       '</td>' +
       cells +
       '</tr>'
@@ -3140,7 +3153,7 @@ function updateSbStores(catKey) {
         .map((tx) => tx.store),
     ]),
   ];
-  dl.innerHTML = stores.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('');
+  dl.innerHTML = stores.map((s) => `<option value="${esc(s)}">`).join('');
 }
 
 function updateStoreSuggestions(catKey) {
@@ -3151,7 +3164,7 @@ function updateStoreSuggestions(catKey) {
     .filter((tx) => tx.category === catKey && tx.store)
     .map((tx) => tx.store);
   const stores = [...new Set([...presets, ...fromHistory])];
-  dl.innerHTML = stores.map((s) => `<option value="${s}">`).join('');
+  dl.innerHTML = stores.map((s) => `<option value="${esc(s)}">`).join('');
 }
 
 function quickAddFor(catKey) {
@@ -7878,7 +7891,7 @@ async function openHistoryPanel() {
         return `<div ${clickAttr}>
       <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
-        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
+        <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
       </div>
     </div>`;
@@ -7929,7 +7942,7 @@ async function refreshHistoryIfOpen() {
           return `<div ${clickAttr}>
         <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || '#94a3b8'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
-          <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${r.description}${clickHandler ? ' ↗' : ''}</div>
+          <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
         </div>
       </div>`;
@@ -8190,7 +8203,7 @@ async function runSearch(query) {
   );
 
   if (matches.length === 0 && budgetItemMatches.length === 0) {
-    resultsDiv.innerHTML = `<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">No results for "${query}"</div>`;
+    resultsDiv.innerHTML = `<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">No results for "${esc(query)}"</div>`;
     return;
   }
 
@@ -8229,7 +8242,7 @@ async function runSearch(query) {
   const totalResults = matches.length + budgetItemMatches.length;
   html += `<div class="search-summary">
     <div style="font-size:.95rem;font-weight:700;color:var(--text);margin-bottom:.25rem;">
-      "${query}" \u2014 ${totalResults} result${totalResults !== 1 ? 's' : ''}
+      "${esc(query)}" \u2014 ${totalResults} result${totalResults !== 1 ? 's' : ''}
     </div>
     ${matches.length > 0 ? `<div style="font-size:1.3rem;font-weight:700;color:var(--accent);">\u20AA${n(total)} <span style="font-size:.75rem;font-weight:400;color:var(--muted);">spent</span></div>` : ''}
     ${budgetItemMatches.length > 0 ? `<div style="font-size:${matches.length > 0 ? '.85' : '1.3'}rem;font-weight:700;color:var(--accent);margin-top:.15rem;">\u20AA${n(biTotal)} <span style="font-size:.75rem;font-weight:400;color:var(--muted);">budgeted (${budgetItemMatches.length} line item${budgetItemMatches.length !== 1 ? 's' : ''})</span></div>` : ''}
@@ -8317,8 +8330,8 @@ async function runSearch(query) {
           <span class="search-tx-date">${monthLabel}</span>
           <span class="search-tx-cat">${catLabel(bi.category)}</span>
           <div class="search-tx-detail">
-            <span class="search-tx-store">${bi.label || ''}</span>
-            ${bi.subcategory ? `<span class="search-tx-item">${bi.subcategory}</span>` : ''}
+            <span class="search-tx-store">${esc(bi.label || '')}</span>
+            ${bi.subcategory ? `<span class="search-tx-item">${esc(bi.subcategory)}</span>` : ''}
           </div>
           <span class="search-tx-amount">\u20AA${n(bi.amount)}</span>
         </div>`;
@@ -8342,8 +8355,8 @@ async function runSearch(query) {
           <span class="search-tx-date">${displayDate}</span>
           <span class="search-tx-cat">${catLabel(t.category)}</span>
           <div class="search-tx-detail">
-            ${t.store ? `<span class="search-tx-store">${t.store}</span>` : ''}
-            ${t.item ? `<span class="search-tx-item">${t.item}</span>` : ''}
+            ${t.store ? `<span class="search-tx-store">${esc(t.store)}</span>` : ''}
+            ${t.item ? `<span class="search-tx-item">${esc(t.item)}</span>` : ''}
           </div>
           <span class="search-tx-amount">\u20AA${n(t.amount)}</span>
         </div>`;
