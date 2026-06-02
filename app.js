@@ -5842,12 +5842,36 @@ function renderAdminTab() {
               if (ps === 'low') return Number(a.amount) - Number(b.amount);
               return 0;
             });
-            const itemMap = {};
+            const itemMeta = {};
             (state.admin.items || []).forEach((it) => {
-              itemMap[it.id] = it.label || '(unnamed)';
+              itemMeta[it.id] = {
+                label: it.label || '(unnamed)',
+                category: it.category || 'Other',
+              };
             });
             const sb2 = (key, label) =>
               `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
+            const payRowHtml = (s) => {
+              const parentLabel = (itemMeta[s.item_id] && itemMeta[s.item_id].label) || '?';
+              const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
+              return `
+            <div class="admin-pay-row" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
+              <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
+              <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
+              <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
+              <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
+              <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
+            </div>`;
+            };
+            // Group paid sub-payments by their parent item's category (ADMIN_CATEGORIES order).
+            const byCat = {};
+            sorted.forEach((s) => {
+              const c = (itemMeta[s.item_id] && itemMeta[s.item_id].category) || 'Other';
+              (byCat[c] = byCat[c] || []).push(s);
+            });
+            const orderedCats = ADMIN_CATEGORIES.filter((c) => byCat[c] && byCat[c].length).concat(
+              Object.keys(byCat).filter((c) => !ADMIN_CATEGORIES.includes(c)),
+            );
             return `
             <div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
@@ -5856,18 +5880,16 @@ function renderAdminTab() {
             <div class="admin-pay-row admin-pay-header" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">
               <span class="admin-pay-mo">Mo</span><span class="admin-pay-item">Item</span><span class="admin-pay-what">What</span><span class="admin-pay-amt" style="text-align:right">Amount</span><span class="admin-pay-est" style="text-align:center">~est</span>
             </div>
-            ${sorted
-              .map((s) => {
-                const parentLabel = itemMap[s.item_id] || '?';
-                const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
+            ${orderedCats
+              .map((c) => {
+                const subs = byCat[c];
+                const catTotal = subs.reduce((n, s) => n + Number(s.amount || 0), 0);
                 return `
-            <div class="admin-pay-row" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
-              <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
-              <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
-              <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
-              <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
-              <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
-            </div>`;
+            <div class="admin-pay-cat" style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.55rem .1rem .25rem;margin-top:.2rem;border-bottom:1px solid var(--border);">
+              <span style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${catEmoji[c] || '📌'} ${esc(c)}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dim);">${fmtA(catTotal)}</span>
+            </div>
+            ${subs.map(payRowHtml).join('')}`;
               })
               .join('')}
             <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
