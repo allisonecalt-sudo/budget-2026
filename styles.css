@@ -135,10 +135,18 @@ textarea {
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+}
+.hdr-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 .year-select {
   flex: 0 0 auto;
-  margin-right: 0.4rem;
+  width: auto;
   padding: 0.22rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -329,7 +337,7 @@ textarea {
 .month-tabs {
   display: flex;
   gap: 0.2rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .mtab {
   padding: 0.22rem 0.45rem;

@@ -2021,7 +2021,18 @@ function renderApp() {
 
   root.innerHTML = `
     <div class="hdr">
-      <h1>Budget ${state.currentYear}</h1>
+      <div class="hdr-title">
+        <h1>Budget</h1>
+        <select class="year-select" onchange="onYearSelect(this.value)" aria-label="Year" title="Year">
+          ${(state.availableYears.length ? state.availableYears : [state.currentYear])
+            .map(
+              (y) =>
+                `<option value="${y}" ${y === state.currentYear ? 'selected' : ''}>${y}</option>`,
+            )
+            .join('')}
+          <option value="__add__">+ Add year</option>
+        </select>
+      </div>
       <div class="hdr-tabs">
         <div class="page-tabs">
           <button class="ptab ${state.activeTab === 'budget' ? 'active' : ''}" onclick="switchTab('budget')">Budget</button>
@@ -2046,15 +2057,6 @@ function renderApp() {
         <button class="mtab toolbar-overflow-btn" onclick="openToolbarOverflow(event)" aria-label="More tools" title="More tools">⋯</button>
       </div>
       <div class="hdr-months">
-        <select class="year-select" onchange="onYearSelect(this.value)" aria-label="Year" title="Year">
-          ${(state.availableYears.length ? state.availableYears : [state.currentYear])
-            .map(
-              (y) =>
-                `<option value="${y}" ${y === state.currentYear ? 'selected' : ''}>${y}</option>`,
-            )
-            .join('')}
-          <option value="__add__">+ Add year</option>
-        </select>
         <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
         <div class="month-tabs">
           ${state.months
