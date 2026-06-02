@@ -2,5 +2,8 @@ node_modules/
 test-results/
 playwright-report/
 
+# Playwright saved auth session (Supabase tokens) — never commit
+tests/.auth/
+
 # Local financial data export — never commit to this PUBLIC repo
 budget-data.txt

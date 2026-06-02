@@ -152,7 +152,9 @@ test('category rows are rendered', async ({ page }) => {
 
 test('clicking a category row toggles it open', async ({ page }) => {
   await page.goto('/');
-  const catTop = page.locator('.cat-top').first();
+  // Only the interactive .cat-top rows carry an onclick; header rows
+  // (cursor:default, no onclick) are also .cat-top, so target the clickable one.
+  const catTop = page.locator('.cat-top[onclick]').first();
   // Categories only render with Supabase data — skip if not present
   if ((await catTop.count()) === 0) return;
   await catTop.click();
@@ -162,7 +164,7 @@ test('clicking a category row toggles it open', async ({ page }) => {
 
 test('double-clicking a category toggles it closed again', async ({ page }) => {
   await page.goto('/');
-  const catTop = page.locator('.cat-top').first();
+  const catTop = page.locator('.cat-top[onclick]').first();
   if ((await catTop.count()) === 0) return;
   await catTop.click();
   await expect(catTop.locator('..')).toHaveClass(/open/);
@@ -1008,14 +1010,18 @@ test('snapshot renders correctly at mobile viewport', async ({ page }) => {
   await page.waitForSelector('.toolbar-overflow-btn', { timeout: 10000 });
 
   // On mobile, toolbar icons are collapsed into the ⋯ overflow menu.
-  // Open the overflow first, then tap "Snapshot".
-  await page.locator('.toolbar-overflow-btn').click();
-  await page.locator('.toolbar-overflow-item').filter({ hasText: 'Snapshot' }).click();
-  await page.waitForSelector('#snapshot-modal', { timeout: 5000 });
-  await page.waitForTimeout(1000);
-
-  // Modal should be visible
-  await expect(page.locator('#snapshot-modal')).toBeVisible();
+  // Open the overflow first, then tap "Snapshot". Wait for the menu item to
+  // be visible before clicking — the menu renders/animates in, and clicking
+  // before it settles silently misses (the modal is always in the DOM at
+  // display:none, so a plain waitForSelector wouldn't catch a missed open).
+  const snapItem = page.locator('.toolbar-overflow-item').filter({ hasText: 'Snapshot' });
+  const modal = page.locator('#snapshot-modal');
+  await expect(async () => {
+    await page.locator('.toolbar-overflow-btn').click();
+    await expect(snapItem).toBeVisible({ timeout: 2000 });
+    await snapItem.click();
+    await expect(modal).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 15000 });
 
   // Read group rows and verify math
   const rows = page.locator('#snapshot-body tr');

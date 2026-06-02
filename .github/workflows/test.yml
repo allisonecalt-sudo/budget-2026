@@ -29,3 +29,5 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
+        env:
+          BUDGET_TEST_PASSWORD: ${{ secrets.BUDGET_TEST_PASSWORD }}
