@@ -76,7 +76,7 @@ const BIG_STORES = [
   'יוחננוף',
   'אושר עד',
 ];
-function isBigStore(store) {
+function isBigStore(store: string): boolean {
   if (!store) return false;
   const s = store.toLowerCase().trim();
   return BIG_STORES.some((b) => s.includes(b));
@@ -100,10 +100,14 @@ const CATEGORY_GROUPS = [
 ];
 
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
-const pt = window.supabase.createClient(PT_URL, PT_KEY);
+const _pt: ReturnType<typeof window.supabase.createClient> = window.supabase.createClient(
+  PT_URL,
+  PT_KEY,
+);
+void _pt; // PT client reserved for future use
 
-const undoStack = [],
-  redoStack = [];
+const undoStack: UndoAction[] = [],
+  redoStack: UndoAction[] = [];
 
 /*
   === AUDIT LOG — run once in Supabase SQL editor (project: hpiyvnfhoqnnnotrmwaz) ===
@@ -119,7 +123,15 @@ const undoStack = [],
     month_id uuid
   );
 */
-function logChange(action, entityType, entityId, description, oldValue, newValue, monthId?) {
+function logChange(
+  action: string,
+  entityType: string,
+  entityId: string | null | undefined,
+  description: string,
+  oldValue: unknown,
+  newValue: unknown,
+  monthId?: string,
+): void {
   sb.from('change_log')
     .insert({
       action,
@@ -137,7 +149,7 @@ function logChange(action, entityType, entityId, description, oldValue, newValue
     // @ts-expect-error PromiseLike from Supabase builder lacks .catch; at runtime it IS a Promise
     .catch((e) => console.warn('change_log insert error:', e));
 }
-function pushUndo(action) {
+function pushUndo(action: UndoAction): void {
   undoStack.push(action);
   if (undoStack.length > 30) undoStack.shift();
   redoStack.length = 0;
@@ -168,12 +180,205 @@ async function doRedo() {
   toast('Redone: ' + a.label);
 }
 
+// ── Row interfaces for Supabase tables ──────────────────────────────────────
+
+interface MonthRow {
+  id: string;
+  year: number;
+  month_num: number;
+  income_petachya: number | null;
+  income_clalit: number | null;
+  income_private: number | null;
+  income_other: number | null;
+  savings_bank: number | null;
+  [key: string]: unknown;
+}
+
+interface TransactionRow {
+  id: string;
+  month_id: string;
+  category: string;
+  store: string | null;
+  item: string | null;
+  amount: number;
+  date: string | null;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+interface BudgetItemRow {
+  id: string;
+  month_id: string;
+  category: string;
+  label: string;
+  amount: number;
+  subcategory: string | null;
+  sort_order: number;
+  [key: string]: unknown;
+}
+
+interface IncomeItemRow {
+  id: string;
+  month_id: string;
+  label: string;
+  amount: number;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+interface CashAccountRow {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  sort_order: number;
+  [key: string]: unknown;
+}
+
+interface AdminItemRow {
+  id: string;
+  year: number;
+  label: string;
+  projected_amount: number;
+  is_estimate?: boolean;
+  category?: string;
+  [key: string]: unknown;
+}
+
+interface AdminSubItemRow {
+  id: string;
+  label: string;
+  amount: number;
+  is_paid: boolean;
+  month_num: number;
+  is_estimate?: boolean;
+  item_id?: string;
+  [key: string]: unknown;
+}
+
+interface AdminAllocationRow {
+  id: string;
+  year: number;
+  month_num: number;
+  amount: number;
+  month_id?: string;
+  [key: string]: unknown;
+}
+
+interface TravelItemRow {
+  id: string;
+  year: number;
+  label: string;
+  projected_amount: number;
+  is_estimate?: boolean;
+  [key: string]: unknown;
+}
+
+interface TravelPaymentRow {
+  id: string;
+  year: number;
+  month_num: number;
+  label: string;
+  destination: string | null;
+  amount: number;
+  is_estimate?: boolean;
+  [key: string]: unknown;
+}
+
+interface TravelSubItemRow {
+  id: string;
+  label: string;
+  amount: number;
+  [key: string]: unknown;
+}
+
+interface CharityItemRow {
+  id: string;
+  year: number;
+  label: string;
+  projected_amount: number;
+  is_estimate?: boolean;
+  is_logged?: boolean;
+  [key: string]: unknown;
+}
+
+interface CharityPaymentRow {
+  id: string;
+  year: number;
+  month_num: number;
+  label: string;
+  amount: number;
+  [key: string]: unknown;
+}
+
+interface CharitySubItemRow {
+  id: string;
+  label: string;
+  amount: number;
+  [key: string]: unknown;
+}
+
+interface BizMonthRow {
+  id: string;
+  month_id: string;
+  confirmed_amount: number | null;
+  accountant_fee: number | null;
+  spending: number | null;
+  [key: string]: unknown;
+}
+
+interface PtClientRow {
+  id: string;
+  name: string;
+  rate: number;
+  [key: string]: unknown;
+}
+
+interface PtSessionRow {
+  id: string;
+  status: string;
+  amount: number;
+  client_id?: string;
+  [key: string]: unknown;
+}
+
+interface PtSessions {
+  earned: PtSessionRow[];
+  scheduled: PtSessionRow[];
+}
+
+interface StoreRow {
+  id: string;
+  name: string;
+  category: string;
+  [key: string]: unknown;
+}
+
+interface YearData {
+  txns: TransactionRow[];
+  budgetItems: BudgetItemRow[];
+  allBudgets: { month_id: string; category: string; amount: number }[];
+  incomeItems: IncomeItemRow[];
+}
+
+interface UndoAction {
+  label: string;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+}
+
+interface ToastOpts {
+  action?: string;
+  onAction?: () => void;
+  duration?: number;
+}
+
 // Per-category aggregate block (admin / travel / charity tabs).
 interface CategorySection {
-  items: any[];
-  allocations: Record<string, any>;
-  payments: any[];
-  subItems: any[];
+  items: AdminItemRow[] | TravelItemRow[] | CharityItemRow[];
+  allocations: Record<string, AdminAllocationRow>;
+  payments: TravelPaymentRow[] | CharityPaymentRow[];
+  subItems: AdminSubItemRow[] | TravelSubItemRow[] | CharitySubItemRow[];
 }
 
 // App state. Row collections are `any[]` in Phase 2; Phase 3 (strict, no-any)
@@ -181,24 +386,24 @@ interface CategorySection {
 interface State {
   currentYear: number;
   availableYears: number[];
-  months: any[];
+  months: MonthRow[];
   currentMonthId: string | null;
-  transactions: any[];
+  transactions: TransactionRow[];
   budgets: Record<string, number>;
   loading: boolean;
   activeTab: string;
-  biz: any | null;
-  ptClients: any[];
-  ptSessions: any;
-  incomeItems: any[];
-  cashAccounts: any[];
+  biz: BizMonthRow | null;
+  ptClients: PtClientRow[];
+  ptSessions: PtSessions;
+  incomeItems: IncomeItemRow[];
+  cashAccounts: CashAccountRow[];
   usdRate: number | null;
-  budgetItems: Record<string, any[]>;
-  allRecurringItems: Record<string, any[]>;
+  budgetItems: Record<string, BudgetItemRow[]>;
+  allRecurringItems: Record<string, BudgetItemRow[]>;
   recurringGridMode: boolean;
-  allHousingItems: Record<string, any[]>;
+  allHousingItems: Record<string, BudgetItemRow[]>;
   housingGridMode: boolean;
-  allCatTxData: Record<string, any[]>;
+  allCatTxData: Record<string, TransactionRow[]>;
   allCatBudgets: Record<string, Record<string, number>>;
   spendingGridCats: string[];
   txSort: string;
@@ -206,12 +411,12 @@ interface State {
   travel: CategorySection;
   charity: CategorySection;
   openCats: Set<string>;
-  yearData: any | null;
+  yearData: YearData | null;
   inlineAddCat: string | null;
-  allStores: any[];
+  allStores: StoreRow[];
   yearViewMonth: number | null;
   yearMobileFull: boolean;
-  allBiz: any[];
+  allBiz: BizMonthRow[];
   _lastCharitySync: Record<string, number> | null;
   ptOwedTotal: number;
 }
@@ -227,7 +432,7 @@ let state: State = {
   activeTab: localStorage.getItem('activeTab') || 'budget',
   biz: null, // biz_months row for current month
   ptClients: [], // private tracker clients
-  ptSessions: [], // private tracker sessions
+  ptSessions: { earned: [], scheduled: [] }, // private tracker sessions
   incomeItems: [], // flexible extra income items
   cashAccounts: [], // liquid cash positions
   usdRate: null, // USD→ILS rate
@@ -293,7 +498,7 @@ function restoreCache() {
     const savedId = localStorage.getItem('activeMonthId');
     if (savedId && c.monthId !== savedId) return false;
     state.months = c.months || [];
-    state.currentMonthId = c.monthId;
+    state.currentMonthId = (c.monthId as string | null) ?? null;
     state.transactions = c.transactions || [];
     state.budgets = c.budgets || {};
     state.budgetItems = c.budgetItems || {};
@@ -313,14 +518,15 @@ function restoreCache() {
 // Agorot rounding — snap a money sum to 2 decimals to kill float drift
 // (e.g. 0.1 + 0.2 = 0.30000000000000004). Apply ONLY at sum/total boundaries
 // so equality and display are exact; does NOT change any real displayed value.
-function ag(n) {
+function ag(n: unknown): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
-const fmt = (n) =>
+const fmt = (n: unknown): string =>
   '₪' +
   Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const pct = (spent, budget) => (budget > 0 ? Math.min((spent / budget) * 100, 100) : 0);
-const status = (spent, budget) => {
+const pct = (spent: number, budget: number): number =>
+  budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+const status = (spent: number, budget: number): string => {
   if (budget === 0) return 'ok';
   const rem = Math.round(budget - spent);
   if (rem < 0) return 'over';
@@ -330,8 +536,8 @@ const status = (spent, budget) => {
   return 'ok';
 };
 
-let _toastTimer = null;
-function toast(msg, opts?) {
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+function toast(msg: string, opts?: ToastOpts): void {
   const t = byId('toast');
   if (!t) return;
   // Backward compat: plain string with no action
@@ -367,7 +573,7 @@ function toast(msg, opts?) {
 // Escapes all five HTML-significant chars so it is safe in both element text
 // and double/single-quoted attribute contexts. Use for ANY user free-text
 // (store, item, label, query) — never for numbers or app-controlled constants.
-function esc(s) {
+function esc(s: unknown): string {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -379,7 +585,7 @@ function esc(s) {
 // V5 — Thin-stroke chrome icons (Lucide-inspired, stroke-width 1.6) for the
 // persistent toolbar. Emoji stays at content level (tabs, categories) — chrome
 // gets monotone line icons that read as professional restraint.
-const _SVG = (paths, opts?) => {
+const _SVG = (paths: string, opts?: { size?: number }): string => {
   const o = opts || {};
   return (
     '<svg xmlns="http://www.w3.org/2000/svg" width="' +
@@ -410,7 +616,7 @@ const ICON_LOGOUT = _SVG(
 );
 
 // Snackbar helper for delete actions: shows "Deleted: <label> ₪<amount> · UNDO"
-function toastDeleted(label, amount) {
+function toastDeleted(label: unknown, amount: unknown): void {
   const amt = amount != null ? ' ' + fmt(amount) : '';
   const lbl = (label || 'item').toString().replace(/^\[auto\]\s*/, '');
   toast('Deleted: ' + lbl + amt, { action: 'UNDO', onAction: doUndo, duration: 5000 });
@@ -431,7 +637,7 @@ async function loadMonths() {
   state.months = data || [];
 }
 
-async function loadTransactions(monthId) {
+async function loadTransactions(monthId: string): Promise<void> {
   const { data, error } = await sb
     .from('transactions')
     .select('*')
@@ -441,14 +647,14 @@ async function loadTransactions(monthId) {
   state.transactions = data || [];
 }
 
-async function loadBudgets(monthId) {
+async function loadBudgets(monthId: string): Promise<void> {
   const { data, error } = await sb.from('budgets').select('*').eq('month_id', monthId);
   if (error) toast('Could not load budgets');
   state.budgets = {};
   (data || []).forEach((b) => (state.budgets[b.category] = b.amount));
 }
 
-async function loadBudgetItems(monthId) {
+async function loadBudgetItems(monthId: string): Promise<void> {
   const { data, error } = await sb
     .from('budget_items')
     .select('*')
@@ -484,8 +690,13 @@ async function toggleRecurringGrid() {
   renderApp();
 }
 
-async function saveRecurringFromMonth(label, fromMonthNum, newAmount, forward) {
-  const num = parseFloat(newAmount) || 0;
+async function saveRecurringFromMonth(
+  label: string,
+  fromMonthNum: number,
+  newAmount: string | number,
+  forward: boolean,
+): Promise<void> {
+  const num = parseFloat(String(newAmount)) || 0;
   const targetMonths = forward
     ? state.months.filter((m) => m.month_num >= fromMonthNum)
     : state.months.filter((m) => m.month_num === fromMonthNum);
@@ -572,7 +783,7 @@ function renderRecurringGrid() {
 
   // Group items by subcategory
   const groups: Record<string, string[]> = {};
-  const noSubcat = [];
+  const noSubcat: string[] = [];
   Object.entries(itemMap).forEach(([label, sc]) => {
     if (sc && SUBCAT_ORDER.includes(sc)) {
       if (!groups[sc]) groups[sc] = [];
@@ -605,7 +816,7 @@ function renderRecurringGrid() {
     '<th style="text-align:right;padding:.3rem .5rem;font-size:.65rem;font-weight:700;color:var(--muted);' +
     'border-left:2px solid var(--border);min-width:74px;background:var(--surface);">Year</th>';
 
-  const renderRow = (label) => {
+  const renderRow = (label: string): string => {
     let rowAnnual = 0;
     const cells = existingMonths
       .map((m) => {
@@ -654,8 +865,8 @@ function renderRecurringGrid() {
   };
 
   // Sort tashlumim by base name then installment number
-  const installSort = (labels) =>
-    labels.slice().sort((a, b) => {
+  const installSort = (labels: string[]): string[] =>
+    labels.slice().sort((a: string, b: string) => {
       const baseA = a.replace(/\s*[\(]?\d+\/\d+[\)]?$/, '').trim();
       const baseB = b.replace(/\s*[\(]?\d+\/\d+[\)]?$/, '').trim();
       if (baseA !== baseB) return baseA.localeCompare(baseB);
@@ -672,7 +883,7 @@ function renderRecurringGrid() {
         '<tr><td colspan="' +
         (existingMonths.length + 2) +
         '" style="padding:.3rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--surface2);">' +
-        SUBCAT_LABELS[sc] +
+        SUBCAT_LABELS[sc as keyof typeof SUBCAT_LABELS] +
         '</td></tr>';
       rows += labels.map(renderRow).join('');
     }
@@ -728,7 +939,7 @@ function renderRecurringGrid() {
   );
 }
 
-function editRecurringCell(label, monthNum, currentVal) {
+function editRecurringCell(label: string, monthNum: number, currentVal: number): void {
   const month = state.months.find((m) => m.month_num === monthNum);
   if (!month) return;
   const MNAMES = [
@@ -752,7 +963,7 @@ function editRecurringCell(label, monthNum, currentVal) {
   const td = (window.event && window.event.currentTarget) as HTMLElement | null;
   if (!td || !td.tagName) {
     // Fallback (no event context — programmatic call): keep old behavior
-    const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
+    const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', String(currentVal || 0));
     if (raw === null || raw.trim() === '') return;
     const amount = raw.trim();
     const isFuture = monthNum >= todayMonthForYear();
@@ -773,7 +984,7 @@ function editRecurringCell(label, monthNum, currentVal) {
     "style=\"width:100%;text-align:right;font-family:'DM Mono',monospace;font-size:.78rem;" +
     'padding:.18rem .25rem;border:1px solid var(--accent);border-radius:3px;background:var(--surface);outline:none;" ' +
     'value="' +
-    (currentVal || '') +
+    String(currentVal || 0) +
     '">';
   const input = td.querySelector('input.rg-edit') as HTMLInputElement;
   input.focus();
@@ -808,10 +1019,10 @@ function editRecurringCell(label, monthNum, currentVal) {
         MNAMES[monthNum - 1] +
         ' only">just this month</button>' +
         '</div>';
-      td.querySelector('.rg-fwd-y').addEventListener('click', () => {
+      td.querySelector('.rg-fwd-y')!.addEventListener('click', () => {
         saveRecurringFromMonth(label, monthNum, raw, true);
       });
-      td.querySelector('.rg-fwd-n').addEventListener('click', () => {
+      td.querySelector('.rg-fwd-n')!.addEventListener('click', () => {
         saveRecurringFromMonth(label, monthNum, raw, false);
       });
     } else {
@@ -860,8 +1071,13 @@ async function toggleHousingGrid() {
   renderApp();
 }
 
-async function saveHousingFromMonth(label, fromMonthNum, newAmount, forward) {
-  const num = parseFloat(newAmount) || 0;
+async function saveHousingFromMonth(
+  label: string,
+  fromMonthNum: number,
+  newAmount: string | number,
+  forward: boolean,
+): Promise<void> {
+  const num = parseFloat(String(newAmount)) || 0;
   const targetMonths = forward
     ? state.months.filter((m) => m.month_num >= fromMonthNum)
     : state.months.filter((m) => m.month_num === fromMonthNum);
@@ -910,7 +1126,7 @@ async function saveHousingFromMonth(label, fromMonthNum, newAmount, forward) {
   toast('Updated ✓');
 }
 
-function editHousingCell(label, monthNum, currentVal) {
+function editHousingCell(label: string, monthNum: number, currentVal: number): void {
   const month = state.months.find((m) => m.month_num === monthNum);
   if (!month) return;
   const MNAMES = [
@@ -927,7 +1143,7 @@ function editHousingCell(label, monthNum, currentVal) {
     'Nov',
     'Dec',
   ];
-  const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
+  const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', String(currentVal || 0));
   if (raw === null || raw.trim() === '') return;
   const amount = raw.trim();
   const isFuture = monthNum >= todayMonthForYear();
@@ -969,7 +1185,7 @@ function renderHousingGrid() {
   });
 
   const groups: Record<string, string[]> = {};
-  const noSubcat = [];
+  const noSubcat: string[] = [];
   Object.entries(itemMap).forEach(([label, sc]) => {
     if (sc && SUBCAT_ORDER.includes(sc)) {
       if (!groups[sc]) groups[sc] = [];
@@ -993,7 +1209,7 @@ function renderHousingGrid() {
       )
       .join('');
 
-  const renderRow = (label) => {
+  const renderRow = (label: string): string => {
     const cells = existingMonths
       .map((m) => {
         const items = state.allHousingItems[m.id] || [];
@@ -1043,7 +1259,7 @@ function renderHousingGrid() {
         '<tr><td colspan="' +
         (existingMonths.length + 1) +
         '" style="padding:.3rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);background:var(--surface2);">' +
-        SUBCAT_LABELS[sc] +
+        SUBCAT_LABELS[sc as keyof typeof SUBCAT_LABELS] +
         '</td></tr>';
       rows += groups[sc].map(renderRow).join('');
     }
@@ -1070,7 +1286,7 @@ function renderHousingGrid() {
 // ── Generic spending grid (actual transactions by store × month) ─────────────
 const SPENDING_GRID_CATS = ['transport', 'groceries', 'health'];
 
-async function toggleSpendingGrid(catKey) {
+async function toggleSpendingGrid(catKey: string): Promise<void> {
   const on = state.spendingGridCats.includes(catKey);
   if (on) {
     state.spendingGridCats = state.spendingGridCats.filter((k) => k !== catKey);
@@ -1083,7 +1299,7 @@ async function toggleSpendingGrid(catKey) {
         sb.from('transactions').select('store,amount,month_id').eq('category', catKey),
         sb.from('budgets').select('month_id,amount').eq('category', catKey),
       ]);
-      state.allCatTxData[catKey] = txRes.data || [];
+      state.allCatTxData[catKey] = (txRes.data || []) as unknown as TransactionRow[];
       state.allCatBudgets[catKey] = {};
       (budgetRes.data || []).forEach((b) => {
         state.allCatBudgets[catKey][b.month_id] = b.amount;
@@ -1094,7 +1310,7 @@ async function toggleSpendingGrid(catKey) {
   renderApp();
 }
 
-function renderSpendingGrid(catKey) {
+function renderSpendingGrid(catKey: string): string {
   const MONTH_NAMES = [
     'Jan',
     'Feb',
@@ -1115,11 +1331,11 @@ function renderSpendingGrid(catKey) {
 
   // Transport / Health: Budget vs Spent per month
   if (catKey === 'health') {
-    const spentByMonth = {};
+    const spentByMonth: Record<string, number> = {};
     txs.forEach((tx) => {
       spentByMonth[tx.month_id] = (spentByMonth[tx.month_id] || 0) + (Number(tx.amount) || 0);
     });
-    const fmtV = (v) =>
+    const fmtV = (v: number): string =>
       v > 0
         ? '₪' +
           Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -1140,7 +1356,7 @@ function renderSpendingGrid(catKey) {
       '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>' +
       existingMonths
         .map((m) => {
-          const v = (state.allCatBudgets['health'] || {})[m.id] || 0;
+          const v = ((state.allCatBudgets['health'] as Record<string, number>) || {})[m.id] || 0;
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
@@ -1184,11 +1400,11 @@ function renderSpendingGrid(catKey) {
 
   // Transport: just Budget vs Spent per month
   if (catKey === 'transport') {
-    const spentByMonth = {};
+    const spentByMonth: Record<string, number> = {};
     txs.forEach((tx) => {
       spentByMonth[tx.month_id] = (spentByMonth[tx.month_id] || 0) + (Number(tx.amount) || 0);
     });
-    const fmtV = (v) =>
+    const fmtV = (v: number): string =>
       v > 0
         ? '₪' +
           Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -1210,7 +1426,9 @@ function renderSpendingGrid(catKey) {
       existingMonths
         .map((m) => {
           const v =
-            (state.allCatBudgets['transport'] || {})[m.id] || state.budgets['transport'] || 0;
+            ((state.allCatBudgets['transport'] as Record<string, number>) || {})[m.id] ||
+            state.budgets['transport'] ||
+            0;
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
@@ -1253,20 +1471,23 @@ function renderSpendingGrid(catKey) {
   }
 
   // Groceries: Supermarket vs Makolet totals per month
-  const storeMonthTotals = {};
+  const storeMonthTotals: Record<string, Record<string, number>> = {};
   txs.forEach((tx) => {
-    const store = isBigStore(tx.store) ? 'Supermarket' : 'Makolet';
+    const store = isBigStore(tx.store || '') ? 'Supermarket' : 'Makolet';
     if (!storeMonthTotals[store]) storeMonthTotals[store] = {};
     storeMonthTotals[store][tx.month_id] =
       (storeMonthTotals[store][tx.month_id] || 0) + (Number(tx.amount) || 0);
   });
 
-  const monthTotals = {};
+  const monthTotals: Record<string, number> = {};
   existingMonths.forEach((m) => {
-    monthTotals[m.id] = Object.values(storeMonthTotals).reduce((sum, s) => sum + (s[m.id] || 0), 0);
+    monthTotals[m.id] = Object.values(storeMonthTotals).reduce(
+      (sum: number, s: Record<string, number>) => sum + (s[m.id] || 0),
+      0,
+    );
   });
 
-  const stores = ['Supermarket', 'Makolet'].filter((s) => storeMonthTotals[s]);
+  const stores = ['Supermarket', 'Makolet'].filter((s: string) => storeMonthTotals[s]);
   if (stores.length === 0)
     return '<div style="color:var(--muted);font-size:.8rem;padding:.5rem;">No transactions yet.</div>';
 
@@ -1283,7 +1504,7 @@ function renderSpendingGrid(catKey) {
       )
       .join('');
 
-  const renderRow = (store) => {
+  const renderRow = (store: string): string => {
     const cells = existingMonths
       .map((m) => {
         const val = storeMonthTotals[store][m.id] || 0;
@@ -1344,7 +1565,7 @@ function renderSpendingGrid(catKey) {
       .join('') +
     '</tr>';
 
-  const fmtV2 = (v) =>
+  const fmtV2 = (v: number): string =>
     v > 0
       ? '₪' +
         Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -1382,13 +1603,13 @@ function renderSpendingGrid(catKey) {
   );
 }
 
-function budgetItemsTotal(catKey) {
+function budgetItemsTotal(catKey: string): number | null {
   const items = state.budgetItems[catKey];
   if (!items || items.length === 0) return null; // null = use manual budget
   return ag(items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0));
 }
 
-function catBudget(catKey) {
+function catBudget(catKey: string): number {
   const fromItems = budgetItemsTotal(catKey);
   return fromItems !== null ? fromItems : state.budgets[catKey] || 0;
 }
@@ -1396,11 +1617,11 @@ function catBudget(catKey) {
 async function addTashlum() {
   const name = prompt('שם התשלום (e.g. Mattress):');
   if (!name?.trim()) return;
-  const amount = parseFloat(prompt('סכום לחודש (₪):'));
+  const amount = parseFloat(prompt('סכום לחודש (₪):') as string);
   if (!amount) return;
-  const total = parseInt(prompt('כמה תשלומים?'));
+  const total = parseInt(prompt('כמה תשלומים?') as string);
   if (!total || total < 1) return;
-  const startMonth = parseInt(prompt('חודש התחלה (1=Jan, 3=Mar, ...):'));
+  const startMonth = parseInt(prompt('חודש התחלה (1=Jan, 3=Mar, ...):') as string);
   if (!startMonth || startMonth < 1 || startMonth > 12) return;
   const MNAMES = [
     'Jan',
@@ -1456,7 +1677,7 @@ async function addTashlum() {
   toast('תשלומים נוספו ✓');
 }
 
-async function addBudgetItem(catKey) {
+async function addBudgetItem(catKey: string): Promise<void> {
   const labelInput = prompt('Item name:');
   if (!labelInput?.trim()) return;
   const label = labelInput.trim();
@@ -1475,16 +1696,23 @@ async function addBudgetItem(catKey) {
     .single();
   if (!state.budgetItems[catKey]) state.budgetItems[catKey] = [];
   state.budgetItems[catKey].push(data);
-  logChange('add', 'budget_item', data.id, `Added budget item: ${label} • ${catKey}`, null, data);
+  logChange(
+    'add',
+    'budget_item',
+    (data as Record<string, unknown> | null)?.['id'] as string | undefined,
+    `Added budget item: ${label} • ${catKey}`,
+    null,
+    data,
+  );
   // Also add to allRecurringItems / allHousingItems so grid propagation works immediately
   if (catKey === 'recurring') {
-    if (!state.allRecurringItems[state.currentMonthId])
-      state.allRecurringItems[state.currentMonthId] = [];
-    state.allRecurringItems[state.currentMonthId].push(data);
+    if (!state.allRecurringItems[state.currentMonthId!])
+      state.allRecurringItems[state.currentMonthId!] = [];
+    state.allRecurringItems[state.currentMonthId!].push(data);
   } else if (catKey === 'housing') {
-    if (!state.allHousingItems[state.currentMonthId])
-      state.allHousingItems[state.currentMonthId] = [];
-    state.allHousingItems[state.currentMonthId].push(data);
+    if (!state.allHousingItems[state.currentMonthId!])
+      state.allHousingItems[state.currentMonthId!] = [];
+    state.allHousingItems[state.currentMonthId!].push(data);
   }
   // Also save to template
   await sb
@@ -1493,14 +1721,14 @@ async function addBudgetItem(catKey) {
   renderApp();
 }
 
-async function saveBudgetItem(id, field, value) {
+async function saveBudgetItem(id: string, field: string, value: unknown): Promise<void> {
   const catKey = Object.keys(state.budgetItems).find((k) =>
     state.budgetItems[k].find((i) => i.id === id),
   );
-  const item = (state.budgetItems[catKey] || []).find((i) => i.id === id);
+  const item = (state.budgetItems[catKey!] || []).find((i) => i.id === id);
   if (!item) return;
   const numericFields = ['amount'];
-  const val = numericFields.includes(field) ? parseFloat(value) || 0 : value;
+  const val = numericFields.includes(field) ? parseFloat(value as string) || 0 : (value as string);
   const oldItemVal = item[field];
   await sb
     .from('budget_items')
@@ -1532,7 +1760,7 @@ async function saveBudgetItem(id, field, value) {
     if (allItems)
       Object.values(allItems).forEach((arr) =>
         arr.forEach((i) => {
-          if (i.label === item.label) i.subcategory = val;
+          if (i.label === item.label) i.subcategory = val as string;
         }),
       );
   }
@@ -1548,11 +1776,11 @@ async function saveBudgetItem(id, field, value) {
   renderApp();
 }
 
-async function deleteBudgetItem(id) {
+async function deleteBudgetItem(id: string): Promise<void> {
   const catKey = Object.keys(state.budgetItems).find((k) =>
     state.budgetItems[k].find((i) => i.id === id),
   );
-  const item = (state.budgetItems[catKey] || []).find((i) => i.id === id);
+  const item = (state.budgetItems[catKey!] || []).find((i: BudgetItemRow) => i.id === id);
   await sb.from('budget_items').delete().eq('id', id);
   if (item) {
     logChange(
@@ -1576,11 +1804,11 @@ async function deleteBudgetItem(id) {
   renderApp();
 }
 
-async function setItemAsDefault(id) {
+async function setItemAsDefault(id: string): Promise<void> {
   const catKey = Object.keys(state.budgetItems).find((k) =>
     state.budgetItems[k].find((i) => i.id === id),
   );
-  const item = (state.budgetItems[catKey] || []).find((i) => i.id === id);
+  const item = (state.budgetItems[catKey!] || []).find((i: BudgetItemRow) => i.id === id);
   if (!item) return;
   // Update template row matching this category + sort_order with the current amount + label
   await sb
@@ -1599,7 +1827,7 @@ async function setItemAsDefault(id) {
 
 // When loading a month that has no budget items for a hasLines category,
 // copy from template if template exists
-async function seedBudgetItemsFromTemplate(monthId) {
+async function seedBudgetItemsFromTemplate(monthId: string): Promise<void> {
   const linesCats = CATEGORIES.filter((c) => c.hasLines).map((c) => c.key);
   for (const catKey of linesCats) {
     if (state.budgetItems[catKey] && state.budgetItems[catKey].length > 0) continue;
@@ -1629,10 +1857,10 @@ async function loadAvailableYears() {
   state.availableYears = years.sort((a, b) => a - b);
 }
 
-async function onYearSelect(val) {
+async function onYearSelect(val: string): Promise<void> {
   if (val === '__add__') {
     const input = prompt('Create a new (empty) budget year. Enter the year:');
-    const year = parseInt(input, 10);
+    const year = parseInt(input || '', 10);
     if (!year || year < 2000 || year > 2100) {
       renderApp(); // reset the dropdown back to the current year
       return;
@@ -1644,7 +1872,7 @@ async function onYearSelect(val) {
   await switchYear(parseInt(val, 10));
 }
 
-async function switchYear(year) {
+async function switchYear(year: number): Promise<void> {
   if (year === state.currentYear) return;
   state.currentYear = year;
   localStorage.setItem('activeYear', String(year));
@@ -1658,7 +1886,7 @@ async function switchYear(year) {
 
 // Create a brand-new EMPTY year: 12 zeroed month rows + zeroed housing/recurring
 // line items seeded from templates (structure present, all amounts 0).
-async function seedYear(year) {
+async function seedYear(year: number): Promise<void> {
   const monthRows = MONTHS.map((name, i) => ({
     month_name: name,
     month_num: i + 1,
@@ -1705,7 +1933,7 @@ async function seedYear(year) {
   toast('Created ' + year + ' (empty)');
 }
 
-async function switchMonth(monthId) {
+async function switchMonth(monthId: string): Promise<void> {
   state.currentMonthId = monthId;
   localStorage.setItem('activeMonthId', monthId);
   state.loading = true;
@@ -1731,8 +1959,8 @@ async function switchMonth(monthId) {
 }
 
 // ── Spent per category ────────────────────────────────────────────────
-function spentByCategory() {
-  const totals = {};
+function spentByCategory(): Record<string, number> {
+  const totals: Record<string, number> = {};
   CATEGORIES.forEach((c) => (totals[c.key] = 0));
   state.transactions.forEach((tx) => {
     if (totals[tx.category] !== undefined) totals[tx.category] += Number(tx.amount);
@@ -1765,7 +1993,7 @@ function spentByCategory() {
   return totals;
 }
 
-async function loadIncomeItems(monthId) {
+async function loadIncomeItems(monthId: string): Promise<void> {
   const { data, error } = await sb
     .from('income_items')
     .select('*')
@@ -1776,30 +2004,30 @@ async function loadIncomeItems(monthId) {
 }
 
 // Est/Act state stored in localStorage per month
-function getIncomeEst(monthId) {
+function getIncomeEst(monthId: string | null): Record<string, boolean> {
   try {
-    return JSON.parse(localStorage.getItem('incomeEst_' + monthId)) || {};
+    return JSON.parse(localStorage.getItem('incomeEst_' + (monthId || '')) || '{}') || {};
   } catch {
     return {};
   }
 }
-function setIncomeEst(monthId, obj) {
+function setIncomeEst(monthId: string | null, obj: Record<string, boolean>): void {
   localStorage.setItem('incomeEst_' + monthId, JSON.stringify(obj));
 }
-function toggleIncomeEst(source, itemId) {
+function toggleIncomeEst(source: string, itemId: string | null): void {
   const mid = state.currentMonthId;
-  const est = getIncomeEst(mid);
+  const est: Record<string, boolean> = getIncomeEst(mid);
   const key = itemId || source;
   est[key] = !est[key];
-  setIncomeEst(mid, est);
+  setIncomeEst(mid, est as Record<string, boolean>);
   renderApp();
 }
-function isAnyEstimated(monthId) {
+function isAnyEstimated(monthId: string | null): boolean {
   const est = getIncomeEst(monthId);
   return Object.values(est).some(Boolean);
 }
 
-function totalIncome(month) {
+function totalIncome(month: MonthRow): number {
   const extras = state.incomeItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   return ag(
     (Number(month.income_petachya) || 0) +
@@ -1810,7 +2038,7 @@ function totalIncome(month) {
 }
 
 // ── Add transaction ───────────────────────────────────────────────────
-async function addTransaction() {
+async function addTransaction(): Promise<void> {
   const cat = byId('tx-cat').value;
   const store = byId('tx-store').value.trim();
   const item = byId('tx-item').value.trim();
@@ -1850,17 +2078,17 @@ async function addTransaction() {
     `Added ${store || item || cat} ₪${amount} • ${cat}`,
     null,
     txData,
-    state.currentMonthId,
+    state.currentMonthId!,
   );
   pushUndo({
     label: 'add transaction',
     undo: async () => {
       await sb.from('transactions').delete().eq('id', txData.id);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
     redo: async () => {
       await sb.from('transactions').insert(txData);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
   });
 
@@ -1871,7 +2099,7 @@ async function addTransaction() {
   byId('tx-date').value = today();
   btn.disabled = false;
 
-  await loadTransactions(state.currentMonthId);
+  await loadTransactions(state.currentMonthId!);
   renderApp();
   toast('Transaction saved ✓');
 }
@@ -1918,17 +2146,17 @@ async function addTransactionSidebar() {
     `Added ${store || item || cat} ₪${amount} • ${cat}`,
     null,
     txData,
-    state.currentMonthId,
+    state.currentMonthId!,
   );
   pushUndo({
     label: 'add transaction',
     undo: async () => {
       await sb.from('transactions').delete().eq('id', txData.id);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
     redo: async () => {
       await sb.from('transactions').insert(txData);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
   });
 
@@ -1939,12 +2167,12 @@ async function addTransactionSidebar() {
   btn.disabled = false;
   btn.textContent = 'Save →';
 
-  await loadTransactions(state.currentMonthId);
+  await loadTransactions(state.currentMonthId!);
   renderApp();
   toast('Transaction saved ✓');
 }
 
-async function deleteTransaction(id) {
+async function deleteTransaction(id: string): Promise<void> {
   const tx = state.transactions.find((t) => t.id === id);
   if (!tx) return;
   const snap = { ...tx };
@@ -1963,22 +2191,23 @@ async function deleteTransaction(id) {
     label: 'delete transaction',
     undo: async () => {
       await sb.from('transactions').insert(snap);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
     redo: async () => {
       await sb.from('transactions').delete().eq('id', snap.id);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
   });
   renderApp();
   toastDeleted(snap.store || snap.item || snap.category, snap.amount);
 }
 
-async function updateTx(id, field, value) {
+async function updateTx(id: string, field: string, value: unknown): Promise<void> {
   const tx = state.transactions.find((t) => t.id === id);
   if (!tx) return;
   const oldVal = tx[field];
-  const val = field === 'amount' ? parseFloat(value) || 0 : value.trim() || null;
+  const val =
+    field === 'amount' ? parseFloat(String(value)) || 0 : (value as string).trim() || null;
   await sb
     .from('transactions')
     .update({ [field]: val })
@@ -2015,7 +2244,7 @@ async function updateTx(id, field, value) {
   renderApp();
 }
 
-function setTxSort(sort) {
+function setTxSort(sort: string): void {
   state.txSort = sort;
   localStorage.setItem('txSort', sort);
   // Sync open cats from DOM before re-render so sort doesn't close categories
@@ -2027,7 +2256,7 @@ function setTxSort(sort) {
 }
 
 // ── Setup: create month ───────────────────────────────────────────────
-async function createMonth(num) {
+async function createMonth(num: number): Promise<void> {
   const { data, error } = await sb
     .from('months')
     .insert({
@@ -2095,7 +2324,9 @@ function renderApp() {
 
   const income = totalIncome(current);
   // Sync charity % from localStorage into state.budgets AND Supabase (quietly, no undo/log)
-  const _chPct = parseFloat(localStorage.getItem('charityPct_' + state.currentMonthId));
+  const _chPct = parseFloat(
+    localStorage.getItem('charityPct_' + (state.currentMonthId || '')) || '0',
+  );
   if (_chPct && income) {
     const _chCalc = Math.round((income * _chPct) / 100);
     state.budgets['charity'] = _chCalc;
@@ -2105,7 +2336,7 @@ function renderApp() {
       state._lastCharitySync[state.currentMonthId] = _chCalc;
       sb.from('budgets')
         .select('id')
-        .eq('month_id', state.currentMonthId)
+        .eq('month_id', state.currentMonthId!)
         .eq('category', 'charity')
         .single()
         .then(({ data }) => {
@@ -2131,6 +2362,7 @@ function renderApp() {
       (state.budgets['savings_invested'] || 0),
   );
   const remaining = ag(income - totalSpent);
+  void remaining;
   const totalBudgeted = ag(
     CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0) +
       (state.budgets['savings_bank'] || 0) +
@@ -2181,7 +2413,7 @@ function renderApp() {
             .map(
               (m) => `
             <button class="mtab ${m.id === state.currentMonthId ? 'active' : ''}" onclick="switchMonth('${m.id}')" data-month-id="${m.id}">
-              ${m.month_name.slice(0, 3)}
+              ${((m as unknown as { month_name?: string }).month_name || '').slice(0, 3)}
             </button>`,
             )
             .join('')}
@@ -2196,8 +2428,10 @@ function renderApp() {
       const ribbonExpanded = localStorage.getItem('ribbonExpanded') === 'true';
       const leftToBudget = ag(income - totalBudgeted);
       const remainingInBudget = ag(totalBudgeted - totalSpent);
-      const n = (v) =>
-        v == null || v === ''
+      void leftToBudget;
+      void remainingInBudget;
+      const n = (v: number | null | undefined): string =>
+        v == null
           ? ''
           : Number(v).toLocaleString('en-IL', {
               minimumFractionDigits: 0,
@@ -2209,7 +2443,9 @@ function renderApp() {
 
       // Snapshot table rows for expanded view
       const groupRows = CATEGORY_GROUPS.map((group) => {
-        const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
+        const cats = group.keys
+          .map((k) => CATEGORIES.find((c) => c.key === k))
+          .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
         const gs = ag(
           cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
         );
@@ -2228,7 +2464,7 @@ function renderApp() {
           })
           .join('');
         if (cats.length === 1) {
-          const c = cats[0];
+          const c = cats[0]!;
           const b = catBudget(c.key) || 0;
           const s = c.hasTab ? b : spent[c.key] || 0;
           const r = b - s;
@@ -2239,10 +2475,10 @@ function renderApp() {
       }).join('');
 
       // Leisure sub-ribbon
-      const leisureGroup = CATEGORY_GROUPS.find((g) => g.label === 'Leisure & Lifestyle');
+      const leisureGroup = CATEGORY_GROUPS.find((g) => g.label === 'Leisure & Lifestyle')!;
       const leisureCats = leisureGroup.keys
         .map((k) => CATEGORIES.find((c) => c.key === k))
-        .filter(Boolean);
+        .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
       const isMobile = window.innerWidth <= 600;
       const leisureKey = isMobile ? 'leisureExpandedMobile' : 'leisureExpanded';
       const leisureStored = localStorage.getItem(leisureKey);
@@ -2309,7 +2545,7 @@ function renderApp() {
             );
             const aGap = ag(Math.max(0, aProj - aAlloc));
             const totalOwed = ag(tGap + aGap);
-            const seg = (emoji, val, tab, label) =>
+            const seg = (emoji: string, val: number, tab: string, label: string): string =>
               val > 0
                 ? `<span class="owed-seg" title="${label}: -${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`
                 : `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
@@ -2384,7 +2620,7 @@ function renderApp() {
                   : state.activeTab === 'admin'
                     ? renderAdminTab()
                     : state.activeTab === 'biz'
-                      ? renderBizTab(current)
+                      ? renderBizTab()
                       : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
@@ -2418,18 +2654,22 @@ function renderApp() {
         ${CATEGORY_GROUPS.map((g) => {
           const gkey = g.label.replace(/\s+/g, '-');
           const expanded = localStorage.getItem('sn-exp-' + gkey) !== 'false';
-          const cats = g.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
+          const cats = g.keys
+            .map((k) => CATEGORIES.find((c) => c.key === k))
+            .filter((x): x is (typeof CATEGORIES)[0] => x !== undefined);
           if (cats.length === 1) {
             const c = cats[0];
             let gapBadge = '';
-            if (c.hasTab && (state as any)[c.key]) {
-              const _catSection = (state as any)[c.key] as CategorySection;
+            if (c.hasTab && (state as unknown as Record<string, unknown>)[c.key]) {
+              const _catSection = (state as unknown as Record<string, unknown>)[
+                c.key
+              ] as CategorySection;
               const projected = (_catSection.items || []).reduce(
                 (s, i) => s + (Number(i.projected_amount) || 0),
                 0,
               );
               const allocated = Object.values(_catSection.allocations || {}).reduce(
-                (s: number, a: any) => s + (Number(a.amount) || 0),
+                (s: number, a: { amount?: unknown }) => s + (Number(a.amount) || 0),
                 0,
               );
               const gap = ag(projected - allocated);
@@ -2479,7 +2719,7 @@ function renderApp() {
           `;
           })()}
           ${state.incomeItems
-            .map((item) => {
+            .map((item: IncomeItemRow) => {
               const _est2 = getIncomeEst(state.currentMonthId);
               return `
           <div class="income-row">
@@ -2507,8 +2747,16 @@ function renderApp() {
           const investSpent = investBudget;
           const groupBudget = bankBudget + investBudget;
           const groupSpent = bankSpent + investSpent;
-          const groupSt = status(groupSpent, groupBudget);
-          const savingsRow = (label, emoji, budgetKey, spentField, budgetVal, spentVal) => {
+          const _groupSt_unused = status(groupSpent, groupBudget);
+          void _groupSt_unused;
+          const savingsRow = (
+            label: string,
+            emoji: string,
+            budgetKey: string,
+            spentField: string,
+            budgetVal: number,
+            _spentVal?: number,
+          ): string => {
             return `<div class="cat-row">
               <div class="cat-top" style="cursor:default;">
                 <div class="cat-name"><span class="cat-emoji">${emoji}</span>${label}</div>
@@ -2536,7 +2784,9 @@ function renderApp() {
         })()}
 
         ${CATEGORY_GROUPS.map((group) => {
-          const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
+          const cats = group.keys
+            .map((k) => CATEGORIES.find((c) => c.key === k))
+            .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
           const groupSpent = ag(cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
           const groupBudget = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
           const groupSt = status(groupSpent, groupBudget);
@@ -2553,7 +2803,7 @@ function renderApp() {
                 const totalSpent = past.reduce((acc, m) => {
                   return (
                     acc +
-                    (state.yearData.txns || [])
+                    (state.yearData!.txns || [])
                       .filter((t) => t.month_id === m.id && leisureCatKeys.includes(t.category))
                       .reduce((s, t) => s + (Number(t.amount) || 0), 0)
                   );
@@ -2602,7 +2852,7 @@ function renderApp() {
                     if (c.key === 'charity') {
                       const charityPctKey = 'charityPct_' + state.currentMonthId;
                       const charityPct =
-                        parseFloat(localStorage.getItem(charityPctKey)) ||
+                        parseFloat(localStorage.getItem(charityPctKey) || '') ||
                         (state.budgets['charity'] && income
                           ? +((state.budgets['charity'] / income) * 100).toFixed(1)
                           : '');
@@ -2708,7 +2958,7 @@ function renderApp() {
                           const subcatOpts =
                             c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
                           const isGridCat = c.key === 'housing' || c.key === 'recurring';
-                          const renderBudgetItemRow = (item) => {
+                          const renderBudgetItemRow = (item: BudgetItemRow): string => {
                             // Subcat picker: per-row select. On mobile the section
                             // banner already conveys the subcategory, so hide it
                             // there (CSS) — keeps the row scannable and prevents
@@ -2778,8 +3028,8 @@ function renderApp() {
                               (state.housingGridMode ? '✕ List view' : '📊 Year grid') +
                               '</button></div>';
                             if (state.housingGridMode) return gridBtn + renderHousingGrid();
-                            const hGroups = {},
-                              hNoSubcat = [];
+                            const hGroups: Record<string, BudgetItemRow[]> = {},
+                              hNoSubcat: BudgetItemRow[] = [];
                             items.forEach((item) => {
                               const sc = item.subcategory || '';
                               if (sc && Object.keys(HOUSING_SUBCATS).includes(sc)) {
@@ -2792,7 +3042,7 @@ function renderApp() {
                               if (hGroups[sc] && hGroups[sc].length > 0) {
                                 hHtml +=
                                   '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
-                                  HOUSING_SUBCATS[sc] +
+                                  (HOUSING_SUBCATS as Record<string, string>)[sc] +
                                   '</div>';
                                 hHtml += hGroups[sc].map(renderBudgetItemRow).join('');
                               }
@@ -2832,8 +3082,8 @@ function renderApp() {
                             bills: 'Bills',
                             fitness: 'Fitness',
                           };
-                          const groups = {};
-                          const noSubcat = [];
+                          const groups: Record<string, BudgetItemRow[]> = {};
+                          const noSubcat: BudgetItemRow[] = [];
                           items.forEach((item) => {
                             const sc = item.subcategory || '';
                             if (sc && SUBCAT_ORDER.includes(sc)) {
@@ -2848,7 +3098,7 @@ function renderApp() {
                             if (groups[sc] && groups[sc].length > 0) {
                               html +=
                                 '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
-                                SUBCAT_LABELS[sc] +
+                                SUBCAT_LABELS[sc as keyof typeof SUBCAT_LABELS] +
                                 '</div>';
                               html += groups[sc].map(renderBudgetItemRow).join('');
                             }
@@ -2863,7 +3113,7 @@ function renderApp() {
                             ? (() => {
                                 const _ps = [
                                   ...new Set([
-                                    ...(PRESET_STORES[c.key] || []),
+                                    ...((PRESET_STORES as Record<string, string[]>)[c.key] || []),
                                     ...state.allStores
                                       .filter((tx) => tx.category === c.key && tx.store)
                                       .map((tx) => tx.store),
@@ -2873,7 +3123,7 @@ function renderApp() {
                                   ]),
                                 ];
                                 const _dlId = 'inline-stores-' + c.key;
-                                return `<datalist id="${_dlId}">${_ps.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('')}</datalist>
+                                return `<datalist id="${_dlId}">${_ps.map((s) => `<option value="${(s as string).replace(/"/g, '&quot;')}">`).join('')}</datalist>
                           <div class="inline-add-form" style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
                             <input id="inline-store-${c.key}" class="inline-add-input" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
                             <input id="inline-item-${c.key}" class="inline-add-input" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
@@ -2891,11 +3141,13 @@ function renderApp() {
                         c.key === 'groceries' && txs.length > 0
                           ? (() => {
                               const bigTotal = txs.reduce(
-                                (sum, tx) => sum + (isBigStore(tx.store) ? Number(tx.amount) : 0),
+                                (sum, tx) =>
+                                  sum + (isBigStore(tx.store || '') ? Number(tx.amount) : 0),
                                 0,
                               );
                               const otherTotal = txs.reduce(
-                                (sum, tx) => sum + (!isBigStore(tx.store) ? Number(tx.amount) : 0),
+                                (sum, tx) =>
+                                  sum + (!isBigStore(tx.store || '') ? Number(tx.amount) : 0),
                                 0,
                               );
                               const bigPct = s > 0 ? Math.round((bigTotal / s) * 100) : 0;
@@ -2951,13 +3203,14 @@ function renderApp() {
                           'Nov',
                           'Dec',
                         ];
-                        const fmtDate = (d) => {
+                        const fmtDate = (d: string | null): string => {
                           if (!d) return '—';
                           const dt = new Date(d + 'T12:00:00');
                           return dt.getDate() + ' ' + MONS[dt.getMonth()];
                         };
-                        const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;');
-                        const renderTxRow = (tx) => `
+                        const esc = (s: string | null | undefined): string =>
+                          (s || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+                        const renderTxRow = (tx: TransactionRow): string => `
                           <div class="tx-item" data-tx-id="${tx.id}">
                             <div class="tx-date-wrap" onclick="event.stopPropagation(); this.classList.add('editing'); this.querySelector('.tx-edit-date').focus();">
                               <span class="tx-date-display">${fmtDate(tx.date)}</span>
@@ -2968,12 +3221,12 @@ function renderApp() {
                             <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01" style="font-size:.88rem;font-weight:600;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','amount',this.value)">
                             <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
                           </div>`;
-                        const sectionHdr = (emoji, label, total) =>
+                        const sectionHdr = (emoji: string, label: string, total: number): string =>
                           `<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;display:flex;justify-content:space-between;"><span>${emoji} ${label}</span><span style="font-family:'DM Mono',monospace;">${fmt(total)}</span></div>`;
                         let txRows = '';
                         if (c.key === 'groceries' && sort === 'type') {
-                          const big = sorted.filter((tx) => isBigStore(tx.store));
-                          const local = sorted.filter((tx) => !isBigStore(tx.store));
+                          const big = sorted.filter((tx) => isBigStore(tx.store || ''));
+                          const local = sorted.filter((tx) => !isBigStore(tx.store || ''));
                           const bigAmt = big.reduce((s, tx) => s + Number(tx.amount), 0);
                           const localAmt = local.reduce((s, tx) => s + Number(tx.amount), 0);
                           txRows =
@@ -3014,7 +3267,14 @@ function renderApp() {
           if (count === 0) return '';
           const open = localStorage.getItem('pendingDecisionsOpen') === 'true';
           const word = count === 1 ? 'thing' : 'things';
-          const fmtRow = (it) => {
+          const fmtRow = (it: {
+            tab: string;
+            type: string;
+            id?: string;
+            emoji?: string;
+            label?: string;
+            amount?: number;
+          }): string => {
             const onclick = `pendingJump('${it.tab}'${it.type === 'estimate' ? `,'${it.id}'` : ''})`;
             const tag =
               it.type === 'estimate'
@@ -3024,7 +3284,7 @@ function renderApp() {
                 onkeydown="if(event.key==='Enter')${onclick}">
               <span class="pd-emoji">${it.emoji}</span>
               <span class="pd-label">${it.label}${tag}</span>
-              <span class="pd-amount">${it.amount > 0 ? '₪' + fmt(it.amount).replace('₪', '') : ''}</span>
+              <span class="pd-amount">${(it.amount ?? 0) > 0 ? '₪' + fmt(it.amount).replace('₪', '') : ''}</span>
               <span class="pd-chev">›</span>
             </div>`;
           };
@@ -3114,10 +3374,10 @@ function renderApp() {
    expansions) that don't go through renderApp(). Idempotent: skips inputs
    that already declare an inputmode (e.g., a future field that explicitly
    wants "numeric" for integer-only). */
-function applyNumericInputModes(root?) {
-  const scope = root && root.querySelectorAll ? root : document;
+function applyNumericInputModes(root?: HTMLElement): void {
+  const scope = root && (root as HTMLElement).querySelectorAll ? (root as HTMLElement) : document;
   const inputs = scope.querySelectorAll('input[type="number"]:not([inputmode])');
-  inputs.forEach((el) => {
+  inputs.forEach((el: Element) => {
     el.setAttribute('inputmode', 'decimal');
   });
 }
@@ -3136,8 +3396,8 @@ function _installInputModeObserver() {
         const el = node as Element;
         if (el.matches && el.matches('input[type="number"]:not([inputmode])')) {
           el.setAttribute('inputmode', 'decimal');
-        } else if (el.querySelectorAll) {
-          applyNumericInputModes(el);
+        } else if ((el as HTMLElement).querySelectorAll) {
+          applyNumericInputModes(el as HTMLElement);
         }
       }
     }
@@ -3155,20 +3415,20 @@ if (!window._inputModeObserverInstalled) {
   setTimeout(_installInputModeObserver, 100);
 }
 
-async function saveSavingsField(field, value) {
+async function saveSavingsField(field: string, value: string | number): Promise<void> {
   // Mirror budget value to months table for backwards compatibility.
   // No undo/render/toast here — saveBudget() handles all of that.
-  const num = parseFloat(value) || 0;
+  const num = parseFloat(String(value)) || 0;
   const month = state.months.find((m) => m.id === state.currentMonthId);
   await sb
     .from('months')
     .update({ [field]: num })
-    .eq('id', state.currentMonthId);
+    .eq('id', state.currentMonthId!);
   if (month) month[field] = num;
 }
 
-async function saveBudget(catKey, amount) {
-  const num = parseFloat(amount) || 0;
+async function saveBudget(catKey: string, amount: string | number): Promise<void> {
+  const num = parseFloat(String(amount)) || 0;
   const old = state.budgets[catKey] || 0;
   const monthId = state.currentMonthId;
   // Upsert — try update first, then insert
@@ -3214,14 +3474,20 @@ async function saveBudget(catKey, amount) {
       if (existingAlloc) {
         existingAlloc.amount = num;
       } else {
-        state.travel.allocations[month.month_num] = { month_id: monthId, amount: num };
+        state.travel.allocations[month.month_num] = {
+          month_id: monthId,
+          amount: num,
+        } as AdminAllocationRow;
       }
     } else if (catKey === 'charity') {
       const existingAlloc = state.charity.allocations[month.month_num];
       if (existingAlloc) {
         existingAlloc.amount = num;
       } else {
-        state.charity.allocations[month.month_num] = { month_id: monthId, amount: num };
+        state.charity.allocations[month.month_num] = {
+          month_id: monthId,
+          amount: num,
+        } as AdminAllocationRow;
       }
     }
   }
@@ -3259,12 +3525,12 @@ const PRESET_STORES = {
   ],
 };
 
-function updateSbStores(catKey) {
+function updateSbStores(catKey: string): void {
   const dl = byId('sb-store-list');
   if (!dl) return;
   const stores = [
     ...new Set([
-      ...(PRESET_STORES[catKey] || []),
+      ...((PRESET_STORES as Record<string, string[]>)[catKey] || []),
       ...state.allStores.filter((tx) => tx.category === catKey && tx.store).map((tx) => tx.store),
       ...state.transactions
         .filter((tx) => tx.category === catKey && tx.store)
@@ -3274,10 +3540,10 @@ function updateSbStores(catKey) {
   dl.innerHTML = stores.map((s) => `<option value="${esc(s)}">`).join('');
 }
 
-function updateStoreSuggestions(catKey) {
+function updateStoreSuggestions(catKey: string): void {
   const dl = byId('store-suggestions');
   if (!dl) return;
-  const presets = PRESET_STORES[catKey] || [];
+  const presets = (PRESET_STORES as Record<string, string[]>)[catKey] || [];
   const fromHistory = state.transactions
     .filter((tx) => tx.category === catKey && tx.store)
     .map((tx) => tx.store);
@@ -3285,7 +3551,7 @@ function updateStoreSuggestions(catKey) {
   dl.innerHTML = stores.map((s) => `<option value="${esc(s)}">`).join('');
 }
 
-function quickAddFor(catKey) {
+function quickAddFor(catKey: string): void {
   state.inlineAddCat = catKey;
   renderApp();
   setTimeout(() => {
@@ -3294,16 +3560,16 @@ function quickAddFor(catKey) {
   }, 50);
 }
 
-async function saveInlineAdd(catKey) {
-  if ((saveInlineAdd as any)._saving) return;
-  (saveInlineAdd as any)._saving = true;
+async function saveInlineAdd(catKey: string): Promise<void> {
+  if ((saveInlineAdd as unknown as { _saving?: boolean })._saving) return;
+  (saveInlineAdd as unknown as { _saving?: boolean })._saving = true;
   const store = (byId('inline-store-' + catKey) || {}).value?.trim() || null;
   const item = (byId('inline-item-' + catKey) || {}).value?.trim() || null;
   const amount = parseFloat((byId('inline-amount-' + catKey) || {}).value);
   const date = (byId('inline-date-' + catKey) || {}).value || null;
   if (!amount || isNaN(amount)) {
     toast('Enter an amount');
-    (saveInlineAdd as any)._saving = false;
+    (saveInlineAdd as unknown as { _saving?: boolean })._saving = false;
     return;
   }
   const { data: txData, error } = await sb
@@ -3320,7 +3586,7 @@ async function saveInlineAdd(catKey) {
     .single();
   if (error) {
     toast('Error saving');
-    (saveInlineAdd as any)._saving = false;
+    (saveInlineAdd as unknown as { _saving?: boolean })._saving = false;
     return;
   }
   logChange(
@@ -3330,27 +3596,27 @@ async function saveInlineAdd(catKey) {
     `Added ${store || item || catKey} ₪${amount} • ${catKey}`,
     null,
     txData,
-    state.currentMonthId,
+    state.currentMonthId!,
   );
   pushUndo({
     label: 'add transaction',
     undo: async () => {
       await sb.from('transactions').delete().eq('id', txData.id);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
     redo: async () => {
       await sb.from('transactions').insert(txData);
-      await loadTransactions(state.currentMonthId);
+      await loadTransactions(state.currentMonthId!);
     },
   });
   state.inlineAddCat = null;
-  await loadTransactions(state.currentMonthId);
-  (saveInlineAdd as any)._saving = false;
+  await loadTransactions(state.currentMonthId!);
+  (saveInlineAdd as unknown as { _saving?: boolean })._saving = false;
   renderApp();
   toast('Saved ✓');
 }
 
-function toggleCat(key) {
+function toggleCat(key: string): void {
   if (state.openCats.has(key)) {
     state.openCats.delete(key);
   } else {
@@ -3368,14 +3634,14 @@ function toggleCat(key) {
   }
 }
 
-async function saveIncomeField(field, value) {
-  const num = parseFloat(value) || 0;
+async function saveIncomeField(field: string, value: string | number): Promise<void> {
+  const num = parseFloat(String(value)) || 0;
   const month = state.months.find((m) => m.id === state.currentMonthId);
   const oldVal = month ? month[field] : 0;
   const { error } = await sb
     .from('months')
     .update({ [field]: num })
-    .eq('id', state.currentMonthId);
+    .eq('id', state.currentMonthId!);
   if (error) {
     toast('Error saving');
     return;
@@ -3388,7 +3654,7 @@ async function saveIncomeField(field, value) {
     `Income changed: ${field} ₪${oldVal} → ₪${num}`,
     { [field]: oldVal },
     { [field]: num },
-    state.currentMonthId,
+    state.currentMonthId!,
   );
   pushUndo({
     label: field.replace('income_', ''),
@@ -3396,14 +3662,14 @@ async function saveIncomeField(field, value) {
       await sb
         .from('months')
         .update({ [field]: oldVal })
-        .eq('id', state.currentMonthId);
+        .eq('id', state.currentMonthId!);
       if (month) month[field] = oldVal;
     },
     redo: async () => {
       await sb
         .from('months')
         .update({ [field]: num })
-        .eq('id', state.currentMonthId);
+        .eq('id', state.currentMonthId!);
       if (month) month[field] = num;
     },
   });
@@ -3411,7 +3677,7 @@ async function saveIncomeField(field, value) {
   toast('Saved ✓');
 }
 
-async function addIncomeItem() {
+async function addIncomeItem(): Promise<void> {
   const { data, error } = await sb
     .from('income_items')
     .insert({ month_id: state.currentMonthId, label: 'Other', amount: 0 })
@@ -3422,7 +3688,14 @@ async function addIncomeItem() {
     return;
   }
   state.incomeItems.push(data);
-  logChange('add', 'income_item', data.id, `Added income source: Other ₪0`, null, data);
+  logChange(
+    'add',
+    'income_item',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Added income source: Other ₪0`,
+    null,
+    data,
+  );
   pushUndo({
     label: 'add income source',
     undo: async () => {
@@ -3437,7 +3710,7 @@ async function addIncomeItem() {
   renderApp();
 }
 
-async function saveIncomeItemLabel(id, value) {
+async function saveIncomeItemLabel(id: string, value: string): Promise<void> {
   const item = state.incomeItems.find((i) => i.id === id);
   const old = item ? item.label : '';
   await sb.from('income_items').update({ label: value }).eq('id', id);
@@ -3465,8 +3738,8 @@ async function saveIncomeItemLabel(id, value) {
   toast('Saved ✓');
 }
 
-async function saveIncomeItemAmount(id, value) {
-  const num = parseFloat(value) || 0;
+async function saveIncomeItemAmount(id: string, value: string | number): Promise<void> {
+  const num = parseFloat(String(value)) || 0;
   const item = state.incomeItems.find((i) => i.id === id);
   const old = item ? item.amount : 0;
   await sb.from('income_items').update({ amount: num }).eq('id', id);
@@ -3494,9 +3767,9 @@ async function saveIncomeItemAmount(id, value) {
   toast('Saved ✓');
 }
 
-async function deleteIncomeItem(id) {
+async function deleteIncomeItem(id: string): Promise<void> {
   const item = state.incomeItems.find((i) => i.id === id);
-  const snap = { ...item };
+  const snap = { ...item } as IncomeItemRow;
   await sb.from('income_items').delete().eq('id', id);
   logChange(
     'delete',
@@ -3544,7 +3817,7 @@ async function saveIncome() {
     income_other: parseFloat(byId('inc-other').value) || 0,
     savings_bank: parseFloat(byId('inc-savings').value) || 0,
   };
-  const { error } = await sb.from('months').update(updates).eq('id', state.currentMonthId);
+  const { error } = await sb.from('months').update(updates).eq('id', state.currentMonthId!);
   if (error) {
     toast('Error saving');
     return;
@@ -3570,7 +3843,7 @@ function showAddMonth() {
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────
-async function switchTab(tab) {
+async function switchTab(tab: string): Promise<void> {
   state.activeTab = tab;
   localStorage.setItem('activeTab', tab);
   if (tab === 'biz') {
@@ -3619,7 +3892,7 @@ async function loadBizData() {
   const { data: bizRows, error: bizErr } = await sb
     .from('biz_months')
     .select('*')
-    .eq('month_id', state.currentMonthId);
+    .eq('month_id', state.currentMonthId!);
   if (bizErr) toast('Could not load business data');
   state.biz = bizRows && bizRows.length > 0 ? bizRows[0] : null;
 
@@ -3646,15 +3919,17 @@ async function loadBizData() {
     const payload = await resp.json();
     // Shape ptClients to match what renderBizTab expects: { id, name, rate }.
     // We use `initial` as the display name (privacy: no full names in browser).
-    state.ptClients = (payload.clients || []).map((c) => ({
-      id: c.id,
-      name: c.initial,
-      rate: c.rate,
-    }));
+    state.ptClients = ((payload.clients as Array<Record<string, unknown>>) || []).map(
+      (c: Record<string, unknown>): PtClientRow => ({
+        id: c['id'] as string,
+        name: c['initial'] as string,
+        rate: c['rate'] as number,
+      }),
+    );
     const sessions = payload.sessions || [];
     state.ptSessions = {
-      earned: sessions.filter((s) => s.status === 'happened'),
-      scheduled: sessions.filter((s) => s.status === 'scheduled'),
+      earned: sessions.filter((s: Record<string, unknown>) => s.status === 'happened'),
+      scheduled: sessions.filter((s: Record<string, unknown>) => s.status === 'scheduled'),
     };
     // Cash tab "Owed to You" — drift detection against cash_accounts (C1).
     state.ptOwedTotal = Number(payload.owed_total) || 0;
@@ -3687,7 +3962,7 @@ async function loadAdminData() {
     .eq('year', state.currentYear);
   state.admin.allocations = {};
   (allocs || []).forEach((a) => {
-    state.admin.allocations[a.month_num] = a;
+    state.admin.allocations[a.month_num] = a as AdminAllocationRow;
   });
 
   const { data: subs } = await sb.from('admin_sub_items').select('*').order('created_at');
@@ -3719,7 +3994,12 @@ async function loadTravelData() {
   state.travel.allocations = {};
   (budgetRows || []).forEach((b) => {
     const m = state.months.find((m) => m.id === b.month_id);
-    if (m) state.travel.allocations[m.month_num] = { month_id: b.month_id, amount: b.amount };
+    if (m)
+      state.travel.allocations[m.month_num] = {
+        month_id: b.month_id,
+        amount: b.amount,
+        id: b.month_id,
+      } as AdminAllocationRow;
   });
 }
 
@@ -3748,12 +4028,17 @@ async function loadCharityData() {
   state.charity.allocations = {};
   (budgetRows || []).forEach((b) => {
     const m = state.months.find((m) => m.id === b.month_id);
-    if (m) state.charity.allocations[m.month_num] = { month_id: b.month_id, amount: b.amount };
+    if (m)
+      state.charity.allocations[m.month_num] = {
+        month_id: b.month_id,
+        amount: b.amount,
+        id: b.month_id,
+      } as AdminAllocationRow;
   });
 }
 
 // ── Charity CRUD ──────────────────────────────────────────────────────
-async function addCharityItem() {
+async function addCharityItem(): Promise<void> {
   const { data, error } = await sb
     .from('charity_items')
     .insert({ year: state.currentYear, label: 'New item', projected_amount: 0 })
@@ -3764,17 +4049,24 @@ async function addCharityItem() {
     return;
   }
   state.charity.items.push(data);
-  logChange('add', 'charity_item', data.id, `Added charity item: New item`, null, data);
+  logChange(
+    'add',
+    'charity_item',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Added charity item: New item`,
+    null,
+    data,
+  );
   renderApp();
 }
 
-async function saveCharityItem(id, field, value) {
+async function saveCharityItem(id: string, field: string, value: unknown): Promise<void> {
   const item = state.charity.items.find((i) => i.id === id);
   if (!item) return;
   const oldVal = item[field];
   const val =
     field === 'projected_amount'
-      ? parseFloat(value) || 0
+      ? parseFloat(String(value)) || 0
       : field === 'is_estimate' || field === 'is_logged'
         ? Boolean(value)
         : value;
@@ -3813,7 +4105,7 @@ async function saveCharityItem(id, field, value) {
   renderApp();
 }
 
-async function deleteCharityItem(id) {
+async function deleteCharityItem(id: string): Promise<void> {
   const snap = state.charity.items.find((i) => i.id === id);
   if (!snap) return;
   await sb.from('charity_items').delete().eq('id', id);
@@ -3845,7 +4137,7 @@ async function deleteCharityItem(id) {
   toastDeleted(snap.label, snap.projected_amount);
 }
 
-async function addCharitySub(itemId) {
+async function addCharitySub(itemId: string): Promise<void> {
   const { data, error } = await sb
     .from('charity_sub_items')
     .insert({ item_id: itemId, label: '', amount: 0 })
@@ -3860,11 +4152,15 @@ async function addCharitySub(itemId) {
   renderApp();
 }
 
-async function updateCharitySub(id, field, value) {
+async function updateCharitySub(id: string, field: string, value: unknown): Promise<void> {
   const s = state.charity.subItems.find((s) => s.id === id);
   if (!s) return;
   const val =
-    field === 'amount' ? parseFloat(value) || 0 : field === 'is_paid' ? Boolean(value) : value;
+    field === 'amount'
+      ? parseFloat(String(value)) || 0
+      : field === 'is_paid'
+        ? Boolean(value)
+        : (value as string);
   await sb
     .from('charity_sub_items')
     .update({ [field]: val })
@@ -3873,14 +4169,14 @@ async function updateCharitySub(id, field, value) {
   renderApp();
 }
 
-async function deleteCharitySub(id) {
+async function deleteCharitySub(id: string): Promise<void> {
   await sb.from('charity_sub_items').delete().eq('id', id);
   state.charity.subItems = state.charity.subItems.filter((s) => s.id !== id);
   renderApp();
 }
 
-async function saveCharityAllocation(monthNum, value) {
-  const num = parseFloat(value) || 0;
+async function saveCharityAllocation(monthNum: number, value: string | number): Promise<void> {
+  const num = parseFloat(String(value)) || 0;
   const existing = state.charity.allocations[monthNum];
   const oldNum = existing ? Number(existing.amount) : 0;
   if (existing) {
@@ -3894,7 +4190,13 @@ async function saveCharityAllocation(monthNum, value) {
     const month = state.months.find((m) => m.month_num === monthNum);
     if (!month) return;
     await sb.from('budgets').insert({ month_id: month.id, category: 'charity', amount: num });
-    state.charity.allocations[monthNum] = { month_id: month.id, amount: num };
+    state.charity.allocations[monthNum] = {
+      month_id: month.id,
+      amount: num,
+      id: month.id,
+      year: state.currentYear,
+      month_num: monthNum,
+    } as AdminAllocationRow;
   }
   state.budgets['charity'] = num;
   logChange(
@@ -3962,7 +4264,7 @@ async function addCharityPayment() {
   toast('Payment logged ✓');
 }
 
-async function deleteCharityPayment(id) {
+async function deleteCharityPayment(id: string): Promise<void> {
   const snap = { ...state.charity.payments.find((p) => p.id === id) };
   await sb.from('charity_payments').delete().eq('id', id);
   state.charity.payments = state.charity.payments.filter((p) => p.id !== id);
@@ -3994,13 +4296,13 @@ async function deleteCharityPayment(id) {
   toastDeleted(snap.label, snap.amount);
 }
 
-async function updateCharityPayment(id, field, value) {
+async function updateCharityPayment(id: string, field: string, value: unknown): Promise<void> {
   const p = state.charity.payments.find((p) => p.id === id);
   if (!p) return;
   const oldVal = p[field];
   const val =
     field === 'amount'
-      ? parseFloat(value) || 0
+      ? parseFloat(String(value)) || 0
       : field === 'is_estimate' || field === 'has_receipt' || field === 'is_given'
         ? Boolean(value)
         : value;
@@ -4040,7 +4342,7 @@ async function updateCharityPayment(id, field, value) {
 }
 
 // ── Travel CRUD ────────────────────────────────────────────────────────
-async function addTravelItem() {
+async function addTravelItem(): Promise<void> {
   const { data, error } = await sb
     .from('travel_items')
     .insert({ year: state.currentYear, label: 'New item', projected_amount: 0 })
@@ -4051,17 +4353,24 @@ async function addTravelItem() {
     return;
   }
   state.travel.items.push(data);
-  logChange('add', 'travel_item', data.id, `Added travel item: New item`, null, data);
+  logChange(
+    'add',
+    'travel_item',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Added travel item: New item`,
+    null,
+    data,
+  );
   renderApp();
 }
 
-async function saveTravelItem(id, field, value) {
+async function saveTravelItem(id: string, field: string, value: unknown): Promise<void> {
   const item = state.travel.items.find((i) => i.id === id);
   if (!item) return;
   const oldVal = item[field];
   const val =
     field === 'projected_amount'
-      ? parseFloat(value) || 0
+      ? parseFloat(String(value)) || 0
       : field === 'is_estimate' || field === 'is_logged'
         ? Boolean(value)
         : value;
@@ -4100,7 +4409,7 @@ async function saveTravelItem(id, field, value) {
   renderApp();
 }
 
-async function deleteTravelItem(id) {
+async function deleteTravelItem(id: string): Promise<void> {
   const snap = state.travel.items.find((i) => i.id === id);
   if (!snap) return;
   await sb.from('travel_items').delete().eq('id', id);
@@ -4132,7 +4441,7 @@ async function deleteTravelItem(id) {
   toastDeleted(snap.label, snap.projected_amount);
 }
 
-async function addTravelSub(itemId) {
+async function addTravelSub(itemId: string): Promise<void> {
   const { data, error } = await sb
     .from('travel_sub_items')
     .insert({ item_id: itemId, label: '', amount: 0 })
@@ -4147,11 +4456,15 @@ async function addTravelSub(itemId) {
   renderApp();
 }
 
-async function updateTravelSub(id, field, value) {
+async function updateTravelSub(id: string, field: string, value: unknown): Promise<void> {
   const s = state.travel.subItems.find((s) => s.id === id);
   if (!s) return;
   const val =
-    field === 'amount' ? parseFloat(value) || 0 : field === 'is_paid' ? Boolean(value) : value;
+    field === 'amount'
+      ? parseFloat(String(value)) || 0
+      : field === 'is_paid'
+        ? Boolean(value)
+        : (value as string);
   await sb
     .from('travel_sub_items')
     .update({ [field]: val })
@@ -4160,14 +4473,14 @@ async function updateTravelSub(id, field, value) {
   renderApp();
 }
 
-async function deleteTravelSub(id) {
+async function deleteTravelSub(id: string): Promise<void> {
   await sb.from('travel_sub_items').delete().eq('id', id);
   state.travel.subItems = state.travel.subItems.filter((s) => s.id !== id);
   renderApp();
 }
 
-async function saveTravelAllocation(monthNum, value) {
-  const num = parseFloat(value) || 0;
+async function saveTravelAllocation(monthNum: number, value: string | number): Promise<void> {
+  const num = parseFloat(String(value)) || 0;
   const existing = state.travel.allocations[monthNum];
   const oldNum = existing ? Number(existing.amount) : 0;
   if (existing) {
@@ -4181,7 +4494,13 @@ async function saveTravelAllocation(monthNum, value) {
     const month = state.months.find((m) => m.month_num === monthNum);
     if (!month) return;
     await sb.from('budgets').upsert({ month_id: month.id, category: 'travel', amount: num });
-    state.travel.allocations[monthNum] = { month_id: month.id, amount: num };
+    state.travel.allocations[monthNum] = {
+      month_id: month.id,
+      amount: num,
+      id: month.id,
+      year: state.currentYear,
+      month_num: monthNum,
+    } as AdminAllocationRow;
   }
   state.budgets['travel'] = num;
   logChange(
@@ -4249,7 +4568,7 @@ async function addTravelPayment() {
   toast('Payment logged ✓');
 }
 
-async function deleteTravelPayment(id) {
+async function deleteTravelPayment(id: string): Promise<void> {
   const snap = { ...state.travel.payments.find((p) => p.id === id) };
   await sb.from('travel_payments').delete().eq('id', id);
   state.travel.payments = state.travel.payments.filter((p) => p.id !== id);
@@ -4281,12 +4600,16 @@ async function deleteTravelPayment(id) {
   toastDeleted(snap.label, snap.amount);
 }
 
-async function updateTravelPayment(id, field, value) {
+async function updateTravelPayment(id: string, field: string, value: unknown): Promise<void> {
   const p = state.travel.payments.find((p) => p.id === id);
   if (!p) return;
   const oldVal = p[field];
   const val =
-    field === 'amount' ? parseFloat(value) || 0 : field === 'is_estimate' ? Boolean(value) : value;
+    field === 'amount'
+      ? parseFloat(String(value)) || 0
+      : field === 'is_estimate'
+        ? Boolean(value)
+        : (value as string);
   await sb
     .from('travel_payments')
     .update({ [field]: val })
@@ -4350,10 +4673,10 @@ function renderTravelTab() {
   const totalSpent = ag(payments.reduce((s, p) => s + Number(p.amount), 0));
   const remaining = ag(budget - totalSpent);
 
-  const fmtA = (n) =>
+  const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const esc = (s) => (s || '').replace(/"/g, '&quot;');
+  const esc = (s: string | null | undefined): string => (s || '').replace(/"/g, '&quot;');
 
   const tvSort = localStorage.getItem('travelItemSort') || 'created';
   const sortedItems = [...items].sort((a, b) => {
@@ -4541,7 +4864,7 @@ function renderTravelTab() {
       if (ps === 'low') return Number(a.amount) - Number(b.amount);
       return 0;
     });
-    const sb2 = (key, label) =>
+    const sb2 = (key: string, label: string): string =>
       "<button onclick=\"localStorage.setItem('travelPaySort','" +
       key +
       '\');renderApp()" style="background:none;border:1px solid ' +
@@ -4555,11 +4878,13 @@ function renderTravelTab() {
       '</button>';
     const destFilter = (localStorage.getItem('travelDestFilter') || '').toLowerCase();
     const filtered = destFilter
-      ? sorted.filter((p) => (p.destination || '').toLowerCase().includes(destFilter))
+      ? (sorted as TravelPaymentRow[]).filter((p) =>
+          ((p.destination as string) || '').toLowerCase().includes(destFilter),
+        )
       : sorted;
     const groupByTrip = localStorage.getItem('travelGroupByTrip') !== 'false'; // default on
     // Helper to render a single payment row (reused in grouped + flat modes)
-    const renderPayRow = (p) => {
+    const renderPayRow = (p: TravelPaymentRow): string => {
       const destVal = esc(p.destination || '');
       const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
       const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
@@ -4615,11 +4940,11 @@ function renderTravelTab() {
         '</div>'
       );
     };
-    const payRows = filtered.map(renderPayRow).join('');
+    const payRows = (filtered as TravelPaymentRow[]).map(renderPayRow).join('');
     // Group-by-trip view: section per destination, with allocated vs spent header
     let groupedHtml = '';
     if (groupByTrip) {
-      const allocByTrip = {};
+      const allocByTrip: Record<string, number> = {};
       (items || []).forEach((it) => {
         allocByTrip[(it.label || '').trim().toLowerCase()] = Number(it.projected_amount) || 0;
       });
@@ -4628,14 +4953,15 @@ function renderTravelTab() {
       // and an item label "Erin- North Cascade" produced TWO cards for the
       // same trip. Normalize the bucket key (lowercase, trimmed) but keep
       // a display name per bucket (prefer the item label when available).
-      const norm = (s) => (s || '').trim().toLowerCase();
-      const groups = {};
-      const displayNames = {}; // norm key -> presentation string
+      const norm = (s: string | null | undefined): string => (s || '').trim().toLowerCase();
+      const groups: Record<string, TravelPaymentRow[]> = {};
+      const displayNames: Record<string, string> = {}; // norm key -> presentation string
       filtered.forEach((p) => {
-        const k = norm(p.destination) || '(unassigned)';
+        const k = norm((p as TravelPaymentRow).destination) || '(unassigned)';
         if (!groups[k]) groups[k] = [];
-        groups[k].push(p);
-        if (!displayNames[k]) displayNames[k] = (p.destination || '').trim() || '(unassigned)';
+        groups[k].push(p as TravelPaymentRow);
+        if (!displayNames[k])
+          displayNames[k] = ((p as TravelPaymentRow).destination || '').trim() || '(unassigned)';
       });
       // Stable trip order: items first (INCLUDING items with no payments yet),
       // then unknown destinations from payments, then unassigned. Match items
@@ -4665,7 +4991,10 @@ function renderTravelTab() {
         .map((tripKey) => {
           const tripName = displayNames[tripKey] || tripKey;
           const ps = groups[tripKey] || [];
-          const tripSpent = ps.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          const tripSpent = ps.reduce(
+            (s: number, p: TravelPaymentRow) => s + (Number(p.amount) || 0),
+            0,
+          );
           const tripAlloc = allocByTrip[tripKey] || 0;
           const headerNote = tripAlloc
             ? '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
@@ -4955,16 +5284,17 @@ function renderCharityTab() {
   const totalPaid = ag(payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0));
   const totalPledged = ag(payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0));
   const totalSpent = ag(totalPaid + totalPledged);
-  const remaining = ag(budget - totalSpent);
+  const _remaining_u2 = ag(budget - totalSpent);
+  void _remaining_u2;
 
-  const fmtA = (n) =>
+  const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const esc = (s) => (s || '').replace(/"/g, '&quot;');
+  const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute sort buttons HTML
   const ciSort = localStorage.getItem('charityItemSort') || 'created';
-  const sortBtnsHtml = [
+  const _sortBtnsHtml_u2 = [
     ['created', 'Added'],
     ['alpha', 'A→Z'],
     ['alpha-desc', 'Z→A'],
@@ -4988,6 +5318,7 @@ function renderCharityTab() {
       );
     })
     .join('');
+  void _sortBtnsHtml_u2;
 
   // Pre-compute items HTML
   const sortedItems = [...items].sort((a, b) => {
@@ -4997,7 +5328,7 @@ function renderCharityTab() {
     if (ciSort === 'amount-low') return Number(a.projected_amount) - Number(b.projected_amount);
     return 0;
   });
-  const itemsCharityHtml = sortedItems
+  const _itemsCharityHtml_u = sortedItems
     .map((item) => {
       const subs = (state.charity.subItems || []).filter((s) => s.item_id === item.id);
       const isOpen = localStorage.getItem('sn-chr-' + item.id) === '1';
@@ -5072,6 +5403,8 @@ function renderCharityTab() {
             );
           })
           .join('');
+        void _itemsCharityHtml_u;
+
         const paidSummary =
           subs.length > 0
             ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
@@ -5171,7 +5504,7 @@ function renderCharityTab() {
       if (ps === 'low') return Number(a.amount) - Number(b.amount);
       return 0;
     });
-    const sb2 = (key, label) =>
+    const sb2 = (key: string, label: string): string =>
       "<button onclick=\"localStorage.setItem('charityPaySort','" +
       key +
       '\');renderApp()" style="background:none;border:1px solid ' +
@@ -5322,8 +5655,7 @@ function renderCharityTab() {
       '</div>'
     );
   }).join('');
-
-  const gapColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
+  // const _gapColorC = gap > 0 ? 'var(--red)' : 'var(--green)'; // unused
   const gapTextC = gap > 0 ? '(−' + fmtA(gap) + ' gap)' : '✓';
   const allocTotalColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
   const monthSelectHtml = MONTH_NAMES.map(
@@ -5427,10 +5759,10 @@ function renderAdminTab() {
   );
   const remaining = ag(budget - totalSpent);
 
-  const fmtA = (n) =>
+  const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const esc = (s) => (s || '').replace(/"/g, '&quot;');
+  const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute sort buttons HTML
   const aiSort = localStorage.getItem('adminItemSort') || 'created';
@@ -5469,7 +5801,7 @@ function renderAdminTab() {
     'Admin',
     'Other',
   ];
-  const sortFn = (a, b) => {
+  const sortFn = (a: CharityItemRow, b: CharityItemRow): number => {
     if (aiSort === 'alpha') return (a.label || '').localeCompare(b.label || '');
     if (aiSort === 'alpha-desc') return (b.label || '').localeCompare(a.label || '');
     if (aiSort === 'amount-high') return Number(b.projected_amount) - Number(a.projected_amount);
@@ -5479,7 +5811,8 @@ function renderAdminTab() {
   // DA5 — filter Yearly Expenses by item-name substring (case-insensitive).
   // Persisted in localStorage so the input stays sticky across renders.
   const adminFilter = (localStorage.getItem('adminItemFilter') || '').toLowerCase();
-  const matchFilter = (i) => !adminFilter || (i.label || '').toLowerCase().includes(adminFilter);
+  const matchFilter = (i: CharityItemRow): boolean =>
+    !adminFilter || (i.label || '').toLowerCase().includes(adminFilter);
   const activeItems = [...items]
     .filter((i) => !i.is_logged)
     .filter(matchFilter)
@@ -5490,7 +5823,7 @@ function renderAdminTab() {
     .sort(sortFn);
   const showDone = localStorage.getItem('adminShowDone') === '1';
   const viewMode = localStorage.getItem('adminViewMode') || 'category';
-  const catEmoji = {
+  const catEmoji: Record<string, string> = {
     Apartment: '🏠',
     Car: '🚗',
     Furniture: '🪑',
@@ -5499,7 +5832,7 @@ function renderAdminTab() {
     Admin: '📋',
     Other: '📌',
   };
-  const renderItemRow = (item) => {
+  const renderItemRow = (item: CharityItemRow): string => {
     const subs = (state.admin.subItems || []).filter((s) => s.item_id === item.id);
     const isOpen = localStorage.getItem('sn-adm-' + item.id) === '1';
     const paidTotal = subs.filter((s) => s.is_paid).reduce((n, s) => n + Number(s.amount), 0);
@@ -5523,13 +5856,16 @@ function renderAdminTab() {
     const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
     const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
     const estWeight = item.is_estimate ? '700' : '400';
-    const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
-    const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
-    const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
+    const _logBg_u2 = item.is_logged ? 'var(--gsoft)' : 'none';
+    void _logBg_u2;
+    const _logBorder_u2 = item.is_logged ? 'var(--accent)' : 'var(--border)';
+    void _logBorder_u2;
+    const _logColor_u2 = item.is_logged ? 'var(--accent)' : 'var(--dim)';
+    void _logColor_u2;
     const logIcon = item.is_logged ? '✓' : '';
     let subsHtml = '';
     if (isOpen) {
-      const paidCount = subs.filter((s) => s.is_paid).length;
+      // const _paidCount = subs.filter((s) => s.is_paid).length; // unused
       const subRows = subs
         .map((s) => {
           const sPaid = s.is_paid;
@@ -5612,7 +5948,7 @@ function renderAdminTab() {
           '"' +
           (c === (item.category || 'Other') ? ' selected' : '') +
           '>' +
-          (catEmoji[c] || '') +
+          ((catEmoji as Record<string, string>)[c] || '') +
           ' ' +
           c +
           '</option>',
@@ -5729,13 +6065,14 @@ function renderAdminTab() {
   // Build grouped or flat view
   let activeItemsHtml;
   if (viewMode === 'category') {
-    const grouped = {};
-    activeItems.forEach((item) => {
+    const grouped: Record<string, AdminItemRow[]> = {};
+    activeItems.forEach((item: AdminItemRow) => {
       const cat = item.category || 'Other';
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(item);
     });
-    activeItemsHtml = ADMIN_CATEGORIES.filter((c) => grouped[c] && grouped[c].length > 0)
+    activeItemsHtml = (Object.keys(ADMIN_CATEGORIES) as string[])
+      .filter((c) => grouped[c] && grouped[c].length > 0)
       .map((cat) => {
         const catItems = grouped[cat];
         const catTotal = catItems.reduce((s, i) => s + Number(i.projected_amount), 0);
@@ -5743,7 +6080,7 @@ function renderAdminTab() {
           '<div style="margin-top:.6rem;">' +
           '<div style="display:flex;align-items:center;gap:.35rem;padding:.25rem .2rem;margin-bottom:.15rem;">' +
           '<span style="font-size:.75rem;">' +
-          (catEmoji[cat] || '📌') +
+          ((catEmoji as Record<string, string>)[cat] || '📌') +
           '</span>' +
           '<span style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">' +
           cat +
@@ -5923,42 +6260,57 @@ function renderAdminTab() {
             }
             const ps = localStorage.getItem('adminPaySort') || 'month';
             const sorted = [...paidSubs].sort((a, b) => {
-              if (ps === 'month') return (a.month_num || 0) - (b.month_num || 0);
-              if (ps === 'month-desc') return (b.month_num || 0) - (a.month_num || 0);
+              if (ps === 'month')
+                return (
+                  ((a as AdminSubItemRow).month_num || 0) - ((b as AdminSubItemRow).month_num || 0)
+                );
+              if (ps === 'month-desc')
+                return (
+                  ((b as AdminSubItemRow).month_num || 0) - ((a as AdminSubItemRow).month_num || 0)
+                );
               if (ps === 'high') return Number(b.amount) - Number(a.amount);
               if (ps === 'low') return Number(a.amount) - Number(b.amount);
               return 0;
             });
-            const itemMeta = {};
+            const itemMeta: Record<string, { label: string; category: string }> = {};
             (state.admin.items || []).forEach((it) => {
-              itemMeta[it.id] = {
+              (itemMeta as Record<string, { label: string; category: string }>)[it.id] = {
                 label: it.label || '(unnamed)',
-                category: it.category || 'Other',
+                category: (it.category as string) || 'Other',
               };
             });
-            const sb2 = (key, label) =>
+            const sb2 = (key: string, label: string): string =>
               `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
-            const payRowHtml = (s) => {
-              const parentLabel = (itemMeta[s.item_id] && itemMeta[s.item_id].label) || '?';
+            const payRowHtml = (s: AdminSubItemRow): string => {
+              const parentLabel =
+                ((itemMeta as Record<string, { label: string; category: string }>)[
+                  s.item_id as string
+                ] &&
+                  (itemMeta as Record<string, { label: string; category: string }>)[
+                    s.item_id as string
+                  ].label) ||
+                '?';
               const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
               return `
             <div class="admin-pay-row" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
               <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
               <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
-              <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace(/^\[auto\]\s*/, '') || '(full payment)')}</span>
+              <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace('[auto] ', '').trim() || '(full payment)')}</span>
               <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
               <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
             </div>`;
             };
             // Group paid sub-payments by their parent item's category (ADMIN_CATEGORIES order).
-            const byCat = {};
+            const byCat: Record<string, AdminSubItemRow[]> = {};
             sorted.forEach((s) => {
-              const c = (itemMeta[s.item_id] && itemMeta[s.item_id].category) || 'Other';
-              (byCat[c] = byCat[c] || []).push(s);
+              const c = ((itemMeta as Record<string, { label: string; category: string }>)[
+                s.item_id as string
+              ]?.category || 'Other') as string;
+              (byCat[c] = byCat[c] || []).push(s as AdminSubItemRow);
             });
-            const orderedCats = ADMIN_CATEGORIES.filter((c) => byCat[c] && byCat[c].length).concat(
-              Object.keys(byCat).filter((c) => !ADMIN_CATEGORIES.includes(c)),
-            );
+            const orderedCats = Object.keys(ADMIN_CATEGORIES)
+              .filter((c) => byCat[c] && byCat[c].length)
+              .concat(Object.keys(byCat).filter((c) => !(c in (ADMIN_CATEGORIES as object))));
             return `
             <div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
@@ -5970,10 +6322,13 @@ function renderAdminTab() {
             ${orderedCats
               .map((c) => {
                 const subs = byCat[c];
-                const catTotal = subs.reduce((n, s) => n + Number(s.amount || 0), 0);
+                const catTotal = subs.reduce(
+                  (n: number, s: AdminSubItemRow) => n + Number(s.amount || 0),
+                  0,
+                );
                 return `
             <div class="admin-pay-cat" style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.55rem .1rem .25rem;margin-top:.2rem;border-bottom:1px solid var(--border);">
-              <span style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${catEmoji[c] || '📌'} ${esc(c)}</span>
+              <span style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${(catEmoji as Record<string, string>)[c] || '📌'} ${esc(c)}</span>
               <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dim);">${fmtA(catTotal)}</span>
             </div>
             ${subs.map(payRowHtml).join('')}`;
@@ -5991,7 +6346,7 @@ function renderAdminTab() {
 }
 
 // ── Admin CRUD ────────────────────────────────────────────────────────
-async function addAdminItem() {
+async function addAdminItem(): Promise<void> {
   const { data, error } = await sb
     .from('admin_items')
     .insert({ year: state.currentYear, label: '', projected_amount: 0 })
@@ -6002,7 +6357,14 @@ async function addAdminItem() {
     return;
   }
   state.admin.items.push(data);
-  logChange('add', 'admin_item', data.id, `Added admin item`, null, data);
+  logChange(
+    'add',
+    'admin_item',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Added admin item`,
+    null,
+    data,
+  );
   renderApp();
   // Auto-focus the new item's name input
   setTimeout(() => {
@@ -6017,13 +6379,13 @@ async function addAdminItem() {
 
 const AUTO_SUB_LABEL = '[auto] full payment';
 
-async function saveAdminItem(id, field, value) {
+async function saveAdminItem(id: string, field: string, value: unknown): Promise<void> {
   const item = state.admin.items.find((i) => i.id === id);
   if (!item) return;
   const oldVal = item[field];
   const val =
     field === 'projected_amount'
-      ? parseFloat(value) || 0
+      ? parseFloat(String(value)) || 0
       : field === 'is_estimate' || field === 'is_logged'
         ? Boolean(value)
         : String(value);
@@ -6137,7 +6499,7 @@ async function saveAdminItem(id, field, value) {
   renderApp();
 }
 
-async function deleteAdminItem(id) {
+async function deleteAdminItem(id: string): Promise<void> {
   const snap = state.admin.items.find((i) => i.id === id);
   if (!snap) return;
   await sb.from('admin_items').delete().eq('id', id);
@@ -6169,7 +6531,7 @@ async function deleteAdminItem(id) {
   toastDeleted(snap.label, snap.projected_amount);
 }
 
-async function addAdminSub(itemId) {
+async function addAdminSub(itemId: string): Promise<void> {
   const { data, error } = await sb
     .from('admin_sub_items')
     .insert({ item_id: itemId, label: '', amount: 0, month_num: currentMonthNum() })
@@ -6184,14 +6546,14 @@ async function addAdminSub(itemId) {
   renderApp();
 }
 
-async function updateAdminSub(id, field, value) {
+async function updateAdminSub(id: string, field: string, value: unknown): Promise<void> {
   const s = state.admin.subItems.find((s) => s.id === id);
   if (!s) return;
   const val =
     field === 'amount'
-      ? parseFloat(value) || 0
+      ? parseFloat(String(value)) || 0
       : field === 'month_num'
-        ? parseInt(value) || 1
+        ? parseInt(String(value)) || 1
         : field === 'is_paid' || field === 'is_estimate'
           ? Boolean(value)
           : value;
@@ -6203,14 +6565,14 @@ async function updateAdminSub(id, field, value) {
   renderApp();
 }
 
-async function deleteAdminSub(id) {
+async function deleteAdminSub(id: string): Promise<void> {
   await sb.from('admin_sub_items').delete().eq('id', id);
   state.admin.subItems = state.admin.subItems.filter((s) => s.id !== id);
   renderApp();
 }
 
-async function saveAdminAllocation(monthNum, value) {
-  const num = parseFloat(value) || 0;
+async function saveAdminAllocation(monthNum: number, value: string | number): Promise<void> {
+  const num = parseFloat(String(value)) || 0;
   const existing = state.admin.allocations[monthNum];
   const oldNum = existing ? Number(existing.amount) : 0;
   if (existing) {
@@ -6266,7 +6628,9 @@ async function saveAdminAllocation(monthNum, value) {
 }
 
 // ── Biz tab render ────────────────────────────────────────────────────
-function renderBizTab(current) {
+function renderBizTab(): string {
+  const current = state.months.find((m: MonthRow) => m.id === state.currentMonthId);
+  if (!current) return '<div>No month selected</div>';
   // Empty state: no biz_months row exists for this month yet. Show a setup
   // button instead of silently auto-inserting a placeholder row on tab visit.
   if (!state.biz) {
@@ -6285,24 +6649,24 @@ function renderBizTab(current) {
   const clients = state.ptClients || [];
   const { earned = [], scheduled = [] } = state.ptSessions || {};
 
-  const clientName = (id) => clients.find((c) => c.id === id)?.name || '?';
-  const clientRate = (id) => clients.find((c) => c.id === id)?.rate || 0;
+  const clientName = (id: string): string => clients.find((c) => c.id === id)?.name || '?';
+  const clientRate = (id: string): number => clients.find((c) => c.id === id)?.rate || 0;
 
   // Group earned sessions by client
-  const earnedByClient: Record<string, any[]> = {};
+  const earnedByClient: Record<string, PtSessionRow[]> = {};
   earned.forEach((s) => {
-    if (!earnedByClient[s.client_id]) earnedByClient[s.client_id] = [];
-    earnedByClient[s.client_id].push(s);
+    if (!earnedByClient[s.client_id as string]) earnedByClient[s.client_id as string] = [];
+    earnedByClient[s.client_id || ''].push(s);
   });
-  const trackerTotal = ag(earned.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0));
+  const trackerTotal = ag(earned.reduce((sum, s) => sum + clientRate(s.client_id || '') * 0.85, 0));
 
   // Group scheduled sessions by client
-  const scheduledByClient: Record<string, any[]> = {};
+  const scheduledByClient: Record<string, PtSessionRow[]> = {};
   scheduled.forEach((s) => {
-    if (!scheduledByClient[s.client_id]) scheduledByClient[s.client_id] = [];
-    scheduledByClient[s.client_id].push(s);
+    if (!scheduledByClient[s.client_id as string]) scheduledByClient[s.client_id as string] = [];
+    scheduledByClient[s.client_id || ''].push(s);
   });
-  const scheduledTotal = ag(scheduled.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0));
+  // const _scheduledTotal = ag(scheduled.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0)); // unused
 
   const net = (biz.confirmed_amount || 0) - (biz.accountant_fee || 0) - (biz.spending || 0);
   const prevMonthName = current.month_num > 1 ? MONTHS[current.month_num - 2] : 'December';
@@ -6359,7 +6723,7 @@ function renderBizTab(current) {
   `;
 }
 
-function renderAccountantTracker(current) {
+function renderAccountantTracker(current: MonthRow): string {
   const allBiz = state.allBiz || [];
   const todayMonth = todayMonthForYear();
   const upToMonth = current.month_num;
@@ -6416,26 +6780,26 @@ async function setupBizMonth() {
   toast('Set up ✓');
 }
 
-async function saveBizField(field, value) {
+async function saveBizField(field: string, value: number | string): Promise<void> {
   if (!state.biz) {
     toast('Set up this month first');
     return;
   }
-  const num = parseFloat(value) || 0;
-  const oldVal = state.biz ? state.biz[field] : 0;
+  const num = parseFloat(String(value)) || 0;
+  const oldVal = state.biz ? state.biz![field as keyof BizMonthRow] : 0;
   const { error } = await sb
     .from('biz_months')
     .update({ [field]: num })
-    .eq('id', state.biz.id);
+    .eq('id', state.biz!.id);
   if (error) {
     toast('Error saving');
     return;
   }
-  state.biz[field] = num;
+  state.biz![field as keyof BizMonthRow] = num;
   logChange(
     'edit',
     'biz_field',
-    state.biz.id,
+    state.biz!.id,
     `Biz changed: ${field} ₪${oldVal} → ₪${num}`,
     { [field]: oldVal },
     { [field]: num },
@@ -6446,33 +6810,33 @@ async function saveBizField(field, value) {
       await sb
         .from('biz_months')
         .update({ [field]: oldVal })
-        .eq('id', state.biz.id);
-      state.biz[field] = oldVal;
+        .eq('id', state.biz!.id);
+      state.biz![field as keyof BizMonthRow] = oldVal;
     },
     redo: async () => {
       await sb
         .from('biz_months')
         .update({ [field]: num })
-        .eq('id', state.biz.id);
-      state.biz[field] = num;
+        .eq('id', state.biz!.id);
+      state.biz![field as keyof BizMonthRow] = num;
     },
   });
 
   // If confirmed_amount changes, also update income_private in main months table
-  // Use state.biz.month_id (not state.currentMonthId) so a stale biz row during a
+  // Use state.biz!.month_id (not state.currentMonthId) so a stale biz row during a
   // month switch can't write the net to the wrong month's dashboard.
-  const bizMonthId = state.biz.month_id;
+  const bizMonthId = state.biz!.month_id;
   if (field === 'confirmed_amount') {
-    const net = num - (state.biz.accountant_fee || 0) - (state.biz.spending || 0);
+    const net = num - (state.biz!.accountant_fee || 0) - (state.biz!.spending || 0);
     await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
     const month = state.months.find((m) => m.id === bizMonthId);
     if (month) month.income_private = net;
   }
   if (field === 'accountant_fee' || field === 'spending') {
     const net =
-      (state.biz.confirmed_amount || 0) -
-      (state.biz.accountant_fee || 0) -
-      (state.biz.spending || 0);
+      (state.biz!.confirmed_amount || 0) -
+      (state.biz!.accountant_fee || 0) -
+      (state.biz!.spending || 0);
     await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
     const month = state.months.find((m) => m.id === bizMonthId);
     if (month) month.income_private = net;
@@ -6482,13 +6846,13 @@ async function saveBizField(field, value) {
   toast('Saved ✓');
 }
 
-function toggleGroup(key) {
+function toggleGroup(key: string): void {
   // Direct class toggle (no re-render) so the CSS transition runs smoothly.
   const el = byId('group-' + key);
   if (el) el.classList.toggle('collapsed');
 }
 
-function jumpTo(id) {
+function jumpTo(id: string): void {
   const el = byId(id);
   if (!el) return;
   if (el.classList.contains('collapsed')) el.classList.remove('collapsed');
@@ -6510,7 +6874,7 @@ window.addEventListener(
       ((document.querySelector('.hdr') as HTMLElement)?.offsetHeight || 57) +
       ((document.querySelector('.ribbon-panel') as HTMLElement)?.offsetHeight || 0) +
       40;
-    let active = null;
+    let active: Element | null = null;
     items.forEach((item) => {
       const fn = item.getAttribute('onclick') || '';
       const m = fn.match(/jumpTo\('(.+?)'\)/);
@@ -6519,19 +6883,19 @@ window.addEventListener(
       if (el && el.getBoundingClientRect().top <= offset) active = item;
     });
     items.forEach((i) => i.classList.remove('active'));
-    if (active) active.classList.add('active');
+    if (active) (active as Element).classList.add('active');
   },
   { passive: true },
 );
 
-function startRibbonDrag(e) {
+function startRibbonDrag(e: MouseEvent): void {
   e.preventDefault();
   const panel = document.querySelector('.ribbon-panel') as HTMLElement;
   if (!panel) return;
   const startY = e.clientY;
   const startH = panel.offsetHeight;
   const minH = 40;
-  function onMove(ev) {
+  function onMove(ev: MouseEvent): void {
     const newH = Math.max(minH, startH + (ev.clientY - startY));
     panel.style.maxHeight = newH + 'px';
     panel.style.overflow = 'hidden auto';
@@ -6630,7 +6994,7 @@ async function loadCashData() {
   }
 }
 
-function cashILS(acct) {
+function cashILS(acct: CashAccountRow): number {
   const amt = Number(acct.amount) || 0;
   if (acct.currency === 'USD') return Math.round(amt * (state.usdRate || 3.13));
   return amt;
@@ -6662,11 +7026,11 @@ async function syncPtOwedToCash() {
 }
 window.syncPtOwedToCash = syncPtOwedToCash;
 
-async function saveCashField(id, field, value) {
+async function saveCashField(id: string, field: string, value: unknown): Promise<void> {
   const acct = state.cashAccounts.find((a) => a.id === id);
   if (!acct) return;
-  const old = acct[field];
-  if (field === 'amount') value = parseFloat(value) || 0;
+  // const old = acct[field]; // unused
+  if (field === 'amount') value = parseFloat(String(value)) || 0;
   acct[field] = value;
   await sb
     .from('cash_accounts')
@@ -6675,7 +7039,7 @@ async function saveCashField(id, field, value) {
   renderApp();
 }
 
-async function addCashAccount() {
+async function addCashAccount(): Promise<void> {
   const { data } = await sb
     .from('cash_accounts')
     .insert({
@@ -6692,16 +7056,16 @@ async function addCashAccount() {
   }
 }
 
-async function deleteCashAccount(id) {
+async function deleteCashAccount(id: string): Promise<void> {
   if (!confirm('Delete this account?')) return;
   await sb.from('cash_accounts').delete().eq('id', id);
   state.cashAccounts = state.cashAccounts.filter((a) => a.id !== id);
   renderApp();
 }
 
-function renderCashTab() {
+function renderCashTab(): string {
   const accounts = state.cashAccounts || [];
-  const n = (v) =>
+  const n = (v: number | null | undefined): string =>
     Number(v || 0).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   // Split into holdings vs owed
@@ -6711,7 +7075,7 @@ function renderCashTab() {
   const totalOwed = ag(owed.reduce((s, a) => s + cashILS(a), 0));
   const totalLiquid = ag(totalHoldings + totalOwed);
 
-  const renderRow = (a) => {
+  const renderRow = (a: CashAccountRow): string => {
     const ilsVal = cashILS(a);
     const isUSD = a.currency === 'USD';
     return `<tr class="cash-row">
@@ -6802,7 +7166,7 @@ function renderCashTab() {
 
 // Q2 — yearly funding gap for Travel/Admin/Charity. Returns positive number
 // when projected need exceeds allocations across the full year.
-function categoryYearlyGap(catKey) {
+function categoryYearlyGap(catKey: string): number {
   if (catKey === 'travel' && state.travel) {
     const proj = (state.travel.items || []).reduce(
       (s, i) => s + (Number(i.projected_amount) || 0),
@@ -6830,11 +7194,11 @@ function categoryYearlyGap(catKey) {
 // Q2 marker disabled 2026-05-15 per Allison: "get rid of these triangles
 // I don't need them." The Owed strip on the top KPI row already surfaces
 // the gap glanceably; the per-cell triangle is duplicate signal.
-function gapMarker(_catKey) {
+function gapMarker(_catKey: string): string {
   return '';
 }
 
-function snToggle(gid) {
+function snToggle(gid: string): void {
   var rows = document.querySelectorAll('.' + gid);
   var hdr = byId(gid + '-hdr');
   var chev = (hdr && hdr.querySelector('.sn-chev')) as HTMLElement | null;
@@ -6850,7 +7214,7 @@ function snToggle(gid) {
   });
 }
 
-function yrToggle(grp) {
+function yrToggle(grp: string): void {
   var rows = document.querySelectorAll('.yr-grp-' + grp);
   var hdr = byId('yr-hdr-' + grp);
   var chev = (hdr && hdr.querySelector('.sn-chev')) as HTMLElement | null;
@@ -6910,7 +7274,7 @@ async function loadYearData() {
   };
 }
 
-function renderYearSnapshot() {
+function renderYearSnapshot(): string {
   if (!state.yearData)
     return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
   const { txns, budgetItems, allBudgets, incomeItems } = state.yearData;
@@ -6919,32 +7283,33 @@ function renderYearSnapshot() {
   const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
   const LEISURE = ['takeout', 'eatingout', 'entertainment', 'retail', 'holiday', 'gifts'];
 
-  const txSum = (mid, cats) =>
+  const txSum = (mid: string, cats: string[]): number =>
     txns
       .filter((t) => t.month_id === mid && cats.includes(t.category))
-      .reduce((s, t) => s + (Number(t.amount) || 0), 0);
-  const biSum = (mid, cats) =>
+      .reduce((s: number, t) => s + (Number(t.amount) || 0), 0);
+  const biSum = (mid: string, cats: string[]): number =>
     budgetItems
       .filter((b) => b.month_id === mid && cats.includes(b.category))
-      .reduce((s, b) => s + (Number(b.amount) || 0), 0);
+      .reduce((s: number, b) => s + (Number(b.amount) || 0), 0);
 
   // Budget lookup from budgets table: { month_id: { category: amount } }
-  const budgetMap = {};
+  const budgetMap: Record<string, Record<string, number>> = {};
   (allBudgets || []).forEach((b) => {
     if (!budgetMap[b.month_id]) budgetMap[b.month_id] = {};
     budgetMap[b.month_id][b.category] = b.amount;
   });
-  const budgetV = (mid, cats) => cats.reduce((s, cat) => s + (budgetMap[mid]?.[cat] || 0), 0);
+  const budgetV = (mid: string, cats: string[]): number =>
+    cats.reduce((s: number, cat: string) => s + (budgetMap[mid]?.[cat] || 0), 0);
 
   // Income items grouped by month
-  const incItemsByMonth = {};
+  const incItemsByMonth: Record<string, IncomeItemRow[]> = {};
   (incomeItems || []).forEach((i) => {
     if (!incItemsByMonth[i.month_id]) incItemsByMonth[i.month_id] = [];
     incItemsByMonth[i.month_id].push(i);
   });
   // Collect unique custom income source labels across all months
-  const customIncLabels = [];
-  const seenLabels = new Set();
+  const customIncLabels: string[] = [];
+  const seenLabels = new Set<string>();
   (incomeItems || []).forEach((i) => {
     const lbl = (i.label || 'Other').trim();
     if (!seenLabels.has(lbl)) {
@@ -6952,50 +7317,51 @@ function renderYearSnapshot() {
       customIncLabels.push(lbl);
     }
   });
-  const incItemsFor = (mid, label) =>
+  const incItemsFor = (mid: string, label: string): number =>
     (incItemsByMonth[mid] || [])
       .filter((i) => (i.label || 'Other').trim() === label)
       .reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const incItemsTotalFor = (mid) =>
+  const incItemsTotalFor = (mid: string): number =>
     (incItemsByMonth[mid] || []).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
-  const spendV = (m, cats, future) => {
+  const spendV = (m: MonthRow, cats: string[], future: boolean): number => {
     if (future && !showProjected) return 0;
     if (future) return budgetV(m.id, cats) || biSum(m.id, cats);
     return txSum(m.id, cats);
   };
-  const charityV = (mn, future) => {
+  const charityV = (mn: number, future: boolean): number => {
     if (!showProjected && future) return 0;
     const m = months.find((mo) => mo.month_num === mn);
     return m ? budgetMap[m.id]?.['charity'] || 0 : 0;
   };
-  const adminV = (mn, future) =>
+  const adminV = (mn: number, future: boolean): number =>
     !showProjected && future ? 0 : Number(state.admin.allocations?.[mn]?.amount || 0);
-  const travelV = (mn, future) => {
+  const travelV = (mn: number, future: boolean): number => {
     if (!showProjected && future) return 0;
     const m = months.find((mo) => mo.month_num === mn);
     return m ? budgetMap[m.id]?.['travel'] || 0 : 0;
   };
   // Income includes fixed fields + custom income items (no income_other — replaced by income_items)
-  const incFor = (m) =>
+  const incFor = (m: MonthRow): number =>
     (Number(m.income_petachya) || 0) +
     (Number(m.income_clalit) || 0) +
     (Number(m.income_private) || 0) +
     (Number(m.income_other) || 0) +
     incItemsTotalFor(m.id);
 
-  const fmtY = (n) => (!n ? '\u2014' : '\u20aa' + Math.round(n).toLocaleString('en-US'));
-  const fmtPct = (n) => (n ? Math.round(n * 100) + '%' : '');
+  const fmtY = (n: number): string =>
+    !n ? '\u2014' : '\u20aa' + Math.round(n).toLocaleString('en-US');
+  const fmtPct = (n: number): string => (n ? Math.round(n * 100) + '%' : '');
 
   // Helper: budget item total for a month (mirrors catBudget logic but for year data)
-  const yearBiTotal = (mid, catKey) => {
+  const yearBiTotal = (mid: string, catKey: string): number | null => {
     const items = budgetItems.filter((b) => b.month_id === mid && b.category === catKey);
     return items.length ? items.reduce((s, b) => s + (Number(b.amount) || 0), 0) : null;
   };
-  const yearCatBudget = (mid, catKey) => {
+  const yearCatBudget = (mid: string, catKey: string): number => {
     // Mirror month page charity % override
     if (catKey === 'charity') {
-      const chPct = parseFloat(localStorage.getItem('charityPct_' + mid));
+      const chPct = parseFloat(localStorage.getItem('charityPct_' + (mid || '')) || '0');
       const m = months.find((mo) => mo.id === mid);
       if (chPct && m) {
         const inc = incFor(m);
@@ -7007,7 +7373,7 @@ function renderYearSnapshot() {
   };
 
   // Total budgeted for a month (all categories + savings)
-  const totalBudgetedFor = (m) => {
+  const totalBudgetedFor = (m: MonthRow): number => {
     return (
       CATEGORIES.reduce((sum, c) => sum + yearCatBudget(m.id, c.key), 0) +
       (budgetMap[m.id]?.['savings_bank'] || 0) +
@@ -7019,7 +7385,7 @@ function renderYearSnapshot() {
   // For ALL months: actual transactions, with committed items (housing/recurring) as floor
   // Tab categories (charity/travel/admin) always count their budget allocation
   // Savings always count as spent
-  const totalSpentFor = (m, future) => {
+  const totalSpentFor = (m: MonthRow, _future?: boolean) => {
     return (
       CATEGORIES.reduce((sum, c) => {
         if (c.hasTab) return sum + yearCatBudget(m.id, c.key);
@@ -7037,16 +7403,20 @@ function renderYearSnapshot() {
 
   // Build income sub-rows dynamically
   const incomeSubRows = [
-    { type: 'sub', label: '\u2937 Petachya', valFn: (m) => Number(m.income_petachya) || 0 },
-    { type: 'sub', label: '\u2937 Clalit', valFn: (m) => Number(m.income_clalit) || 0 },
-    { type: 'sub', label: '\u2937 Private', valFn: (m) => Number(m.income_private) || 0 },
+    {
+      type: 'sub',
+      label: '\u2937 Petachya',
+      valFn: (m: MonthRow) => Number(m.income_petachya) || 0,
+    },
+    { type: 'sub', label: '\u2937 Clalit', valFn: (m: MonthRow) => Number(m.income_clalit) || 0 },
+    { type: 'sub', label: '\u2937 Private', valFn: (m: MonthRow) => Number(m.income_private) || 0 },
   ];
   // Add a row for income_other if any month has it
   if (months.some((m) => Number(m.income_other) > 0)) {
     incomeSubRows.push({
       type: 'sub',
       label: '\u2937 Other',
-      valFn: (m) => Number(m.income_other) || 0,
+      valFn: (m: MonthRow) => Number(m.income_other) || 0,
     });
   }
   // Add a row for each custom income source label
@@ -7054,39 +7424,42 @@ function renderYearSnapshot() {
     incomeSubRows.push({
       type: 'sub',
       label: '\u2937 ' + lbl,
-      valFn: (m) => incItemsFor(m.id, lbl),
+      valFn: (m: MonthRow) => incItemsFor(m.id, lbl),
     });
   });
 
   // Housing: sum all housing budget_items (rent, arnona, etc.)
   // Housing: sum all housing budget_items (household is now its own independent category)
-  const housingV = (m, f) =>
+  const housingV = (m: MonthRow, _f?: boolean): number =>
     budgetItems
       .filter((b) => b.month_id === m.id && b.category === 'housing')
       .reduce((s, b) => s + (Number(b.amount) || 0), 0);
   // Recurring: sum all recurring budget_items
-  const recurringV = (m) =>
+  const recurringV = (m: MonthRow): number =>
     budgetItems
       .filter((b) => b.month_id === m.id && b.category === 'recurring')
       .reduce((s, b) => s + (Number(b.amount) || 0), 0);
 
   // Travel/Admin: budget vs spent gap
-  const travelBudgetV = (mn) => {
-    const m = months.find((mo) => mo.month_num === mn);
-    return m ? budgetMap[m.id]?.['travel'] || 0 : 0;
-  };
-  const travelSpentV = (mn) => {
-    const m = months.find((mo) => mo.month_num === mn);
-    if (!m) return 0;
-    return txns
-      .filter((t) => t.month_id === m.id && t.category === 'travel')
-      .reduce((s, t) => s + (Number(t.amount) || 0), 0);
-  };
-  const adminBudgetV = (mn) => Number(state.admin.allocations?.[mn]?.amount || 0);
-  const adminSpentV = (mn) => {
-    const items = (state.admin.items || []).filter((i) => i.month_num === mn);
-    return items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  };
+  // travelBudgetV unused - commented out
+  // const travelBudgetV = (mn: number) => {
+  //   const m = months.find((mo) => mo.month_num === mn);
+  //   return m ? budgetMap[m.id]?.['travel'] || 0 : 0;
+  // };
+  // travelSpentV unused - commented out
+  // const travelSpentV = (mn: number) => {
+  //   const m = months.find((mo) => mo.month_num === mn);
+  //   if (!m) return 0;
+  //   return txns
+  //     .filter((t) => t.month_id === m.id && t.category === 'travel')
+  //     .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  // };
+  // adminBudgetV and adminSpentV unused - commented out
+  // const adminBudgetV = (mn: number) => Number(state.admin.allocations?.[mn]?.amount || 0);
+  // const adminSpentV = (mn: number) => {
+  //   const items = (state.admin.items || []).filter((i) => i.month_num === mn);
+  //   return items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  // };
 
   const ROWS = [
     // 1. Income
@@ -7095,7 +7468,7 @@ function renderYearSnapshot() {
       type: 'row',
       bold: true,
       label: 'Total Income',
-      valFn: (m) => incFor(m),
+      valFn: (m: MonthRow) => incFor(m),
       sectionGroup: 'income',
       stickyInSection: true,
     },
@@ -7106,26 +7479,26 @@ function renderYearSnapshot() {
       type: 'row',
       bold: true,
       label: 'Total Budgeted',
-      valFn: (m, f) => totalBudgetedFor(m),
+      valFn: (m: MonthRow) => totalBudgetedFor(m as MonthRow),
       sectionGroup: 'overview',
     },
     {
       type: 'row',
       bold: true,
       label: 'Total Spent',
-      valFn: (m, f) => totalSpentFor(m, f),
+      valFn: (m: MonthRow, f: boolean) => totalSpentFor(m, f),
       sectionGroup: 'overview',
     },
     {
       type: 'net',
       label: '\u{1F4B0} Unbudgeted',
-      valFn: (m, f) => incFor(m) - totalBudgetedFor(m),
+      valFn: (m: MonthRow) => incFor(m) - totalBudgetedFor(m as MonthRow),
       sectionGroup: 'overview',
     },
     {
       type: 'net',
       label: '\u2705 Remaining',
-      valFn: (m, f) => incFor(m) - totalSpentFor(m, f),
+      valFn: (m: MonthRow, f: boolean) => incFor(m) - totalSpentFor(m, f),
       sectionGroup: 'overview',
     },
     // 3. Savings & Investment
@@ -7134,7 +7507,7 @@ function renderYearSnapshot() {
       type: 'row',
       bold: true,
       label: 'Total Savings',
-      valFn: (m, f) =>
+      valFn: (m: MonthRow, f: boolean) =>
         !showProjected && f
           ? 0
           : (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
@@ -7144,13 +7517,15 @@ function renderYearSnapshot() {
     {
       type: 'sub',
       label: '\u2937 Saved (Bank)',
-      valFn: (m, f) => (!showProjected && f ? 0 : budgetMap[m.id]?.['savings_bank'] || 0),
+      valFn: (m: MonthRow, f: boolean) =>
+        !showProjected && f ? 0 : budgetMap[m.id]?.['savings_bank'] || 0,
       sectionGroup: 'savings',
     },
     {
       type: 'sub',
       label: '\u2937 Invested',
-      valFn: (m, f) => (!showProjected && f ? 0 : budgetMap[m.id]?.['savings_invested'] || 0),
+      valFn: (m: MonthRow, f: boolean) =>
+        !showProjected && f ? 0 : budgetMap[m.id]?.['savings_invested'] || 0,
       sectionGroup: 'savings',
     },
     // 5. Charity Overview
@@ -7158,7 +7533,7 @@ function renderYearSnapshot() {
     {
       type: 'row',
       label: 'Charity ₪',
-      valFn: (m, f) => charityV(m.month_num, f),
+      valFn: (m: MonthRow, f: boolean) => charityV(m.month_num, f),
       sectionGroup: 'charity',
     },
     { type: 'sub', label: 'Charity % of Income', special: 'charityPct', sectionGroup: 'charity' },
@@ -7167,43 +7542,43 @@ function renderYearSnapshot() {
     {
       type: 'row',
       label: '\u{1F6D2} Groceries',
-      valFn: (m, f) => spendV(m, ['groceries'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['groceries'], f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F3E0} Housing',
-      valFn: (m, f) => housingV(m, f),
+      valFn: (m: MonthRow, f: boolean) => housingV(m, f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F9F9} Household Items',
-      valFn: (m, f) => spendV(m, ['household'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['household'], f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F697} Transport',
-      valFn: (m, f) => spendV(m, ['transport'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['transport'], f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F3E5} Health & Therapy',
-      valFn: (m, f) => spendV(m, ['health', 'therapy'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['health', 'therapy'], f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F504} Recurring',
-      valFn: (m) => recurringV(m),
+      valFn: (m: MonthRow) => recurringV(m),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F389} Leisure',
-      valFn: (m, f) => spendV(m, LEISURE, f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, LEISURE, f),
       expandable: 'leisure',
       sectionGroup: 'spending',
     },
@@ -7211,54 +7586,54 @@ function renderYearSnapshot() {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Take Out',
-      valFn: (m, f) => spendV(m, ['takeout'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['takeout'], f),
     },
     {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Eating Out',
-      valFn: (m, f) => spendV(m, ['eatingout'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['eatingout'], f),
     },
     {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Entertainment',
-      valFn: (m, f) => spendV(m, ['entertainment'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['entertainment'], f),
     },
     {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Retail & Shopping',
-      valFn: (m, f) => spendV(m, ['retail'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['retail'], f),
     },
     {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Holiday',
-      valFn: (m, f) => spendV(m, ['holiday'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['holiday'], f),
     },
     {
       type: 'sub',
       group: 'leisure',
       label: '\u2937 Gifts',
-      valFn: (m, f) => spendV(m, ['gifts'], f),
+      valFn: (m: MonthRow, f: boolean) => spendV(m, ['gifts'], f),
     },
     {
       type: 'row',
       label: '\u{1F49A} Charity',
-      valFn: (m, f) => charityV(m.month_num, f),
+      valFn: (m: MonthRow, f: boolean) => charityV(m.month_num, f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u2708\uFE0F Travel',
-      valFn: (m, f) => travelV(m.month_num, f),
+      valFn: (m: MonthRow, f: boolean) => travelV(m.month_num, f),
       sectionGroup: 'spending',
     },
     {
       type: 'row',
       label: '\u{1F4CB} Admin',
-      valFn: (m, f) => adminV(m.month_num, f),
+      valFn: (m: MonthRow, f: boolean) => adminV(m.month_num, f),
       sectionGroup: 'spending',
     },
   ];
@@ -7279,7 +7654,9 @@ function renderYearSnapshot() {
       const totalI = months.reduce((s, m) => s + incFor(m), 0);
       return { row, values, total: totalI ? totalCh / totalI : 0, avg: 0, isPct: true };
     }
-    const values = months.map((m) => row.valFn(m, m.month_num > todayMonth) || 0);
+    const values = months.map(
+      (m: MonthRow) => (row.valFn ? row.valFn(m, m.month_num > todayMonth) : 0) || 0,
+    );
     const total = ag(values.reduce((s, v) => s + v, 0));
     return { row, values, total, avg: total / 12 };
   });
@@ -7319,7 +7696,7 @@ function renderYearSnapshot() {
   const adminGap = ag(totalAdminProjected - totalAdminAlloc);
 
   // Format: always show ₪0 instead of dashes
-  const fmtYZ = (n) => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
+  const fmtYZ = (n: number): string => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
 
   // Summary ribbon ABOVE the table
   const summaryHtml =
@@ -7379,7 +7756,7 @@ function renderYearSnapshot() {
           '"><a class="ov-month-link" onclick="switchTab(\'budget\');switchMonth(\'' +
           m.id +
           '\')">' +
-          m.month_name.slice(0, 3) +
+          ((m as unknown as { month_name?: string }).month_name || '').slice(0, 3) +
           (m.month_num === todayMonth ? ' \u25C9' : '') +
           '</a></th>'
         );
@@ -7391,7 +7768,7 @@ function renderYearSnapshot() {
   const tbody = computed
     .map(function (item) {
       const row = item.row,
-        values = item.values,
+        values = item.values!,
         total = item.total,
         avg = item.avg;
       // Sections that start collapsed (only show totals, expand for detail)
@@ -7441,8 +7818,8 @@ function renderYearSnapshot() {
 
       if (item.isPct) {
         const cells = months
-          .map(function (m, i) {
-            const v = values[i];
+          .map(function (m: MonthRow, i: number) {
+            const v = (values as number[])[i];
             let cls = 'year-cell';
             if (m.month_num > todayMonth) cls += ' future';
             if (m.month_num === todayMonth) cls += ' current-col';
@@ -7477,7 +7854,7 @@ function renderYearSnapshot() {
       }
 
       const cells = months
-        .map(function (m, i) {
+        .map(function (m: MonthRow, i: number) {
           const v = values[i];
           let cls = 'year-cell';
           if (m.month_num > todayMonth) cls += ' future';
@@ -7628,7 +8005,7 @@ function renderYearSnapshot() {
           '" onclick="setYearViewMonth(' +
           m.month_num +
           ')">' +
-          m.month_name.slice(0, 3) +
+          ((m as unknown as { month_name?: string }).month_name || '').slice(0, 3) +
           '</button>'
         );
       })
@@ -7683,14 +8060,14 @@ function renderYearSnapshot() {
     if (selIdx < 0) return;
     let valStr;
     if (item.isPct) {
-      valStr = (item.values[selIdx] * 100).toFixed(1) + '%';
+      valStr = (item.values![selIdx] * 100).toFixed(1) + '%';
     } else {
-      valStr = fmtYZ(item.values[selIdx]);
+      valStr = fmtYZ(item.values![selIdx]);
     }
     let cls = 'ym-row';
     if (row.type === 'sub') cls += ' ym-row-sub';
     else if (row.type === 'net') {
-      const v = item.values[selIdx];
+      const v = item.values![selIdx];
       cls += ' ym-row-net' + (v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '');
     } else if (row.bold) cls += ' ym-row-bold';
     mobileRows +=
@@ -7740,22 +8117,22 @@ function renderYearSnapshot() {
   );
 }
 
-function setYearViewMonth(monthNum) {
+function setYearViewMonth(monthNum: number): void {
   state.yearViewMonth = monthNum;
   renderApp();
 }
 
-function setYearMobileFull(v) {
+function setYearMobileFull(v: boolean): void {
   state.yearMobileFull = !!v;
   renderApp();
 }
 
-function setYearFilter(key) {
+function setYearFilter(key: string): void {
   localStorage.setItem('yearFilter', key);
   renderApp();
 }
 
-function openSnapshot() {
+function openSnapshot(): void {
   const current = state.months.find((m) => m.id === state.currentMonthId);
   if (!current) return;
   const income = totalIncome(current);
@@ -7773,15 +8150,19 @@ function openSnapshot() {
       (state.budgets['savings_invested'] || 0),
   );
   const leftToBudget = ag(income - totalBudgeted);
+  void leftToBudget; // used in template literal below
   const remainingInBudget = ag(totalBudgeted - totalSpent);
+  void remainingInBudget; // used in template literal below
 
-  const n = (v) =>
-    v == null || v === ''
+  const n = (v: number | null | undefined): string =>
+    v == null
       ? ''
       : Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
-    const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
+    const cats = group.keys
+      .map((k) => CATEGORIES.find((c) => c.key === k))
+      .filter((x): x is (typeof CATEGORIES)[0] => x !== undefined);
     const gs = ag(
       cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
     );
@@ -7889,7 +8270,7 @@ async function init() {
     .select('category,store')
     .not('store', 'is', null)
     .then(({ data }) => {
-      if (data) state.allStores = data;
+      if (data) state.allStores = data as unknown as StoreRow[];
     });
   // Try cache first — show UI instantly, refresh in background
   if (restoreCache()) {
@@ -7938,9 +8319,9 @@ async function bootstrap() {
   }
 }
 
-function renderLogin(errMsg?) {
+function renderLogin(errMsg?: string): string | void {
   const root = byId('root');
-  if (!root) return;
+  if (!root) return '';
   root.style.marginRight = '';
   root.innerHTML = `
     <div class="login-wrap">
@@ -7972,7 +8353,7 @@ function renderLogin(errMsg?) {
   if (pw) pw.focus();
 }
 
-async function handleLoginSubmit(e) {
+async function handleLoginSubmit(e: Event): Promise<void> {
   e.preventDefault();
   const emailEl = byId('login-email');
   const pwEl = byId('login-password');
@@ -8004,7 +8385,9 @@ async function handleLoginSubmit(e) {
       await init();
     }
   } catch (err) {
-    showLoginError((err && err.message) || 'Login failed.');
+    showLoginError(
+      ((err as { message?: string }) && (err as { message?: string }).message) || 'Login failed.',
+    );
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Log in';
@@ -8027,11 +8410,14 @@ async function handleForgotPassword() {
     }
     toast(`Reset link sent to ${email}`);
   } catch (err) {
-    showLoginError((err && err.message) || 'Could not send reset link.');
+    showLoginError(
+      ((err as { message?: string }) && (err as { message?: string }).message) ||
+        'Could not send reset link.',
+    );
   }
 }
 
-function showLoginError(msg) {
+function showLoginError(msg: string): void {
   const el = byId('login-err');
   if (el) {
     el.textContent = msg;
@@ -8117,7 +8503,7 @@ function hideBackdrop() {
 function anyPanelOpen() {
   return !!document.querySelector('.app-panel.app-panel-open');
 }
-function closeOtherPanel(keepId) {
+function closeOtherPanel(keepId: string): void {
   document.querySelectorAll('.app-panel').forEach((p) => {
     if (p.id !== keepId && p.classList.contains('app-panel-open')) {
       p.classList.remove('app-panel-open');
@@ -8152,7 +8538,7 @@ document.addEventListener(
     if (!panel) return;
     const startY = e.touches[0].clientY;
     let dy = 0;
-    const onMove = (ev) => {
+    const onMove = (ev: TouchEvent): void => {
       dy = Math.max(0, ev.touches[0].clientY - startY);
       panel.style.transform = 'translateY(' + dy + 'px)';
       panel.style.transition = 'none';
@@ -8161,10 +8547,12 @@ document.addEventListener(
       panel.style.transition = '';
       panel.style.transform = '';
       if (dy > 80) closeAllPanels();
-      document.removeEventListener('touchmove', onMove);
+      (document as EventTarget).removeEventListener('touchmove', onMove as EventListener);
       document.removeEventListener('touchend', onEnd);
     };
-    document.addEventListener('touchmove', onMove, { passive: true });
+    (document as EventTarget).addEventListener('touchmove', onMove as EventListener, {
+      passive: true,
+    });
     document.addEventListener('touchend', onEnd, { passive: true });
   },
   { passive: true },
@@ -8175,12 +8563,12 @@ bootstrap();
 // M6 — Weekly digest builder. Aggregates the last 7 days of change_log entries
 // into a single auto-generated summary at the TOP of the History panel.
 // Lives INSIDE the panel (not on the main app surface) per the no-crowding rule.
-function buildWeeklyDigest(rows) {
+function buildWeeklyDigest(rows: unknown[]): string {
   if (!Array.isArray(rows) || rows.length === 0) return '';
   const now = Date.now();
   const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
   const recent = rows.filter((r) => {
-    const t = new Date(r.created_at).getTime();
+    const t = new Date((r as Record<string, unknown>).created_at as string).getTime();
     return !isNaN(t) && t >= weekAgo;
   });
   if (recent.length === 0) return '';
@@ -8190,43 +8578,46 @@ function buildWeeklyDigest(rows) {
   let editsCount = 0;
   const categoriesTouched = new Set();
   const gapsClosedNotes = new Set();
-  recent.forEach((r) => {
-    if (r.entity_type === 'transaction' && r.action === 'add') {
+  recent.map((rRaw) => {
+    const r = rRaw as Record<string, unknown>;
+    const et = String(r.entity_type || '');
+    const act = String(r.action || '');
+    if (et === 'transaction' && act === 'add') {
       txAdds++;
-      // Pull amount from new_value JSON
       try {
-        const nv = typeof r.new_value === 'string' ? JSON.parse(r.new_value) : r.new_value;
+        const nvStr = r.new_value;
+        const nv =
+          typeof nvStr === 'string' ? (JSON.parse(nvStr) as Record<string, unknown>) : null;
         if (nv && typeof nv.amount === 'number') txAddSum += nv.amount;
         if (nv && nv.category) categoriesTouched.add(nv.category);
-      } catch (e) {
-        /* ignore */
+      } catch (_e) {
+        void 0;
       }
-    } else if (r.entity_type === 'transaction' && r.action === 'delete') {
+    } else if (et === 'transaction' && act === 'delete') {
       txDeletes++;
-    } else if (r.action === 'edit') {
+    } else if (act === 'edit') {
       editsCount++;
     }
-    // Heuristic: payments to charity/travel/admin "close" gaps in those budgets
     if (
-      r.action === 'add' &&
-      (r.entity_type === 'charity_payment' ||
-        r.entity_type === 'travel_payment' ||
-        r.entity_type === 'admin_payment')
+      act === 'add' &&
+      (et === 'charity_payment' || et === 'travel_payment' || et === 'admin_payment')
     ) {
-      const tab = r.entity_type.split('_')[0];
-      gapsClosedNotes.add(tab);
+      gapsClosedNotes.add(et.split('_')[0]);
     }
   });
+  // Date label:
   // Date label: "Week of <oldest date>"
-  const earliestT = recent.reduce(
-    (min, r) => Math.min(min, new Date(r.created_at).getTime()),
+  const earliestT = recent.reduce<number>(
+    (min: number, r) =>
+      Math.min(min, new Date((r as Record<string, unknown>).created_at as string).getTime()),
     Infinity,
   );
   const weekLabel = new Date(earliestT).toLocaleDateString('en-IL', {
     day: 'numeric',
     month: 'short',
   });
-  const fmtAmt = (n) => '₪' + Math.round(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
+  const fmtAmt = (n: number): string =>
+    '₪' + Math.round(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
   const parts = [];
   if (txAdds > 0) parts.push(`<strong>${txAdds}</strong> tx added (${fmtAmt(txAddSum)})`);
   if (txDeletes > 0) parts.push(`<strong>${txDeletes}</strong> deleted`);
@@ -8303,13 +8694,13 @@ async function openHistoryPanel() {
     list.innerHTML = `<div style="padding:1rem;color:var(--muted);font-size:.82rem;">No history yet — changes will appear here as you use the app.</div>`;
     return;
   }
-  const colors = {
+  const colors: Record<string, string> = {
     add: 'var(--log-add)',
     delete: 'var(--log-delete)',
     edit: 'var(--log-edit)',
   };
-  const fmtDate = (iso) => {
-    const d = new Date(iso);
+  const fmtDate = (iso: string | null | undefined): string => {
+    const d = new Date(iso || '');
     return (
       d.toLocaleDateString('en-IL', { weekday: 'short', day: 'numeric', month: 'short' }) +
       ', ' +
@@ -8328,7 +8719,7 @@ async function openHistoryPanel() {
         let clickHandler = '';
         if (canClick) {
           if (r.entity_type === 'budget_amount') {
-            const m = r.description.match(/Budget changed: (\S+)/);
+            const m = (r.description as string).match(/Budget changed: (\S+)/);
             if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
           } else {
             clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
@@ -8338,10 +8729,10 @@ async function openHistoryPanel() {
           ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
           : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
         return `<div ${clickAttr}>
-      <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
+      <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action as string] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
         <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate((r as Record<string, unknown>).created_at as string | null)}</div>
       </div>
     </div>`;
       })
@@ -8360,13 +8751,13 @@ async function refreshHistoryIfOpen() {
       .order('created_at', { ascending: false })
       .limit(200);
     if (!data) return;
-    const colors = {
+    const colors: Record<string, string> = {
       add: 'var(--log-add)',
       delete: 'var(--log-delete)',
       edit: 'var(--log-edit)',
     };
-    const fmtDate = (iso) => {
-      const d = new Date(iso);
+    const fmtDate = (iso: string | null | undefined): string => {
+      const d = new Date(iso || '');
       return (
         d.toLocaleDateString('en-IL', { weekday: 'short', day: 'numeric', month: 'short' }) +
         ', ' +
@@ -8383,7 +8774,7 @@ async function refreshHistoryIfOpen() {
           let clickHandler = '';
           if (canClick) {
             if (r.entity_type === 'budget_amount') {
-              const m = r.description.match(/Budget changed: (\S+)/);
+              const m = (r.description as string).match(/Budget changed: (\S+)/);
               if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
             } else {
               clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
@@ -8393,10 +8784,10 @@ async function refreshHistoryIfOpen() {
             ? `onclick="${clickHandler}" style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;cursor:pointer;transition:background .15s;" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''"`
             : `style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.6rem;align-items:flex-start;"`;
           return `<div ${clickAttr}>
-        <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action as string] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
           <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at)}</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at.created_at)}</div>
         </div>
       </div>`;
         })
@@ -8405,7 +8796,7 @@ async function refreshHistoryIfOpen() {
 }
 
 // Jump to transaction from history
-function jumpToTransaction(txId) {
+function jumpToTransaction(txId: string): void {
   const tx = state.transactions.find((t) => t.id === txId);
   if (!tx) {
     toast('Transaction not found in current month');
@@ -8435,7 +8826,7 @@ function jumpToTransaction(txId) {
 }
 
 // Jump to any entity from history log
-async function jumpToHistoryEntry(entityType, entityId) {
+async function jumpToHistoryEntry(entityType: string, entityId: string): Promise<void> {
   if (entityType === 'transaction') {
     jumpToTransaction(entityId);
     return;
@@ -8538,7 +8929,7 @@ async function jumpToHistoryEntry(entityType, entityId) {
 }
 
 // ── Search Panel ─────────────────────────────────────────────────────
-async function openSearchPanel() {
+function openSearchPanel(): void {
   // Q5 \u2014 single-panel rule: opening one closes the other.
   closeOtherPanel('search-panel');
   let panel: HTMLElement = byId('search-panel');
@@ -8586,10 +8977,10 @@ async function openSearchPanel() {
   showBackdrop();
   requestAnimationFrame(() => panel.classList.add('app-panel-open'));
 
-  let debounceTimer;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   const input = byId('search-input');
   input.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
+    if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => runSearch(input.value.trim()), 300);
   });
   byId('search-all-months').addEventListener('change', () => {
@@ -8598,7 +8989,7 @@ async function openSearchPanel() {
   setTimeout(() => input.focus(), 50);
 }
 
-async function runSearch(query) {
+async function runSearch(query: string): Promise<void> {
   const resultsDiv = byId('search-results');
   if (!query || query.length < 2) {
     resultsDiv.innerHTML =
@@ -8636,7 +9027,15 @@ async function runSearch(query) {
   } else {
     transactions = state.transactions.map((t) => {
       const m = state.months.find((mo) => mo.id === state.currentMonthId);
-      return { ...t, months: m ? { month_name: m.month_name, month_num: m.month_num } : null };
+      return {
+        ...t,
+        months: m
+          ? {
+              month_name: (m as unknown as { month_name?: string }).month_name,
+              month_num: m.month_num,
+            }
+          : null,
+      };
     });
     // Budget items for current month
     const q = query.toLowerCase();
@@ -8650,7 +9049,12 @@ async function runSearch(query) {
           budgetItemMatches.push({
             ...bi,
             category: cat,
-            months: m ? { month_name: m.month_name, month_num: m.month_num } : null,
+            months: m
+              ? {
+                  month_name: (m as unknown as { month_name?: string }).month_name,
+                  month_num: m.month_num,
+                }
+              : null,
           });
         }
       });
@@ -8672,7 +9076,7 @@ async function runSearch(query) {
 
   const total = ag(matches.reduce((sum, t) => sum + (t.amount || 0), 0));
   const biTotal = ag(budgetItemMatches.reduce((sum, bi) => sum + (bi.amount || 0), 0));
-  const catLabel = (key) => {
+  const catLabel = (key: string): string => {
     const c = CATEGORIES.find((cat) => cat.key === key);
     return c ? `${c.emoji} ${c.label}` : key;
   };
@@ -8696,7 +9100,7 @@ async function runSearch(query) {
     byCat[t.category].count++;
   });
 
-  const n = (v) =>
+  const n = (v: number): string =>
     Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   let html = '';
@@ -8831,7 +9235,7 @@ async function runSearch(query) {
   resultsDiv.innerHTML = html;
 }
 
-async function searchJumpToTx(txId, monthId) {
+async function searchJumpToTx(txId: string, monthId: string): Promise<void> {
   // Switch month if needed, then jump
   if (monthId && monthId !== state.currentMonthId) {
     await switchMonth(monthId);
@@ -8919,7 +9323,7 @@ function openQuickAddSheet() {
   }, 240);
 }
 
-function quickAddSheetBody(kind) {
+function quickAddSheetBody(kind: string): string {
   const inputCss =
     "width:100%;font-size:.95rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;";
   const btnCss =
@@ -8969,7 +9373,7 @@ function quickAddSheetBody(kind) {
   return '';
 }
 
-async function submitQuickAdd(kind) {
+async function submitQuickAdd(kind: string): Promise<void> {
   const monthNum = currentMonthNum();
   if (kind === 'tx') {
     const cat = byId('qa-cat').value;
@@ -9005,17 +9409,17 @@ async function submitQuickAdd(kind) {
       `Added ${store || item || cat} ₪${amount} • ${cat}`,
       null,
       txData,
-      state.currentMonthId,
+      state.currentMonthId!,
     );
     pushUndo({
       label: 'add transaction',
       undo: async () => {
         await sb.from('transactions').delete().eq('id', txData.id);
-        await loadTransactions(state.currentMonthId);
+        await loadTransactions(state.currentMonthId!);
       },
       redo: async () => {
         await sb.from('transactions').insert(txData);
-        await loadTransactions(state.currentMonthId);
+        await loadTransactions(state.currentMonthId!);
       },
     });
     closeAllPanels();
@@ -9104,12 +9508,12 @@ async function submitQuickAdd(kind) {
         return;
       }
       parent = newItem;
-      state.admin.items.push(parent);
+      (state.admin.items as AdminItemRow[]).push(parent as AdminItemRow);
     }
     const { data, error } = await sb
       .from('admin_sub_items')
       .insert({
-        item_id: parent.id,
+        item_id: parent!.id,
         label,
         amount,
         month_num: monthNum,
@@ -9125,9 +9529,9 @@ async function submitQuickAdd(kind) {
     state.admin.subItems.push(data);
     // Keep the catch-all's projected in step with its paid total so it never reads
     // as over/under budget in Yearly Expenses.
-    const newProj = Number(parent.projected_amount || 0) + amount;
-    await sb.from('admin_items').update({ projected_amount: newProj }).eq('id', parent.id);
-    parent.projected_amount = newProj;
+    const newProj = Number(parent!.projected_amount || 0) + amount;
+    await sb.from('admin_items').update({ projected_amount: newProj }).eq('id', parent!.id);
+    parent!.projected_amount = newProj;
     closeAllPanels();
     renderApp();
     toast('Payment logged ✓');
@@ -9185,12 +9589,20 @@ function computePending() {
   const items = [];
 
   // Estimates from each payments list
-  const collectEstimates = (payments, kind, tab, emoji) => {
+  const collectEstimates = (
+    payments: Record<string, unknown>[],
+    kind: string,
+    tab: string,
+    emoji: string,
+  ): void => {
     (payments || [])
       .filter((p) => p.is_estimate)
       .forEach((p) => {
         const amt = Number(p.amount) || 0;
-        const label = (p.label || p.what || '').trim() || `(unnamed ${kind})`;
+        const label =
+          String(
+            (p as Record<string, unknown>).label || (p as Record<string, unknown>).what || '',
+          ).trim() || `(unnamed ${kind})`;
         items.push({
           type: 'estimate',
           kind,
@@ -9238,7 +9650,7 @@ function togglePendingDecisions() {
   renderApp();
 }
 
-function pendingJump(tab, paymentId) {
+function pendingJump(tab: string, paymentId?: string): void {
   switchTab(tab);
   if (paymentId) {
     // Best-effort highlight on the relevant payment row after the tab renders
@@ -9260,7 +9672,7 @@ function pendingJump(tab, paymentId) {
 }
 
 // ── M4 — Mobile month navigation: chevrons + swipe ─────────────────────
-async function navMonth(delta) {
+async function navMonth(delta: number): Promise<void> {
   const idx = state.months.findIndex((m) => m.id === state.currentMonthId);
   if (idx === -1) return;
   const next = idx + delta;
@@ -9269,8 +9681,8 @@ async function navMonth(delta) {
 }
 
 // Swipe on the main content area to advance/go-back month (mobile only).
-let _swipeStartX = null;
-let _swipeStartY = null;
+let _swipeStartX: number | null = null;
+let _swipeStartY: number | null = null;
 let _swipeStartT = 0;
 document.addEventListener(
   'touchstart',
@@ -9298,7 +9710,7 @@ document.addEventListener(
     if (_swipeStartX == null) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - _swipeStartX;
-    const dy = t.clientY - _swipeStartY;
+    const dy = t.clientY - _swipeStartY!;
     const dt = Date.now() - _swipeStartT;
     _swipeStartX = null;
     _swipeStartY = null;
@@ -9314,7 +9726,7 @@ document.addEventListener(
 );
 
 // ── Toolbar overflow on mobile (collapse 6 icons into ⋯ menu) ─────────
-function openToolbarOverflow(ev) {
+function openToolbarOverflow(ev?: MouseEvent): void {
   if (ev) ev.stopPropagation();
   let menu: HTMLElement = byId('toolbar-overflow-menu');
   if (menu) {
@@ -9340,15 +9752,15 @@ function openToolbarOverflow(ev) {
   // Position near the overflow button
   const btn = ev?.currentTarget || document.querySelector('.toolbar-overflow-btn');
   if (btn) {
-    const r = btn.getBoundingClientRect();
+    const r = (btn as HTMLElement).getBoundingClientRect();
     menu.style.position = 'fixed';
     menu.style.top = r.bottom + 6 + 'px';
     menu.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
   }
   // Click-outside to close
   setTimeout(() => {
-    const handler = (e) => {
-      if (!menu.contains(e.target)) {
+    const handler = (e: MouseEvent): void => {
+      if (!menu.contains(e.target as Node | null)) {
         menu.remove();
         document.removeEventListener('click', handler);
       }
@@ -9440,7 +9852,7 @@ function openMoreSheet() {
 // whenever a write is enqueued or drained. We update a small toolbar
 // indicator. Manual sync trigger: clicking the indicator asks the SW to
 // drain immediately.
-function updateOfflineQueueUI(count) {
+function updateOfflineQueueUI(count: number): void {
   const el = byId('offline-queue-indicator');
   const num = byId('offline-queue-count');
   if (!el || !num) return;
@@ -9471,7 +9883,7 @@ function syncQueueNow() {
 // while writes are still queued from a prior offline session).
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.ready
-    .then((reg) => {
+    .then((): void => {
       // Some browsers don't have controller until next load — guard.
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'queue-count' });
