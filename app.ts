@@ -1,4 +1,31 @@
 /* eslint-disable no-unused-vars -- functions called from inline HTML onclick handlers */
+
+// Type-only import: erased at compile time (runtime still uses the @supabase CDN
+// global). Its presence also marks this file as an ES module, matching the
+// `<script type="module">` load in index.html.
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+declare global {
+  interface Window {
+    // Supabase UMD global from the CDN <script> in index.html.
+    supabase: { createClient: (url: string, key: string) => SupabaseClient };
+    // SW → app bridge (assigned below, read by the inline SW script in index.html).
+    onQueueUpdate?: (data: { count?: number }) => void;
+    // Cross-module handler also assigned explicitly elsewhere.
+    syncPtOwedToCash: () => void;
+    // One-time guard flag for the numeric-input-mode observer.
+    _inputModeObserverInstalled?: boolean;
+  }
+}
+
+// Typed element lookup. The app reads .value/.checked/.style/.disabled off
+// looked-up nodes; HTMLInputElement carries those (and everything HTMLElement
+// has), so it's the pragmatic return type for this DOM-heavy code. Runtime is
+// identical to document.getElementById.
+function byId(id: string): HTMLInputElement {
+  return document.getElementById(id) as HTMLInputElement;
+}
+
 const SB_URL = 'https://hpiyvnfhoqnnnotrmwaz.supabase.co';
 const SB_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaXl2bmZob3Fubm5vdHJtd2F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzIwNDEsImV4cCI6MjA4ODA0ODA0MX0.AsGhYitkSnyVMwpJII05UseS_gICaXiCy7d8iHsr6Qw';
@@ -92,7 +119,7 @@ const undoStack = [],
     month_id uuid
   );
 */
-function logChange(action, entityType, entityId, description, oldValue, newValue, monthId) {
+function logChange(action, entityType, entityId, description, oldValue, newValue, monthId?) {
   sb.from('change_log')
     .insert({
       action,
@@ -107,6 +134,7 @@ function logChange(action, entityType, entityId, description, oldValue, newValue
       if (error) console.warn('change_log insert failed:', error);
       else if (typeof refreshHistoryIfOpen === 'function') refreshHistoryIfOpen();
     })
+    // @ts-expect-error PromiseLike from Supabase builder lacks .catch; at runtime it IS a Promise
     .catch((e) => console.warn('change_log insert error:', e));
 }
 function pushUndo(action) {
@@ -116,8 +144,8 @@ function pushUndo(action) {
   updateUndoButtons();
 }
 function updateUndoButtons() {
-  const u = document.getElementById('undo-btn'),
-    r = document.getElementById('redo-btn');
+  const u = byId('undo-btn'),
+    r = byId('redo-btn');
   if (u) u.disabled = undoStack.length === 0;
   if (r) r.disabled = redoStack.length === 0;
 }
@@ -140,8 +168,56 @@ async function doRedo() {
   toast('Redone: ' + a.label);
 }
 
-let state = {
-  currentYear: parseInt(localStorage.getItem('activeYear'), 10) || 2026,
+// Per-category aggregate block (admin / travel / charity tabs).
+interface CategorySection {
+  items: any[];
+  allocations: Record<string, any>;
+  payments: any[];
+  subItems: any[];
+}
+
+// App state. Row collections are `any[]` in Phase 2; Phase 3 (strict, no-any)
+// replaces them with concrete row interfaces (Month, Transaction, BudgetItem…).
+interface State {
+  currentYear: number;
+  availableYears: number[];
+  months: any[];
+  currentMonthId: string | null;
+  transactions: any[];
+  budgets: Record<string, number>;
+  loading: boolean;
+  activeTab: string;
+  biz: any | null;
+  ptClients: any[];
+  ptSessions: any;
+  incomeItems: any[];
+  cashAccounts: any[];
+  usdRate: number | null;
+  budgetItems: Record<string, any[]>;
+  allRecurringItems: Record<string, any[]>;
+  recurringGridMode: boolean;
+  allHousingItems: Record<string, any[]>;
+  housingGridMode: boolean;
+  allCatTxData: Record<string, any[]>;
+  allCatBudgets: Record<string, Record<string, number>>;
+  spendingGridCats: string[];
+  txSort: string;
+  admin: CategorySection;
+  travel: CategorySection;
+  charity: CategorySection;
+  openCats: Set<string>;
+  yearData: any | null;
+  inlineAddCat: string | null;
+  allStores: any[];
+  yearViewMonth: number | null;
+  yearMobileFull: boolean;
+  allBiz: any[];
+  _lastCharitySync: Record<string, number> | null;
+  ptOwedTotal: number;
+}
+
+let state: State = {
+  currentYear: parseInt(localStorage.getItem('activeYear') as string, 10) || 2026,
   availableYears: [],
   months: [],
   currentMonthId: null,
@@ -173,6 +249,9 @@ let state = {
   allStores: [],
   yearViewMonth: null, // mobile Year view: which month column is shown (1-12); null = auto
   yearMobileFull: false, // mobile Year view: false = one-month layout, true = full 12-month grid
+  allBiz: [],
+  _lastCharitySync: null,
+  ptOwedTotal: 0,
 };
 
 // ── Cache (stale-while-revalidate for fast startup) ──────────────────
@@ -252,8 +331,8 @@ const status = (spent, budget) => {
 };
 
 let _toastTimer = null;
-function toast(msg, opts) {
-  const t = document.getElementById('toast');
+function toast(msg, opts?) {
+  const t = byId('toast');
   if (!t) return;
   // Backward compat: plain string with no action
   if (!opts || !opts.action) {
@@ -300,7 +379,7 @@ function esc(s) {
 // V5 — Thin-stroke chrome icons (Lucide-inspired, stroke-width 1.6) for the
 // persistent toolbar. Emoji stays at content level (tabs, categories) — chrome
 // gets monotone line icons that read as professional restraint.
-const _SVG = (paths, opts) => {
+const _SVG = (paths, opts?) => {
   const o = opts || {};
   return (
     '<svg xmlns="http://www.w3.org/2000/svg" width="' +
@@ -398,7 +477,7 @@ async function loadAllRecurringItems() {
 
 async function toggleRecurringGrid() {
   state.recurringGridMode = !state.recurringGridMode;
-  localStorage.setItem('recurringGridMode', state.recurringGridMode);
+  localStorage.setItem('recurringGridMode', state.recurringGridMode as unknown as string);
   if (state.recurringGridMode && Object.keys(state.allRecurringItems).length === 0) {
     await loadAllRecurringItems();
   }
@@ -484,7 +563,7 @@ function renderRecurringGrid() {
   const today = todayMonthForYear(); // current month num
 
   // Get all unique items with their subcategory (from any month that has them)
-  const itemMap = {}; // label -> subcategory
+  const itemMap: Record<string, string> = {}; // label -> subcategory
   Object.values(state.allRecurringItems).forEach((items) => {
     items.forEach((i) => {
       if (!itemMap[i.label]) itemMap[i.label] = i.subcategory || '';
@@ -492,7 +571,7 @@ function renderRecurringGrid() {
   });
 
   // Group items by subcategory
-  const groups = {};
+  const groups: Record<string, string[]> = {};
   const noSubcat = [];
   Object.entries(itemMap).forEach(([label, sc]) => {
     if (sc && SUBCAT_ORDER.includes(sc)) {
@@ -670,7 +749,7 @@ function editRecurringCell(label, monthNum, currentVal) {
   // a real <input> overlaid on the cell. Enter saves; Esc cancels; blur saves.
   // For future months we still need to ask "apply to all future" — we do that
   // with a tiny inline confirm strip, NOT a native confirm dialog.
-  const td = window.event && window.event.currentTarget;
+  const td = (window.event && window.event.currentTarget) as HTMLElement | null;
   if (!td || !td.tagName) {
     // Fallback (no event context — programmatic call): keep old behavior
     const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
@@ -696,7 +775,7 @@ function editRecurringCell(label, monthNum, currentVal) {
     'value="' +
     (currentVal || '') +
     '">';
-  const input = td.querySelector('input.rg-edit');
+  const input = td.querySelector('input.rg-edit') as HTMLInputElement;
   input.focus();
   input.select();
   let committed = false;
@@ -774,7 +853,7 @@ async function loadAllHousingItems() {
 
 async function toggleHousingGrid() {
   state.housingGridMode = !state.housingGridMode;
-  localStorage.setItem('housingGridMode', state.housingGridMode);
+  localStorage.setItem('housingGridMode', state.housingGridMode as unknown as string);
   if (state.housingGridMode && Object.keys(state.allHousingItems).length === 0) {
     await loadAllHousingItems();
   }
@@ -882,14 +961,14 @@ function renderHousingGrid() {
   };
   const today = todayMonthForYear();
 
-  const itemMap = {};
+  const itemMap: Record<string, string> = {};
   Object.values(state.allHousingItems).forEach((items) => {
     items.forEach((i) => {
       if (!itemMap[i.label]) itemMap[i.label] = i.subcategory || '';
     });
   });
 
-  const groups = {};
+  const groups: Record<string, string[]> = {};
   const noSubcat = [];
   Object.entries(itemMap).forEach(([label, sc]) => {
     if (sc && SUBCAT_ORDER.includes(sc)) {
@@ -1732,18 +1811,18 @@ function totalIncome(month) {
 
 // ── Add transaction ───────────────────────────────────────────────────
 async function addTransaction() {
-  const cat = document.getElementById('tx-cat').value;
-  const store = document.getElementById('tx-store').value.trim();
-  const item = document.getElementById('tx-item').value.trim();
-  const amount = parseFloat(document.getElementById('tx-amount').value);
-  const date = document.getElementById('tx-date').value;
+  const cat = byId('tx-cat').value;
+  const store = byId('tx-store').value.trim();
+  const item = byId('tx-item').value.trim();
+  const amount = parseFloat(byId('tx-amount').value);
+  const date = byId('tx-date').value;
 
   if (!cat || !amount || isNaN(amount)) {
     toast('Fill in category and amount');
     return;
   }
 
-  const btn = document.getElementById('tx-btn');
+  const btn = byId('tx-btn');
   btn.disabled = true;
 
   const { data: txData, error } = await sb
@@ -1786,10 +1865,10 @@ async function addTransaction() {
   });
 
   // Clear form
-  document.getElementById('tx-store').value = '';
-  document.getElementById('tx-item').value = '';
-  document.getElementById('tx-amount').value = '';
-  document.getElementById('tx-date').value = today();
+  byId('tx-store').value = '';
+  byId('tx-item').value = '';
+  byId('tx-amount').value = '';
+  byId('tx-date').value = today();
   btn.disabled = false;
 
   await loadTransactions(state.currentMonthId);
@@ -1798,18 +1877,18 @@ async function addTransaction() {
 }
 
 async function addTransactionSidebar() {
-  const cat = document.getElementById('sb-cat').value;
-  const store = document.getElementById('sb-store').value.trim();
-  const item = document.getElementById('sb-item').value.trim();
-  const amount = parseFloat(document.getElementById('sb-amount').value);
-  const date = document.getElementById('sb-date').value;
+  const cat = byId('sb-cat').value;
+  const store = byId('sb-store').value.trim();
+  const item = byId('sb-item').value.trim();
+  const amount = parseFloat(byId('sb-amount').value);
+  const date = byId('sb-date').value;
 
   if (!cat || !amount || isNaN(amount)) {
     toast('Fill in category and amount');
     return;
   }
 
-  const btn = document.getElementById('sb-btn');
+  const btn = byId('sb-btn');
   btn.disabled = true;
   btn.textContent = '…';
 
@@ -1853,10 +1932,10 @@ async function addTransactionSidebar() {
     },
   });
 
-  document.getElementById('sb-store').value = '';
-  document.getElementById('sb-item').value = '';
-  document.getElementById('sb-amount').value = '';
-  document.getElementById('sb-date').value = '';
+  byId('sb-store').value = '';
+  byId('sb-item').value = '';
+  byId('sb-amount').value = '';
+  byId('sb-date').value = '';
   btn.disabled = false;
   btn.textContent = 'Save →';
 
@@ -1969,7 +2048,7 @@ async function createMonth(num) {
 
 // ── Render ────────────────────────────────────────────────────────────
 function renderApp() {
-  const root = document.getElementById('root');
+  const root = byId('root');
   document.title = `Budget ${state.currentYear}`;
   requestAnimationFrame(applyRibbonHeight);
   requestAnimationFrame(updateUndoButtons);
@@ -1987,7 +2066,7 @@ function renderApp() {
                 ${MONTHS.map((m, i) => `<option value="${i + 1}" ${i === 1 ? 'selected' : ''}>${m}</option>`).join('')}
               </select>
             </div>
-            <button class="btn btn-primary" onclick="createMonth(parseInt(document.getElementById('setup-month').value))">
+            <button class="btn btn-primary" onclick="createMonth(parseInt(byId('setup-month').value))">
               Start this month →
             </button>
           </div>
@@ -2343,13 +2422,14 @@ function renderApp() {
           if (cats.length === 1) {
             const c = cats[0];
             let gapBadge = '';
-            if (c.hasTab && state[c.key]) {
-              const projected = (state[c.key].items || []).reduce(
+            if (c.hasTab && (state as any)[c.key]) {
+              const _catSection = (state as any)[c.key] as CategorySection;
+              const projected = (_catSection.items || []).reduce(
                 (s, i) => s + (Number(i.projected_amount) || 0),
                 0,
               );
-              const allocated = Object.values(state[c.key].allocations || {}).reduce(
-                (s, a) => s + (Number(a.amount) || 0),
+              const allocated = Object.values(_catSection.allocations || {}).reduce(
+                (s: number, a: any) => s + (Number(a.amount) || 0),
                 0,
               );
               const gap = ag(projected - allocated);
@@ -2844,9 +2924,15 @@ function renderApp() {
                         const sort = state.txSort || 'newest';
                         const sorted = [...txs].sort((a, b) => {
                           if (sort === 'newest')
-                            return new Date(b.created_at) - new Date(a.created_at);
+                            return (
+                              (new Date(b.created_at) as unknown as number) -
+                              (new Date(a.created_at) as unknown as number)
+                            );
                           if (sort === 'oldest')
-                            return new Date(a.created_at) - new Date(b.created_at);
+                            return (
+                              (new Date(a.created_at) as unknown as number) -
+                              (new Date(b.created_at) as unknown as number)
+                            );
                           if (sort === 'high') return Number(b.amount) - Number(a.amount);
                           if (sort === 'low') return Number(a.amount) - Number(b.amount);
                           return 0;
@@ -2970,7 +3056,7 @@ function renderApp() {
           <h3 style="font-size:1rem;font-weight:700;">📊 Snapshot</h3>
           <div style="display:flex;gap:.5rem;">
             <button class="btn btn-primary" onclick="window.print()" style="font-size:.8rem;padding:.4rem .9rem;">🖨️ Print / PDF</button>
-            <button class="mtab" onclick="document.getElementById('snapshot-modal').style.display='none'">✕ Close</button>
+            <button class="mtab" onclick="byId('snapshot-modal').style.display='none'">✕ Close</button>
           </div>
         </div>
         <div id="snapshot-body"></div>
@@ -2997,11 +3083,11 @@ function renderApp() {
   `;
 
   // Set store field visibility + autocomplete based on category
-  const catSel = document.getElementById('tx-cat');
+  const catSel = byId('tx-cat');
   if (catSel) {
     catSel.addEventListener('change', () => {
       const cat = CATEGORIES.find((c) => c.key === catSel.value);
-      const storeField = document.getElementById('tx-store');
+      const storeField = byId('tx-store');
       if (storeField)
         storeField.placeholder = cat?.hasStore ? 'Makolet, Yochananof...' : 'Optional';
       updateStoreSuggestions(catSel.value);
@@ -3028,7 +3114,7 @@ function renderApp() {
    expansions) that don't go through renderApp(). Idempotent: skips inputs
    that already declare an inputmode (e.g., a future field that explicitly
    wants "numeric" for integer-only). */
-function applyNumericInputModes(root) {
+function applyNumericInputModes(root?) {
   const scope = root && root.querySelectorAll ? root : document;
   const inputs = scope.querySelectorAll('input[type="number"]:not([inputmode])');
   inputs.forEach((el) => {
@@ -3047,10 +3133,11 @@ function _installInputModeObserver() {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
         if (node.nodeType !== 1) continue; // ELEMENT_NODE only
-        if (node.matches && node.matches('input[type="number"]:not([inputmode])')) {
-          node.setAttribute('inputmode', 'decimal');
-        } else if (node.querySelectorAll) {
-          applyNumericInputModes(node);
+        const el = node as Element;
+        if (el.matches && el.matches('input[type="number"]:not([inputmode])')) {
+          el.setAttribute('inputmode', 'decimal');
+        } else if (el.querySelectorAll) {
+          applyNumericInputModes(el);
         }
       }
     }
@@ -3173,7 +3260,7 @@ const PRESET_STORES = {
 };
 
 function updateSbStores(catKey) {
-  const dl = document.getElementById('sb-store-list');
+  const dl = byId('sb-store-list');
   if (!dl) return;
   const stores = [
     ...new Set([
@@ -3188,7 +3275,7 @@ function updateSbStores(catKey) {
 }
 
 function updateStoreSuggestions(catKey) {
-  const dl = document.getElementById('store-suggestions');
+  const dl = byId('store-suggestions');
   if (!dl) return;
   const presets = PRESET_STORES[catKey] || [];
   const fromHistory = state.transactions
@@ -3202,21 +3289,21 @@ function quickAddFor(catKey) {
   state.inlineAddCat = catKey;
   renderApp();
   setTimeout(() => {
-    const el = document.getElementById('inline-store-' + catKey);
+    const el = byId('inline-store-' + catKey);
     if (el) el.focus();
   }, 50);
 }
 
 async function saveInlineAdd(catKey) {
-  if (saveInlineAdd._saving) return;
-  saveInlineAdd._saving = true;
-  const store = (document.getElementById('inline-store-' + catKey) || {}).value?.trim() || null;
-  const item = (document.getElementById('inline-item-' + catKey) || {}).value?.trim() || null;
-  const amount = parseFloat((document.getElementById('inline-amount-' + catKey) || {}).value);
-  const date = (document.getElementById('inline-date-' + catKey) || {}).value || null;
+  if ((saveInlineAdd as any)._saving) return;
+  (saveInlineAdd as any)._saving = true;
+  const store = (byId('inline-store-' + catKey) || {}).value?.trim() || null;
+  const item = (byId('inline-item-' + catKey) || {}).value?.trim() || null;
+  const amount = parseFloat((byId('inline-amount-' + catKey) || {}).value);
+  const date = (byId('inline-date-' + catKey) || {}).value || null;
   if (!amount || isNaN(amount)) {
     toast('Enter an amount');
-    saveInlineAdd._saving = false;
+    (saveInlineAdd as any)._saving = false;
     return;
   }
   const { data: txData, error } = await sb
@@ -3233,7 +3320,7 @@ async function saveInlineAdd(catKey) {
     .single();
   if (error) {
     toast('Error saving');
-    saveInlineAdd._saving = false;
+    (saveInlineAdd as any)._saving = false;
     return;
   }
   logChange(
@@ -3258,7 +3345,7 @@ async function saveInlineAdd(catKey) {
   });
   state.inlineAddCat = null;
   await loadTransactions(state.currentMonthId);
-  saveInlineAdd._saving = false;
+  (saveInlineAdd as any)._saving = false;
   renderApp();
   toast('Saved ✓');
 }
@@ -3273,7 +3360,7 @@ function toggleCat(key) {
   // Smooth open/close — toggle the class directly when the row exists in
   // the DOM, so the CSS transition can run. Fall back to full re-render if
   // the row isn't here yet (first paint, tab switch, etc.).
-  const row = document.getElementById('cat-' + key);
+  const row = byId('cat-' + key);
   if (row) {
     row.classList.toggle('open');
   } else {
@@ -3436,14 +3523,14 @@ async function deleteIncomeItem(id) {
 }
 
 function showEditIncome() {
-  const modal = document.getElementById('income-modal');
+  const modal = byId('income-modal');
   if (modal) {
     modal.style.display = 'flex';
   }
 }
 
 function closeModal() {
-  const modal = document.getElementById('income-modal');
+  const modal = byId('income-modal');
   if (modal) modal.style.display = 'none';
 }
 
@@ -3452,10 +3539,10 @@ async function saveIncome() {
   // biz_months net via saveBizField. Editing it from this modal would create
   // drift between months.income_private and biz_months.
   const updates = {
-    income_petachya: parseFloat(document.getElementById('inc-petachya').value) || 0,
-    income_clalit: parseFloat(document.getElementById('inc-clalit').value) || 0,
-    income_other: parseFloat(document.getElementById('inc-other').value) || 0,
-    savings_bank: parseFloat(document.getElementById('inc-savings').value) || 0,
+    income_petachya: parseFloat(byId('inc-petachya').value) || 0,
+    income_clalit: parseFloat(byId('inc-clalit').value) || 0,
+    income_other: parseFloat(byId('inc-other').value) || 0,
+    savings_bank: parseFloat(byId('inc-savings').value) || 0,
   };
   const { error } = await sb.from('months').update(updates).eq('id', state.currentMonthId);
   if (error) {
@@ -3849,10 +3936,10 @@ async function saveCharityAllocation(monthNum, value) {
 }
 
 async function addCharityPayment() {
-  const monthNum = parseInt(document.getElementById('cp-month').value);
-  const label = document.getElementById('cp-label').value.trim();
-  const dateVal = document.getElementById('cp-date').value || null;
-  const amount = parseFloat(document.getElementById('cp-amount').value);
+  const monthNum = parseInt(byId('cp-month').value);
+  const label = byId('cp-label').value.trim();
+  const dateVal = byId('cp-date').value || null;
+  const amount = parseFloat(byId('cp-amount').value);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in name and amount');
     return;
@@ -3868,9 +3955,9 @@ async function addCharityPayment() {
   }
   state.charity.payments.push(data);
   state.charity.payments.sort((a, b) => a.month_num - b.month_num);
-  document.getElementById('cp-label').value = '';
-  document.getElementById('cp-date').value = '';
-  document.getElementById('cp-amount').value = '';
+  byId('cp-label').value = '';
+  byId('cp-date').value = '';
+  byId('cp-amount').value = '';
   renderApp();
   toast('Payment logged ✓');
 }
@@ -4136,10 +4223,10 @@ async function saveTravelAllocation(monthNum, value) {
 }
 
 async function addTravelPayment() {
-  const monthNum = parseInt(document.getElementById('tp-month').value);
-  const label = document.getElementById('tp-label').value.trim();
-  const destination = document.getElementById('tp-dest').value.trim();
-  const amount = parseFloat(document.getElementById('tp-amount').value);
+  const monthNum = parseInt(byId('tp-month').value);
+  const label = byId('tp-label').value.trim();
+  const destination = byId('tp-dest').value.trim();
+  const amount = parseFloat(byId('tp-amount').value);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in what and amount');
     return;
@@ -4155,9 +4242,9 @@ async function addTravelPayment() {
   }
   state.travel.payments.push(data);
   state.travel.payments.sort((a, b) => a.month_num - b.month_num);
-  document.getElementById('tp-label').value = '';
-  document.getElementById('tp-dest').value = '';
-  document.getElementById('tp-amount').value = '';
+  byId('tp-label').value = '';
+  byId('tp-dest').value = '';
+  byId('tp-amount').value = '';
   renderApp();
   toast('Payment logged ✓');
 }
@@ -5920,7 +6007,7 @@ async function addAdminItem() {
   // Auto-focus the new item's name input
   setTimeout(() => {
     const inputs = document.querySelectorAll('input[placeholder="Item name"]');
-    const last = inputs[inputs.length - 1];
+    const last = inputs[inputs.length - 1] as HTMLInputElement | undefined;
     if (last && !last.value) {
       last.focus();
       last.placeholder = 'Type item name...';
@@ -6202,7 +6289,7 @@ function renderBizTab(current) {
   const clientRate = (id) => clients.find((c) => c.id === id)?.rate || 0;
 
   // Group earned sessions by client
-  const earnedByClient = {};
+  const earnedByClient: Record<string, any[]> = {};
   earned.forEach((s) => {
     if (!earnedByClient[s.client_id]) earnedByClient[s.client_id] = [];
     earnedByClient[s.client_id].push(s);
@@ -6210,7 +6297,7 @@ function renderBizTab(current) {
   const trackerTotal = ag(earned.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0));
 
   // Group scheduled sessions by client
-  const scheduledByClient = {};
+  const scheduledByClient: Record<string, any[]> = {};
   scheduled.forEach((s) => {
     if (!scheduledByClient[s.client_id]) scheduledByClient[s.client_id] = [];
     scheduledByClient[s.client_id].push(s);
@@ -6397,17 +6484,17 @@ async function saveBizField(field, value) {
 
 function toggleGroup(key) {
   // Direct class toggle (no re-render) so the CSS transition runs smoothly.
-  const el = document.getElementById('group-' + key);
+  const el = byId('group-' + key);
   if (el) el.classList.toggle('collapsed');
 }
 
 function jumpTo(id) {
-  const el = document.getElementById(id);
+  const el = byId(id);
   if (!el) return;
   if (el.classList.contains('collapsed')) el.classList.remove('collapsed');
   const hdrH =
-    (document.querySelector('.hdr')?.offsetHeight || 57) +
-    (document.querySelector('.ribbon-panel')?.offsetHeight || 0) +
+    ((document.querySelector('.hdr') as HTMLElement)?.offsetHeight || 57) +
+    ((document.querySelector('.ribbon-panel') as HTMLElement)?.offsetHeight || 0) +
     12;
   const top = el.getBoundingClientRect().top + window.scrollY - hdrH;
   window.scrollTo({ top, behavior: 'smooth' });
@@ -6420,15 +6507,15 @@ window.addEventListener(
     const items = document.querySelectorAll('.sidenav-item');
     if (!items.length) return;
     const offset =
-      (document.querySelector('.hdr')?.offsetHeight || 57) +
-      (document.querySelector('.ribbon-panel')?.offsetHeight || 0) +
+      ((document.querySelector('.hdr') as HTMLElement)?.offsetHeight || 57) +
+      ((document.querySelector('.ribbon-panel') as HTMLElement)?.offsetHeight || 0) +
       40;
     let active = null;
     items.forEach((item) => {
       const fn = item.getAttribute('onclick') || '';
       const m = fn.match(/jumpTo\('(.+?)'\)/);
       if (!m) return;
-      const el = document.getElementById(m[1]);
+      const el = byId(m[1]);
       if (el && el.getBoundingClientRect().top <= offset) active = item;
     });
     items.forEach((i) => i.classList.remove('active'));
@@ -6439,7 +6526,7 @@ window.addEventListener(
 
 function startRibbonDrag(e) {
   e.preventDefault();
-  const panel = document.querySelector('.ribbon-panel');
+  const panel = document.querySelector('.ribbon-panel') as HTMLElement;
   if (!panel) return;
   const startY = e.clientY;
   const startH = panel.offsetHeight;
@@ -6448,7 +6535,7 @@ function startRibbonDrag(e) {
     const newH = Math.max(minH, startH + (ev.clientY - startY));
     panel.style.maxHeight = newH + 'px';
     panel.style.overflow = 'hidden auto';
-    localStorage.setItem('ribbonHeight', newH);
+    localStorage.setItem('ribbonHeight', newH as unknown as string);
   }
   function onUp() {
     document.removeEventListener('mousemove', onMove);
@@ -6461,7 +6548,7 @@ function startRibbonDrag(e) {
 function applyRibbonHeight() {
   const h = localStorage.getItem('ribbonHeight');
   if (h) {
-    const panel = document.querySelector('.ribbon-panel');
+    const panel = document.querySelector('.ribbon-panel') as HTMLElement;
     if (panel) {
       panel.style.maxHeight = h + 'px';
       panel.style.overflow = 'hidden auto';
@@ -6479,20 +6566,20 @@ function collapseAll() {
 
 function toggleRibbon() {
   const hidden = localStorage.getItem('ribbonHidden') === 'true';
-  localStorage.setItem('ribbonHidden', !hidden);
+  localStorage.setItem('ribbonHidden', !hidden as unknown as string);
   if (!hidden) localStorage.removeItem('ribbonExpanded');
   renderApp();
 }
 function toggleRibbonExpand() {
   const expanded = localStorage.getItem('ribbonExpanded') === 'true';
-  localStorage.setItem('ribbonExpanded', !expanded);
+  localStorage.setItem('ribbonExpanded', !expanded as unknown as string);
   renderApp();
 }
 
 // Owed strip — collapsible chevron, persists state, default open. (Q1)
 function toggleOwedStrip() {
   const open = localStorage.getItem('owedStripOpen') !== 'false'; // default open
-  localStorage.setItem('owedStripOpen', !open);
+  localStorage.setItem('owedStripOpen', !open as unknown as string);
   renderApp();
 }
 
@@ -6500,7 +6587,8 @@ function toggleOwedStrip() {
 // reaches its right edge so the fade-mask drops away gracefully.
 function applyScrollFadeListeners() {
   const targets = document.querySelectorAll('.hdr-tabs .page-tabs, .hdr-months .month-tabs');
-  targets.forEach((el) => {
+  targets.forEach((elBase) => {
+    const el = elBase as HTMLElement;
     if (el.dataset.scrollFadeBound) return;
     el.dataset.scrollFadeBound = '1';
     const update = () => {
@@ -6748,8 +6836,8 @@ function gapMarker(_catKey) {
 
 function snToggle(gid) {
   var rows = document.querySelectorAll('.' + gid);
-  var hdr = document.getElementById(gid + '-hdr');
-  var chev = hdr && hdr.querySelector('.sn-chev');
+  var hdr = byId(gid + '-hdr');
+  var chev = (hdr && hdr.querySelector('.sn-chev')) as HTMLElement | null;
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
   // Smoother feel: rotate the chevron via transform instead of swapping glyphs.
   // Use ▶ as the canonical glyph so the CSS transition can interpolate.
@@ -6764,8 +6852,8 @@ function snToggle(gid) {
 
 function yrToggle(grp) {
   var rows = document.querySelectorAll('.yr-grp-' + grp);
-  var hdr = document.getElementById('yr-hdr-' + grp);
-  var chev = hdr && hdr.querySelector('.sn-chev');
+  var hdr = byId('yr-hdr-' + grp);
+  var chev = (hdr && hdr.querySelector('.sn-chev')) as HTMLElement | null;
   var isCollapsed = rows[0] && rows[0].classList.contains('collapsed');
   if (chev) {
     chev.textContent = '▶';
@@ -6780,7 +6868,7 @@ function yrCollapseAll() {
     r.classList.add('collapsed');
   });
   document.querySelectorAll('[id^="yr-hdr-"]').forEach(function (h) {
-    var c = h.querySelector('.sn-chev');
+    var c = h.querySelector('.sn-chev') as HTMLElement | null;
     if (c) {
       c.textContent = '▶';
       c.style.transform = 'rotate(0deg)';
@@ -6792,7 +6880,7 @@ function yrExpandAll() {
     r.classList.remove('collapsed');
   });
   document.querySelectorAll('[id^="yr-hdr-"]').forEach(function (h) {
-    var c = h.querySelector('.sn-chev');
+    var c = h.querySelector('.sn-chev') as HTMLElement | null;
     if (c) {
       c.textContent = '▶';
       c.style.transform = 'rotate(90deg)';
@@ -7732,8 +7820,8 @@ function openSnapshot() {
       </tr>${catRows}`;
   }).join('');
 
-  document.getElementById('snapshot-modal').style.display = 'flex';
-  document.getElementById('snapshot-body').innerHTML = `
+  byId('snapshot-modal').style.display = 'flex';
+  byId('snapshot-body').innerHTML = `
     <table class="sn-table">
       <thead><tr><th>Category</th><th>Budget ₪</th><th>Spent ₪</th><th>Remaining ₪</th></tr></thead>
       <tbody>
@@ -7850,8 +7938,8 @@ async function bootstrap() {
   }
 }
 
-function renderLogin(errMsg) {
-  const root = document.getElementById('root');
+function renderLogin(errMsg?) {
+  const root = byId('root');
   if (!root) return;
   root.style.marginRight = '';
   root.innerHTML = `
@@ -7876,19 +7964,19 @@ function renderLogin(errMsg) {
         </form>
       </div>
     </div>`;
-  const form = document.getElementById('login-form');
+  const form = byId('login-form');
   if (form) form.addEventListener('submit', handleLoginSubmit);
-  const forgot = document.getElementById('login-forgot');
+  const forgot = byId('login-forgot');
   if (forgot) forgot.addEventListener('click', handleForgotPassword);
-  const pw = document.getElementById('login-password');
+  const pw = byId('login-password');
   if (pw) pw.focus();
 }
 
 async function handleLoginSubmit(e) {
   e.preventDefault();
-  const emailEl = document.getElementById('login-email');
-  const pwEl = document.getElementById('login-password');
-  const btn = document.getElementById('login-btn');
+  const emailEl = byId('login-email');
+  const pwEl = byId('login-password');
+  const btn = byId('login-btn');
   const email = (emailEl && emailEl.value.trim()) || '';
   const password = (pwEl && pwEl.value) || '';
   if (!email || !password) {
@@ -7925,7 +8013,7 @@ async function handleLoginSubmit(e) {
 }
 
 async function handleForgotPassword() {
-  const emailEl = document.getElementById('login-email');
+  const emailEl = byId('login-email');
   const email = (emailEl && emailEl.value.trim()) || AUTH_DEFAULT_EMAIL;
   if (!email) {
     showLoginError('Enter your email first.');
@@ -7944,7 +8032,7 @@ async function handleForgotPassword() {
 }
 
 function showLoginError(msg) {
-  const el = document.getElementById('login-err');
+  const el = byId('login-err');
   if (el) {
     el.textContent = msg;
     el.hidden = false;
@@ -7986,7 +8074,7 @@ document.addEventListener('keydown', (e) => {
   }
   // Q6 — Esc closes any open panel + the snapshot modal.
   if (e.key === 'Escape' || e.key === 'Esc') {
-    const snap = document.getElementById('snapshot-modal');
+    const snap = byId('snapshot-modal');
     if (snap && snap.style.display !== 'none' && snap.style.display !== '') {
       snap.style.display = 'none';
       e.preventDefault();
@@ -8004,7 +8092,7 @@ document.addEventListener('keydown', (e) => {
 // backdrop OR press Esc closes the active panel. Mobile (<=600px) renders
 // the panels as bottom-sheets via the .app-panel CSS rules.
 function ensureBackdrop() {
-  let bd = document.getElementById('app-panel-backdrop');
+  let bd: HTMLElement = byId('app-panel-backdrop');
   if (!bd) {
     bd = document.createElement('div');
     bd.id = 'app-panel-backdrop';
@@ -8021,7 +8109,7 @@ function showBackdrop() {
   requestAnimationFrame(() => bd.classList.add('app-panel-backdrop-open'));
 }
 function hideBackdrop() {
-  const bd = document.getElementById('app-panel-backdrop');
+  const bd = byId('app-panel-backdrop');
   if (!bd) return;
   bd.classList.remove('app-panel-backdrop-open');
   setTimeout(() => bd.classList.remove('visible'), 200);
@@ -8034,7 +8122,7 @@ function closeOtherPanel(keepId) {
     if (p.id !== keepId && p.classList.contains('app-panel-open')) {
       p.classList.remove('app-panel-open');
       setTimeout(() => {
-        p.style.display = 'none';
+        (p as HTMLElement).style.display = 'none';
       }, 220);
     }
   });
@@ -8043,11 +8131,11 @@ function closeAllPanels() {
   document.querySelectorAll('.app-panel.app-panel-open').forEach((p) => {
     p.classList.remove('app-panel-open');
     setTimeout(() => {
-      p.style.display = 'none';
+      (p as HTMLElement).style.display = 'none';
     }, 220);
   });
   // Reset desktop layout shift
-  const root = document.getElementById('root');
+  const root = byId('root');
   if (root) root.style.marginRight = '';
   hideBackdrop();
 }
@@ -8057,9 +8145,10 @@ function closeAllPanels() {
 document.addEventListener(
   'touchstart',
   (e) => {
-    const handle = e.target.closest && e.target.closest('.app-panel-drag-handle');
+    const _et = e.target as HTMLElement | null;
+    const handle = _et && _et.closest && _et.closest('.app-panel-drag-handle');
     if (!handle || window.innerWidth > 600) return;
-    const panel = handle.closest('.app-panel');
+    const panel = handle.closest('.app-panel') as HTMLElement | null;
     if (!panel) return;
     const startY = e.touches[0].clientY;
     let dy = 0;
@@ -8164,14 +8253,14 @@ function buildWeeklyDigest(rows) {
 async function openHistoryPanel() {
   // Q5 — single-panel rule: opening one closes the other.
   closeOtherPanel('history-panel');
-  let panel = document.getElementById('history-panel');
+  let panel: HTMLElement = byId('history-panel');
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'history-panel';
     panel.className = 'app-panel app-panel-history';
     ensureBackdrop();
     if (window.innerWidth > 600) {
-      document.getElementById('root').style.marginRight = '360px';
+      byId('root').style.marginRight = '360px';
     }
     panel.innerHTML = `
       <div class="app-panel-drag-handle" aria-hidden="true"></div>
@@ -8192,7 +8281,7 @@ async function openHistoryPanel() {
       ensureBackdrop();
       showBackdrop();
       if (window.innerWidth > 600) {
-        document.getElementById('root').style.marginRight = '360px';
+        byId('root').style.marginRight = '360px';
       }
       requestAnimationFrame(() => panel.classList.add('app-panel-open'));
     } else {
@@ -8200,7 +8289,7 @@ async function openHistoryPanel() {
       return;
     }
   }
-  const list = document.getElementById('history-list');
+  const list = byId('history-list');
   const { data, error } = await sb
     .from('change_log')
     .select('*')
@@ -8261,9 +8350,9 @@ async function openHistoryPanel() {
 
 // Auto-refresh history if panel is open
 async function refreshHistoryIfOpen() {
-  const panel = document.getElementById('history-panel');
+  const panel = byId('history-panel');
   if (panel && panel.style.display !== 'none') {
-    const list = document.getElementById('history-list');
+    const list = byId('history-list');
     if (!list) return;
     const { data } = await sb
       .from('change_log')
@@ -8330,7 +8419,7 @@ function jumpToTransaction(txId) {
   }
   // Scroll to and highlight the transaction row
   setTimeout(() => {
-    const el = document.querySelector(`[data-tx-id="${txId}"]`);
+    const el = document.querySelector(`[data-tx-id="${txId}"]`) as HTMLElement | null;
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.background = 'var(--accent)';
@@ -8352,7 +8441,7 @@ async function jumpToHistoryEntry(entityType, entityId) {
     return;
   }
 
-  const highlight = (el, ms) => {
+  const highlight = (el: HTMLElement, ms?: number) => {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.style.outline = '2px solid var(--accent)';
     el.style.borderRadius = '6px';
@@ -8365,7 +8454,7 @@ async function jumpToHistoryEntry(entityType, entityId) {
   if (entityType === 'budget_amount') {
     if (state.activeTab !== 'budget') await switchTab('budget');
     setTimeout(() => {
-      const el = document.getElementById('cat-' + entityId);
+      const el = byId('cat-' + entityId);
       if (el) highlight(el);
       else toast('Category not found on current view');
     }, 200);
@@ -8375,7 +8464,9 @@ async function jumpToHistoryEntry(entityType, entityId) {
   if (entityType === 'budget_item') {
     if (state.activeTab !== 'budget') await switchTab('budget');
     setTimeout(() => {
-      const el = document.querySelector('[data-budget-item-id="' + entityId + '"]');
+      const el = document.querySelector(
+        '[data-budget-item-id="' + entityId + '"]',
+      ) as HTMLElement | null;
       if (el) {
         const catRow = el.closest('.cat-row');
         if (catRow) {
@@ -8387,7 +8478,9 @@ async function jumpToHistoryEntry(entityType, entityId) {
           }
         }
         setTimeout(() => {
-          const el2 = document.querySelector('[data-budget-item-id="' + entityId + '"]');
+          const el2 = document.querySelector(
+            '[data-budget-item-id="' + entityId + '"]',
+          ) as HTMLElement | null;
           if (el2) {
             highlight(el2);
             el2.style.background = 'var(--accent)';
@@ -8406,7 +8499,9 @@ async function jumpToHistoryEntry(entityType, entityId) {
   if (entityType === 'admin_item') {
     if (state.activeTab !== 'admin') await switchTab('admin');
     setTimeout(() => {
-      const el = document.querySelector('[data-admin-item-id="' + entityId + '"]');
+      const el = document.querySelector(
+        '[data-admin-item-id="' + entityId + '"]',
+      ) as HTMLElement | null;
       if (el) highlight(el);
       else toast('Admin item not found — may have been deleted');
     }, 300);
@@ -8416,7 +8511,9 @@ async function jumpToHistoryEntry(entityType, entityId) {
   if (entityType === 'admin_payment') {
     if (state.activeTab !== 'admin') await switchTab('admin');
     setTimeout(() => {
-      const el = document.querySelector('[data-admin-payment-id="' + entityId + '"]');
+      const el = document.querySelector(
+        '[data-admin-payment-id="' + entityId + '"]',
+      ) as HTMLElement | null;
       if (el) {
         const parentItem = el.closest('[data-admin-item-id]');
         if (parentItem) {
@@ -8427,7 +8524,9 @@ async function jumpToHistoryEntry(entityType, entityId) {
           }
         }
         setTimeout(() => {
-          const el2 = document.querySelector('[data-admin-payment-id="' + entityId + '"]');
+          const el2 = document.querySelector(
+            '[data-admin-payment-id="' + entityId + '"]',
+          ) as HTMLElement | null;
           if (el2) highlight(el2);
         }, 200);
       } else toast('Payment not found — may have been deleted');
@@ -8442,7 +8541,7 @@ async function jumpToHistoryEntry(entityType, entityId) {
 async function openSearchPanel() {
   // Q5 \u2014 single-panel rule: opening one closes the other.
   closeOtherPanel('search-panel');
-  let panel = document.getElementById('search-panel');
+  let panel: HTMLElement = byId('search-panel');
   if (panel) {
     const wasHidden = panel.style.display === 'none' || !panel.classList.contains('app-panel-open');
     if (wasHidden) {
@@ -8450,10 +8549,10 @@ async function openSearchPanel() {
       ensureBackdrop();
       showBackdrop();
       if (window.innerWidth > 600) {
-        document.getElementById('root').style.marginRight = '420px';
+        byId('root').style.marginRight = '420px';
       }
       requestAnimationFrame(() => panel.classList.add('app-panel-open'));
-      setTimeout(() => document.getElementById('search-input').focus(), 50);
+      setTimeout(() => byId('search-input').focus(), 50);
     } else {
       closeAllPanels();
     }
@@ -8464,7 +8563,7 @@ async function openSearchPanel() {
   panel.className = 'app-panel app-panel-search';
   ensureBackdrop();
   if (window.innerWidth > 600) {
-    document.getElementById('root').style.marginRight = '420px';
+    byId('root').style.marginRight = '420px';
   }
   panel.innerHTML = `
     <div class="app-panel-drag-handle" aria-hidden="true"></div>
@@ -8488,19 +8587,19 @@ async function openSearchPanel() {
   requestAnimationFrame(() => panel.classList.add('app-panel-open'));
 
   let debounceTimer;
-  const input = document.getElementById('search-input');
+  const input = byId('search-input');
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => runSearch(input.value.trim()), 300);
   });
-  document.getElementById('search-all-months').addEventListener('change', () => {
+  byId('search-all-months').addEventListener('change', () => {
     if (input.value.trim()) runSearch(input.value.trim());
   });
   setTimeout(() => input.focus(), 50);
 }
 
 async function runSearch(query) {
-  const resultsDiv = document.getElementById('search-results');
+  const resultsDiv = byId('search-results');
   if (!query || query.length < 2) {
     resultsDiv.innerHTML =
       '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Type at least 2 characters to search</div>';
@@ -8509,7 +8608,7 @@ async function runSearch(query) {
   resultsDiv.innerHTML =
     '<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:2rem 0;">Searching\u2026</div>';
 
-  const allMonths = document.getElementById('search-all-months').checked;
+  const allMonths = byId('search-all-months').checked;
   let transactions;
   let budgetItemMatches = [];
 
@@ -8579,7 +8678,7 @@ async function runSearch(query) {
   };
 
   // Group by month for trend
-  const byMonth = {};
+  const byMonth: Record<string, { total: number; count: number; num: number }> = {};
   matches.forEach((t) => {
     const mName = t.months ? t.months.month_name : 'Unknown';
     const mNum = t.months ? t.months.month_num : 0;
@@ -8590,7 +8689,7 @@ async function runSearch(query) {
   const sortedMonths = Object.entries(byMonth).sort((a, b) => a[1].num - b[1].num);
 
   // Group by category for breakdown
-  const byCat = {};
+  const byCat: Record<string, { total: number; count: number }> = {};
   matches.forEach((t) => {
     if (!byCat[t.category]) byCat[t.category] = { total: 0, count: 0 };
     byCat[t.category].total += t.amount || 0;
@@ -8768,21 +8867,22 @@ function fabSpec() {
 }
 
 function renderFab() {
-  let fab = document.getElementById('mobile-fab');
+  let fab: HTMLElement = byId('mobile-fab');
   const spec = fabSpec();
   if (!spec) {
     if (fab) fab.remove();
     return;
   }
   if (!fab) {
-    fab = document.createElement('button');
-    fab.id = 'mobile-fab';
-    fab.type = 'button';
-    fab.className = 'mobile-fab';
-    fab.innerHTML = '+';
-    fab.setAttribute('aria-label', spec.label);
-    fab.onclick = openQuickAddSheet;
-    document.body.appendChild(fab);
+    const fabBtn = document.createElement('button');
+    fabBtn.id = 'mobile-fab';
+    fabBtn.type = 'button';
+    fabBtn.className = 'mobile-fab';
+    fabBtn.innerHTML = '+';
+    fabBtn.setAttribute('aria-label', spec.label);
+    fabBtn.onclick = openQuickAddSheet;
+    document.body.appendChild(fabBtn);
+    fab = fabBtn;
   } else {
     fab.setAttribute('aria-label', spec.label);
   }
@@ -8792,7 +8892,7 @@ function openQuickAddSheet() {
   const spec = fabSpec();
   if (!spec) return;
   closeAllPanels();
-  let panel = document.getElementById('quick-add-sheet');
+  let panel: HTMLElement = byId('quick-add-sheet');
   if (panel) panel.remove();
   panel = document.createElement('div');
   panel.id = 'quick-add-sheet';
@@ -8814,7 +8914,7 @@ function openQuickAddSheet() {
   requestAnimationFrame(() => panel.classList.add('app-panel-open'));
   // Focus first input
   setTimeout(() => {
-    const f = panel.querySelector('input,select');
+    const f = panel.querySelector('input,select') as HTMLElement | null;
     if (f) f.focus();
   }, 240);
 }
@@ -8872,11 +8972,11 @@ function quickAddSheetBody(kind) {
 async function submitQuickAdd(kind) {
   const monthNum = currentMonthNum();
   if (kind === 'tx') {
-    const cat = document.getElementById('qa-cat').value;
-    const store = document.getElementById('qa-store').value.trim();
-    const item = document.getElementById('qa-item').value.trim();
-    const amount = parseFloat(document.getElementById('qa-amount').value);
-    const date = document.getElementById('qa-date').value;
+    const cat = byId('qa-cat').value;
+    const store = byId('qa-store').value.trim();
+    const item = byId('qa-item').value.trim();
+    const amount = parseFloat(byId('qa-amount').value);
+    const date = byId('qa-date').value;
     if (!cat || !amount || isNaN(amount)) {
       toast('Fill in category and amount');
       return;
@@ -8924,9 +9024,9 @@ async function submitQuickAdd(kind) {
     return;
   }
   if (kind === 'travel') {
-    const label = document.getElementById('qa-label').value.trim();
-    const destination = document.getElementById('qa-dest').value.trim();
-    const amount = parseFloat(document.getElementById('qa-amount').value);
+    const label = byId('qa-label').value.trim();
+    const destination = byId('qa-dest').value.trim();
+    const amount = parseFloat(byId('qa-amount').value);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
@@ -8948,9 +9048,9 @@ async function submitQuickAdd(kind) {
     return;
   }
   if (kind === 'charity') {
-    const label = document.getElementById('qa-label').value.trim();
-    const dateVal = document.getElementById('qa-date').value || null;
-    const amount = parseFloat(document.getElementById('qa-amount').value);
+    const label = byId('qa-label').value.trim();
+    const dateVal = byId('qa-date').value || null;
+    const amount = parseFloat(byId('qa-amount').value);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in name and amount');
       return;
@@ -8978,8 +9078,8 @@ async function submitQuickAdd(kind) {
     return;
   }
   if (kind === 'admin') {
-    const label = document.getElementById('qa-label').value.trim();
-    const amount = parseFloat(document.getElementById('qa-amount').value);
+    const label = byId('qa-label').value.trim();
+    const amount = parseFloat(byId('qa-amount').value);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
@@ -9134,7 +9234,7 @@ function computePending() {
 
 function togglePendingDecisions() {
   const open = localStorage.getItem('pendingDecisionsOpen') === 'true';
-  localStorage.setItem('pendingDecisionsOpen', !open);
+  localStorage.setItem('pendingDecisionsOpen', !open as unknown as string);
   renderApp();
 }
 
@@ -9144,8 +9244,8 @@ function pendingJump(tab, paymentId) {
     // Best-effort highlight on the relevant payment row after the tab renders
     setTimeout(() => {
       const el =
-        document.querySelector(`[data-payment-id="${paymentId}"]`) ||
-        document.getElementById('pmt-' + paymentId);
+        (document.querySelector(`[data-payment-id="${paymentId}"]`) as HTMLElement | null) ||
+        byId('pmt-' + paymentId);
       if (el && typeof el.scrollIntoView === 'function') {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.style.transition = 'background 0.4s ease';
@@ -9180,7 +9280,11 @@ document.addEventListener(
     // (setYearViewMonth); the global month-swipe would jump months out from
     // under a vertical scroll, so it's disabled here.
     if (state.activeTab === 'year') return;
-    if (e.target.closest('.app-panel') || e.target.closest('input,textarea,select,button')) return;
+    if (
+      (e.target as HTMLElement).closest('.app-panel') ||
+      (e.target as HTMLElement).closest('input,textarea,select,button')
+    )
+      return;
     if (e.touches.length !== 1) return;
     _swipeStartX = e.touches[0].clientX;
     _swipeStartY = e.touches[0].clientY;
@@ -9212,7 +9316,7 @@ document.addEventListener(
 // ── Toolbar overflow on mobile (collapse 6 icons into ⋯ menu) ─────────
 function openToolbarOverflow(ev) {
   if (ev) ev.stopPropagation();
-  let menu = document.getElementById('toolbar-overflow-menu');
+  let menu: HTMLElement = byId('toolbar-overflow-menu');
   if (menu) {
     menu.remove();
     return;
@@ -9222,7 +9326,7 @@ function openToolbarOverflow(ev) {
   menu.className = 'toolbar-overflow-menu';
   const undoDisabled = undoStack.length === 0 ? 'disabled' : '';
   const redoDisabled = redoStack.length === 0 ? 'disabled' : '';
-  const close = "document.getElementById('toolbar-overflow-menu')?.remove();";
+  const close = "byId('toolbar-overflow-menu')?.remove();";
   menu.innerHTML = `
     <button class="toolbar-overflow-item" ${undoDisabled} onclick="doUndo();${close}">${ICON_UNDO}<span>Undo</span></button>
     <button class="toolbar-overflow-item" ${redoDisabled} onclick="doRedo();${close}">${ICON_REDO}<span>Redo</span></button>
@@ -9257,8 +9361,8 @@ function openToolbarOverflow(ev) {
 // horizontal scroll container — without scrolling the whole page (which
 // element.scrollIntoView() would do).
 function scrollActiveMonthIntoView() {
-  const c = document.querySelector('.hdr-months .month-tabs');
-  const a = c && c.querySelector('.mtab.active');
+  const c = document.querySelector('.hdr-months .month-tabs') as HTMLElement | null;
+  const a = c && (c.querySelector('.mtab.active') as HTMLElement | null);
   if (c && a) c.scrollLeft = a.offsetLeft - c.clientWidth / 2 + a.clientWidth / 2;
 }
 
@@ -9278,7 +9382,7 @@ const MOBILE_TABS_MORE = [
 ];
 
 function renderMobileTabBar() {
-  let bar = document.getElementById('mobile-tabbar');
+  let bar: HTMLElement = byId('mobile-tabbar');
   if (!bar) {
     bar = document.createElement('nav');
     bar.id = 'mobile-tabbar';
@@ -9302,7 +9406,7 @@ function renderMobileTabBar() {
 
 function openMoreSheet() {
   closeAllPanels();
-  let panel = document.getElementById('more-sheet');
+  let panel: HTMLElement = byId('more-sheet');
   if (panel) panel.remove();
   panel = document.createElement('div');
   panel.id = 'more-sheet';
@@ -9337,8 +9441,8 @@ function openMoreSheet() {
 // indicator. Manual sync trigger: clicking the indicator asks the SW to
 // drain immediately.
 function updateOfflineQueueUI(count) {
-  const el = document.getElementById('offline-queue-indicator');
-  const num = document.getElementById('offline-queue-count');
+  const el = byId('offline-queue-indicator');
+  const num = byId('offline-queue-count');
   if (!el || !num) return;
   if (count > 0) {
     num.textContent = String(count);
@@ -9381,3 +9485,196 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Inline on* handlers in the rendered HTML resolve names against the global
+// scope. As a classic script every top-level function was implicitly global;
+// as an ES module they are module-scoped, so re-expose them on window to keep
+// the 215 inline handlers working byte-for-byte. (fmt is a top-level const.)
+// ─────────────────────────────────────────────────────────────────────
+Object.assign(window as unknown as Record<string, unknown>, {
+  _installInputModeObserver,
+  addAdminItem,
+  addAdminSub,
+  addBudgetItem,
+  addCashAccount,
+  addCharityItem,
+  addCharityPayment,
+  addCharitySub,
+  addIncomeItem,
+  addTashlum,
+  addTransaction,
+  addTransactionSidebar,
+  addTravelItem,
+  addTravelPayment,
+  addTravelSub,
+  ag,
+  anyPanelOpen,
+  applyNumericInputModes,
+  applyRibbonHeight,
+  applyScrollFadeListeners,
+  authSignOut,
+  bootstrap,
+  budgetItemsTotal,
+  buildWeeklyDigest,
+  cacheKey,
+  cashILS,
+  catBudget,
+  categoryYearlyGap,
+  closeAllPanels,
+  closeModal,
+  closeOtherPanel,
+  collapseAll,
+  computeOwed,
+  computePending,
+  createMonth,
+  currentMonthNum,
+  deleteAdminItem,
+  deleteAdminSub,
+  deleteBudgetItem,
+  deleteCashAccount,
+  deleteCharityItem,
+  deleteCharityPayment,
+  deleteCharitySub,
+  deleteIncomeItem,
+  deleteTransaction,
+  deleteTravelItem,
+  deleteTravelPayment,
+  deleteTravelSub,
+  doRedo,
+  doUndo,
+  editHousingCell,
+  editRecurringCell,
+  ensureBackdrop,
+  esc,
+  fabSpec,
+  fmt,
+  gapMarker,
+  getIncomeEst,
+  handleForgotPassword,
+  handleLoginSubmit,
+  hideBackdrop,
+  init,
+  isAnyEstimated,
+  isBigStore,
+  jumpTo,
+  jumpToHistoryEntry,
+  jumpToTransaction,
+  loadAdminData,
+  loadAllHousingItems,
+  loadAllRecurringItems,
+  loadAvailableYears,
+  loadBizData,
+  loadBudgetItems,
+  loadBudgets,
+  loadCashData,
+  loadCharityData,
+  loadFresh,
+  loadIncomeItems,
+  loadMonths,
+  loadTransactions,
+  loadTravelData,
+  loadYearData,
+  logChange,
+  navMonth,
+  onYearSelect,
+  openHistoryPanel,
+  openMoreSheet,
+  openQuickAddSheet,
+  openSearchPanel,
+  openSnapshot,
+  openToolbarOverflow,
+  pendingJump,
+  pushUndo,
+  quickAddFor,
+  quickAddSheetBody,
+  refreshBiz,
+  refreshHistoryIfOpen,
+  renderAccountantTracker,
+  renderAdminTab,
+  renderApp,
+  renderBizTab,
+  renderCashTab,
+  renderCharityTab,
+  renderFab,
+  renderHousingGrid,
+  renderLogin,
+  renderMobileTabBar,
+  renderRecurringGrid,
+  renderSpendingGrid,
+  renderTravelTab,
+  renderYearSnapshot,
+  restoreCache,
+  runSearch,
+  saveAdminAllocation,
+  saveAdminItem,
+  saveBizField,
+  saveBudget,
+  saveBudgetItem,
+  saveCache,
+  saveCashField,
+  saveCharityAllocation,
+  saveCharityItem,
+  saveHousingFromMonth,
+  saveIncome,
+  saveIncomeField,
+  saveIncomeItemAmount,
+  saveIncomeItemLabel,
+  saveInlineAdd,
+  saveRecurringFromMonth,
+  saveSavingsField,
+  saveTravelAllocation,
+  saveTravelItem,
+  scrollActiveMonthIntoView,
+  searchJumpToTx,
+  seedBudgetItemsFromTemplate,
+  seedYear,
+  setIncomeEst,
+  setItemAsDefault,
+  setTxSort,
+  setYearFilter,
+  setYearMobileFull,
+  setYearViewMonth,
+  setupBizMonth,
+  showAddMonth,
+  showBackdrop,
+  showEditIncome,
+  showLoginError,
+  snToggle,
+  spentByCategory,
+  startRibbonDrag,
+  submitQuickAdd,
+  switchMonth,
+  switchTab,
+  switchYear,
+  syncPtOwedToCash,
+  syncQueueNow,
+  toast,
+  toastDeleted,
+  today,
+  todayMonthForYear,
+  toggleCat,
+  toggleGroup,
+  toggleHousingGrid,
+  toggleIncomeEst,
+  toggleOwedStrip,
+  togglePendingDecisions,
+  toggleRecurringGrid,
+  toggleRibbon,
+  toggleRibbonExpand,
+  toggleSpendingGrid,
+  totalIncome,
+  updateAdminSub,
+  updateCharityPayment,
+  updateCharitySub,
+  updateOfflineQueueUI,
+  updateSbStores,
+  updateStoreSuggestions,
+  updateTravelPayment,
+  updateTravelSub,
+  updateTx,
+  updateUndoButtons,
+  yrCollapseAll,
+  yrExpandAll,
+  yrToggle,
+});

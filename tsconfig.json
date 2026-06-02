@@ -18,6 +18,6 @@
     "strict": false,
     "noImplicitAny": false
   },
-  "include": ["app.js"],
+  "include": ["app.ts"],
   "exclude": ["node_modules", "dist", "tests", "playwright.config.js"]
 }

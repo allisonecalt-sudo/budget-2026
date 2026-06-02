@@ -26,7 +26,10 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
-    <script src="app.js" defer></script>
+    <!-- Compiled from app.ts by `npm run build`. The supabase CDN script above
+         is a classic defer script and runs before this module (document order),
+         so window.supabase is ready when app.js evaluates. -->
+    <script type="module" src="dist/app.js"></script>
     <script>
       // PWA service worker registration (B4) — registers on load, no-op if unsupported.
       if ('serviceWorker' in navigator) {

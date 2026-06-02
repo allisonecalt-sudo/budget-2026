@@ -7,10 +7,10 @@
     "test": "playwright test",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint app.js sw.js",
-    "lint:fix": "eslint app.js sw.js --fix",
-    "format": "prettier --write app.js sw.js styles.css index.html manifest.webmanifest",
-    "format:check": "prettier --check app.js sw.js styles.css index.html manifest.webmanifest"
+    "lint": "eslint app.ts sw.js",
+    "lint:fix": "eslint app.ts sw.js --fix",
+    "format": "prettier --write app.ts sw.js styles.css index.html manifest.webmanifest",
+    "format:check": "prettier --check app.ts sw.js styles.css index.html manifest.webmanifest"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,7 @@
   "homepage": "https://github.com/allisonecalt-sudo/budget-2026#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@supabase/supabase-js": "^2.107.0",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
     "eslint": "^10.1.0",
