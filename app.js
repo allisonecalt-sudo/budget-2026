@@ -171,6 +171,7 @@ let state = {
   yearData: null,
   inlineAddCat: null,
   allStores: [],
+  yearViewMonth: null, // mobile Year view: which month column is shown (1-12); null = auto
 };
 
 // ── Cache (stale-while-revalidate for fast startup) ──────────────────
@@ -7437,8 +7438,8 @@ function renderYearSnapshot() {
     (!showProjected ? '#fff' : 'var(--dim)') +
     ";cursor:pointer;font-family:'DM Sans',sans-serif;\">Actual Only</button>" +
     '<span style="margin-left:auto;"></span>' +
-    '<button onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
-    '<button onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
+    '<button class="yr-table-only" onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
+    '<button class="yr-table-only" onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
     '</div>';
   // B5 \u2014 Filter chips (slice the year grid)
   const yearFilter = localStorage.getItem('yearFilter') || 'all';
@@ -7476,6 +7477,124 @@ function renderYearSnapshot() {
     .map((s, i) => 'data-yr-col-' + (i + 1) + '="' + (s ? 'above' : 'ok') + '"')
     .join(' ');
 
+  // \u2500\u2500 MOBILE (\u2264600px) one-month-at-a-time layout \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Reuses `computed` (same per-month values + annual totals as the table),
+  // so the mobile number for (month, row) is identical to the desktop column.
+  // Selected month: state.yearViewMonth, defaulting to current month (or 1).
+  let selMonthNum = state.yearViewMonth;
+  if (!selMonthNum || !months.some((m) => m.month_num === selMonthNum)) {
+    const auto = todayMonth;
+    selMonthNum = months.some((m) => m.month_num === auto) ? auto : months[0]?.month_num || 1;
+  }
+  const selIdx = months.findIndex((m) => m.month_num === selMonthNum);
+  const selMonth = months[selIdx];
+  const isFuture = selMonth ? selMonth.month_num > todayMonth : false;
+
+  // Month chip selector
+  const chipsMonthHtml =
+    '<div class="ym-monthbar">' +
+    months
+      .map((m) => {
+        let c = 'ym-chip';
+        if (m.month_num === selMonthNum) c += ' active';
+        if (m.month_num === todayMonth) c += ' today';
+        if (m.month_num > todayMonth) c += ' future';
+        return (
+          '<button class="' +
+          c +
+          '" onclick="setYearViewMonth(' +
+          m.month_num +
+          ')">' +
+          m.month_name.slice(0, 3) +
+          '</button>'
+        );
+      })
+      .join('') +
+    '</div>';
+
+  // Annual totals summary card (year-level numbers from the ribbon math)
+  const annCardHtml =
+    '<div class="card ym-annual">' +
+    '<div class="ym-annual-title">' +
+    state.currentYear +
+    ' \u00B7 Annual</div>' +
+    '<div class="ym-annual-grid">' +
+    '<div class="ym-annual-cell"><span class="ym-al">Income (YTD / Proj)</span><span class="ym-av">' +
+    fmtY(ytdIncome) +
+    ' / ' +
+    fmtY(totalAnnInc) +
+    '</span></div>' +
+    '<div class="ym-annual-cell"><span class="ym-al">Saved + Invested (YTD / Proj)</span><span class="ym-av" style="color:var(--green)">' +
+    fmtY(ytdSavings) +
+    ' / ' +
+    fmtY(projSavings) +
+    '</span></div>' +
+    '<div class="ym-annual-cell"><span class="ym-al">\u2708\uFE0F Travel proj / gap</span><span class="ym-av">' +
+    fmtY(totalTravelProjected) +
+    ' \u00B7 <span style="color:' +
+    (travelGap > 0 ? 'var(--red)' : 'var(--green)') +
+    '">' +
+    fmtY(Math.abs(travelGap)) +
+    ' ' +
+    (travelGap > 0 ? 'gap' : 'funded') +
+    '</span></span></div>' +
+    '<div class="ym-annual-cell"><span class="ym-al">\u{1F4CB} Admin proj / gap</span><span class="ym-av">' +
+    fmtY(totalAdminProjected) +
+    ' \u00B7 <span style="color:' +
+    (adminGap > 0 ? 'var(--red)' : 'var(--green)') +
+    '">' +
+    fmtY(Math.abs(adminGap)) +
+    ' ' +
+    (adminGap > 0 ? 'gap' : 'funded') +
+    '</span></span></div>' +
+    '</div></div>';
+
+  // Per-month rows \u2014 grouped by section, reusing computed[].values[selIdx]
+  let mobileRows = '';
+  computed.forEach((item) => {
+    const row = item.row;
+    if (row.type === 'section') {
+      mobileRows += '<div class="ym-section">' + row.label + '</div>';
+      return;
+    }
+    if (selIdx < 0) return;
+    let valStr;
+    if (item.isPct) {
+      valStr = (item.values[selIdx] * 100).toFixed(1) + '%';
+    } else {
+      valStr = fmtYZ(item.values[selIdx]);
+    }
+    let cls = 'ym-row';
+    if (row.type === 'sub') cls += ' ym-row-sub';
+    else if (row.type === 'net') {
+      const v = item.values[selIdx];
+      cls += ' ym-row-net' + (v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '');
+    } else if (row.bold) cls += ' ym-row-bold';
+    mobileRows +=
+      '<div class="' +
+      cls +
+      '"><span class="ym-label">' +
+      row.label +
+      '</span><span class="ym-dots"></span><span class="ym-val">' +
+      valStr +
+      '</span></div>';
+  });
+
+  const mobileHtml =
+    '<div class="year-mobile">' +
+    annCardHtml +
+    chipsMonthHtml +
+    '<div class="card ym-monthcard">' +
+    '<div class="ym-monthcard-head">' +
+    (selMonth ? selMonth.month_name : '') +
+    (selMonthNum === todayMonth ? ' \u25C9' : '') +
+    (isFuture
+      ? '<span class="ym-proj-tag">' + (showProjected ? 'projected' : 'actual') + '</span>'
+      : '') +
+    '</div>' +
+    mobileRows +
+    '</div></div>';
+
   return (
     '<div class="year-tab-wrap" data-year-filter="' +
     yearFilter +
@@ -7489,8 +7608,15 @@ function renderYearSnapshot() {
     thead +
     '<tbody>' +
     tbody +
-    '</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div></div>'
+    '</tbody></table></div><div style="margin-top:.6rem;font-size:.62rem;color:var(--dim);text-align:center;">\u25C9 = current month &nbsp;|&nbsp; italics = projected</div>' +
+    mobileHtml +
+    '</div>'
   );
+}
+
+function setYearViewMonth(monthNum) {
+  state.yearViewMonth = monthNum;
+  renderApp();
 }
 
 function setYearFilter(key) {

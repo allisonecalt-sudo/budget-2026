@@ -3545,3 +3545,181 @@ tr.collapsed {
     margin-right: 0.2rem;
   }
 }
+
+/* ── Year view: mobile one-month-at-a-time layout ──────────────────── */
+/* Desktop default: wide table shown, mobile layout hidden. */
+.year-mobile {
+  display: none;
+}
+@media (max-width: 600px) {
+  .year-tab-wrap .year-table-wrap {
+    display: none;
+  }
+  .year-mobile {
+    display: block;
+    max-width: 100%;
+  }
+  /* These controls only act on the (now-hidden) desktop table — hide on mobile.
+     The Projected/Actual toggle stays; it drives the mobile figures too. */
+  .year-tab-wrap .yr-table-only,
+  .year-tab-wrap .year-filter-chips {
+    display: none !important;
+  }
+}
+
+/* Annual summary card */
+.ym-annual {
+  padding: 0.9rem 1rem;
+}
+.ym-annual-title {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.6rem;
+}
+.ym-annual-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+.ym-annual-cell {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+.ym-annual-cell .ym-al {
+  color: var(--dim);
+  flex: 1 1 auto;
+}
+.ym-annual-cell .ym-av {
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Month chip selector */
+.ym-monthbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+.ym-chip {
+  flex: 1 1 auto;
+  min-width: 2.7rem;
+  font-size: 0.72rem;
+  padding: 0.35rem 0;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.ym-chip.today {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ym-chip.future {
+  color: var(--dim);
+  border-style: dashed;
+}
+.ym-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Selected-month card */
+.ym-monthcard {
+  padding: 0.5rem 1rem 0.75rem;
+}
+.ym-monthcard-head {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink, var(--accent));
+  padding: 0.55rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ym-proj-tag {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.05rem 0.4rem;
+}
+
+/* Section header inside month card */
+.ym-section {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0.85rem 0 0.15rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+.ym-section:first-child {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 0.25rem;
+}
+
+/* Label … value rows */
+.ym-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.28rem 0;
+  font-size: 0.85rem;
+}
+.ym-row .ym-label {
+  flex: 0 1 auto;
+  color: var(--ink, inherit);
+}
+.ym-row .ym-dots {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted var(--border);
+  transform: translateY(-0.18rem);
+  min-width: 0.75rem;
+}
+.ym-row .ym-val {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.ym-row-sub {
+  padding-left: 0.85rem;
+  font-size: 0.8rem;
+}
+.ym-row-sub .ym-label {
+  color: var(--dim);
+}
+.ym-row-bold .ym-label,
+.ym-row-bold .ym-val {
+  font-weight: 700;
+}
+.ym-row-net .ym-label,
+.ym-row-net .ym-val {
+  font-weight: 600;
+}
+.ym-row-net.net-pos .ym-val {
+  color: var(--green);
+}
+.ym-row-net.net-neg .ym-val {
+  color: var(--red);
+}
