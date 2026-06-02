@@ -3547,11 +3547,41 @@ tr.collapsed {
 }
 
 /* ── Year view: mobile one-month-at-a-time layout ──────────────────── */
-/* Desktop default: wide table shown, mobile layout hidden. */
+/* Desktop default: wide table shown, mobile layout + mobile toggle hidden. */
 .year-mobile {
   display: none;
 }
+.ym-modetoggle {
+  display: none;
+}
 @media (max-width: 600px) {
+  /* Mobile-only Month ⇄ Full Year segmented toggle. Lives outside both the
+     month layout and the table-wrap so it stays visible while switching. */
+  .ym-modetoggle {
+    display: inline-flex;
+    gap: 0.3rem;
+    margin-bottom: 0.85rem;
+    padding: 0.2rem;
+    border-radius: 14px;
+    background: var(--surface2);
+  }
+  .ym-modebtn {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 11px;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--dim);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .ym-modebtn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  /* Default (Month mode): wide table hidden, one-month layout shown. */
   .year-tab-wrap .year-table-wrap {
     display: none;
   }
@@ -3564,6 +3594,48 @@ tr.collapsed {
   .year-tab-wrap .yr-table-only,
   .year-tab-wrap .year-filter-chips {
     display: none !important;
+  }
+  /* Full Year mode: show the scrollable 12-month grid, hide the month layout.
+     The .ym-modetoggle stays visible so they can switch back. */
+  .year-tab-wrap.ym-full .year-table-wrap {
+    display: block;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Size to viewport so the TABLE scrolls inside, not the page. */
+    max-width: 100%;
+    max-height: 75vh;
+  }
+  .year-tab-wrap.ym-full .year-mobile {
+    display: none;
+  }
+  /* Compact but readable; tabular figures stay aligned while scrolling. */
+  .year-tab-wrap.ym-full .year-table {
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .year-tab-wrap.ym-full .year-table th,
+  .year-tab-wrap.ym-full .year-table td {
+    padding: 0.3rem 0.45rem;
+  }
+  /* Frozen first column (row labels) — opaque surface so cells don't bleed. */
+  .year-tab-wrap.ym-full .year-table th:first-child,
+  .year-tab-wrap.ym-full .year-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--surface);
+    z-index: 2;
+  }
+  /* Frozen header row (months) stays while scrolling vertically. */
+  .year-tab-wrap.ym-full .year-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+  /* Top-left cell overlaps both — highest z-index. */
+  .year-tab-wrap.ym-full .year-table thead th:first-child {
+    z-index: 3;
   }
 }
 

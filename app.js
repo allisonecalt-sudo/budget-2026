@@ -172,6 +172,7 @@ let state = {
   inlineAddCat: null,
   allStores: [],
   yearViewMonth: null, // mobile Year view: which month column is shown (1-12); null = auto
+  yearMobileFull: false, // mobile Year view: false = one-month layout, true = full 12-month grid
 };
 
 // ── Cache (stale-while-revalidate for fast startup) ──────────────────
@@ -7441,6 +7442,18 @@ function renderYearSnapshot() {
     '<button class="yr-table-only" onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
     '<button class="yr-table-only" onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
     '</div>';
+  // Mobile-only Month ⇄ Full Year toggle. Lives in its own .ym-modetoggle block
+  // OUTSIDE .year-mobile / .year-table-wrap so it stays visible in BOTH modes.
+  const ymFull = state.yearMobileFull;
+  const modeToggleHtml =
+    '<div class="ym-modetoggle">' +
+    '<button onclick="setYearMobileFull(false)" class="ym-modebtn' +
+    (!ymFull ? ' active' : '') +
+    '">📅 Month</button>' +
+    '<button onclick="setYearMobileFull(true)" class="ym-modebtn' +
+    (ymFull ? ' active' : '') +
+    '">📊 Full Year</button>' +
+    '</div>';
   // B5 \u2014 Filter chips (slice the year grid)
   const yearFilter = localStorage.getItem('yearFilter') || 'all';
   const chipDef = [
@@ -7596,11 +7609,14 @@ function renderYearSnapshot() {
     '</div></div>';
 
   return (
-    '<div class="year-tab-wrap" data-year-filter="' +
+    '<div class="year-tab-wrap' +
+    (ymFull ? ' ym-full' : '') +
+    '" data-year-filter="' +
     yearFilter +
     '" ' +
     aboveAttrs +
     '>' +
+    modeToggleHtml +
     toggleHtml +
     chipsHtml +
     summaryHtml +
@@ -7616,6 +7632,11 @@ function renderYearSnapshot() {
 
 function setYearViewMonth(monthNum) {
   state.yearViewMonth = monthNum;
+  renderApp();
+}
+
+function setYearMobileFull(v) {
+  state.yearMobileFull = !!v;
   renderApp();
 }
 
