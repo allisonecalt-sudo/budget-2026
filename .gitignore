@@ -1,6 +1,7 @@
 node_modules/
 test-results/
 playwright-report/
+dist/
 
 # Playwright saved auth session (Supabase tokens) — never commit
 tests/.auth/
