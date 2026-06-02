@@ -229,6 +229,12 @@ function restoreCache() {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+// Agorot rounding — snap a money sum to 2 decimals to kill float drift
+// (e.g. 0.1 + 0.2 = 0.30000000000000004). Apply ONLY at sum/total boundaries
+// so equality and display are exact; does NOT change any real displayed value.
+function ag(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
 const fmt = (n) =>
   '₪' +
   Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -331,35 +337,39 @@ function today() {
 
 // ── Data loading ──────────────────────────────────────────────────────
 async function loadMonths() {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('months')
     .select('*')
     .eq('year', state.currentYear)
     .order('month_num');
+  if (error) toast('Could not load months');
   state.months = data || [];
 }
 
 async function loadTransactions(monthId) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('transactions')
     .select('*')
     .eq('month_id', monthId)
     .order('created_at', { ascending: false });
+  if (error) toast('Could not load transactions');
   state.transactions = data || [];
 }
 
 async function loadBudgets(monthId) {
-  const { data } = await sb.from('budgets').select('*').eq('month_id', monthId);
+  const { data, error } = await sb.from('budgets').select('*').eq('month_id', monthId);
+  if (error) toast('Could not load budgets');
   state.budgets = {};
   (data || []).forEach((b) => (state.budgets[b.category] = b.amount));
 }
 
 async function loadBudgetItems(monthId) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('budget_items')
     .select('*')
     .eq('month_id', monthId)
     .order('sort_order');
+  if (error) toast('Could not load budget items');
   state.budgetItems = {};
   (data || []).forEach((item) => {
     if (!state.budgetItems[item.category]) state.budgetItems[item.category] = [];
@@ -412,7 +422,8 @@ async function saveRecurringFromMonth(label, fromMonthNum, newAmount, forward) {
     const items = state.allRecurringItems[month.id];
     const item = items.find((i) => i.label === label);
     if (item) {
-      await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
+      const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
+      if (error) toast('Could not save recurring item');
       item.amount = num;
     } else {
       // Item doesn't exist for this month — create it
@@ -786,7 +797,8 @@ async function saveHousingFromMonth(label, fromMonthNum, newAmount, forward) {
     const items = state.allHousingItems[month.id];
     const item = items.find((i) => i.label === label);
     if (item) {
-      await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
+      const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
+      if (error) toast('Could not save recurring item');
       item.amount = num;
     } else {
       const { data: newItem } = await sb
@@ -1288,7 +1300,7 @@ function renderSpendingGrid(catKey) {
 function budgetItemsTotal(catKey) {
   const items = state.budgetItems[catKey];
   if (!items || items.length === 0) return null; // null = use manual budget
-  return items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  return ag(items.reduce((sum, i) => sum + (Number(i.amount) || 0), 0));
 }
 
 function catBudget(catKey) {
@@ -1660,15 +1672,21 @@ function spentByCategory() {
       .filter((p) => p.month_num === mn)
       .reduce((s, p) => s + Number(p.amount), 0);
   }
+  // Snap each category total to agorot at this boundary (kills float drift
+  // from the running += accumulation above) before display/comparison.
+  Object.keys(totals).forEach((k) => {
+    totals[k] = ag(totals[k]);
+  });
   return totals;
 }
 
 async function loadIncomeItems(monthId) {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('income_items')
     .select('*')
     .eq('month_id', monthId)
     .order('created_at');
+  if (error) toast('Could not load income items');
   state.incomeItems = data || [];
 }
 
@@ -1698,11 +1716,11 @@ function isAnyEstimated(monthId) {
 
 function totalIncome(month) {
   const extras = state.incomeItems.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-  return (
+  return ag(
     (Number(month.income_petachya) || 0) +
-    (Number(month.income_clalit) || 0) +
-    (Number(month.income_private) || 0) +
-    extras
+      (Number(month.income_clalit) || 0) +
+      (Number(month.income_private) || 0) +
+      extras,
   );
 }
 
@@ -2022,15 +2040,17 @@ function renderApp() {
   }
   const spent = spentByCategory();
   // For hasTab categories, use allocation (budget) not actual payments in top-line totals
-  const totalSpent =
+  const totalSpent = ag(
     CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0) +
-    (state.budgets['savings_bank'] || 0) +
-    (state.budgets['savings_invested'] || 0);
-  const remaining = income - totalSpent;
-  const totalBudgeted =
+      (state.budgets['savings_bank'] || 0) +
+      (state.budgets['savings_invested'] || 0),
+  );
+  const remaining = ag(income - totalSpent);
+  const totalBudgeted = ag(
     CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0) +
-    (state.budgets['savings_bank'] || 0) +
-    (state.budgets['savings_invested'] || 0);
+      (state.budgets['savings_bank'] || 0) +
+      (state.budgets['savings_invested'] || 0),
+  );
 
   root.innerHTML = `
     <div class="hdr">
@@ -2089,8 +2109,8 @@ function renderApp() {
       if (state.activeTab !== 'budget' || state.loading) return '';
       const ribbonHidden = localStorage.getItem('ribbonHidden') === 'true';
       const ribbonExpanded = localStorage.getItem('ribbonExpanded') === 'true';
-      const leftToBudget = income - totalBudgeted;
-      const remainingInBudget = totalBudgeted - totalSpent;
+      const leftToBudget = ag(income - totalBudgeted);
+      const remainingInBudget = ag(totalBudgeted - totalSpent);
       const n = (v) =>
         v == null || v === ''
           ? ''
@@ -2105,12 +2125,11 @@ function renderApp() {
       // Snapshot table rows for expanded view
       const groupRows = CATEGORY_GROUPS.map((group) => {
         const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-        const gs = cats.reduce(
-          (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
-          0,
+        const gs = ag(
+          cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
         );
-        const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
-        const gr = gb - gs;
+        const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
+        const gr = ag(gb - gs);
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
         const catRows = cats
           .map((c) => {
@@ -2143,8 +2162,10 @@ function renderApp() {
       const leisureKey = isMobile ? 'leisureExpandedMobile' : 'leisureExpanded';
       const leisureStored = localStorage.getItem(leisureKey);
       const leisureExpanded = leisureStored !== null ? leisureStored !== 'false' : !isMobile;
-      const leisureSpent = leisureCats.reduce((sum, c) => sum + (spent[c.key] || 0), 0);
-      const leisureBudget = leisureCats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0);
+      const leisureSpent = ag(leisureCats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
+      const leisureBudget = ag(
+        leisureCats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0),
+      );
       const leisureSubRibbon = `<div class="sub-ribbon">
         <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
           ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
@@ -2192,7 +2213,7 @@ function renderApp() {
               (s, a) => s + (Number(a.amount) || 0),
               0,
             );
-            const tGap = Math.max(0, tProj - tAlloc);
+            const tGap = ag(Math.max(0, tProj - tAlloc));
             const aProj = (state.admin.items || []).reduce(
               (s, i) => s + (Number(i.projected_amount) || 0),
               0,
@@ -2201,8 +2222,8 @@ function renderApp() {
               (s, a) => s + (Number(a.amount) || 0),
               0,
             );
-            const aGap = Math.max(0, aProj - aAlloc);
-            const totalOwed = tGap + aGap;
+            const aGap = ag(Math.max(0, aProj - aAlloc));
+            const totalOwed = ag(tGap + aGap);
             const seg = (emoji, val, tab, label) =>
               val > 0
                 ? `<span class="owed-seg" title="${label}: -${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`
@@ -2325,7 +2346,7 @@ function renderApp() {
                 (s, a) => s + (Number(a.amount) || 0),
                 0,
               );
-              const gap = projected - allocated;
+              const gap = ag(projected - allocated);
               if (gap > 0)
                 gapBadge = `<span style="font-size:.62rem;color:var(--red);font-family:'DM Mono',monospace;margin-left:auto;padding-left:.4rem;">−${fmt(gap)}</span>`;
             }
@@ -2430,8 +2451,8 @@ function renderApp() {
 
         ${CATEGORY_GROUPS.map((group) => {
           const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-          const groupSpent = cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0);
-          const groupBudget = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
+          const groupSpent = ag(cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
+          const groupBudget = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
           const groupSt = status(groupSpent, groupBudget);
           const singleCat = cats.length === 1;
           // B2 narrowed — Leisure-only personal-average trend marker
@@ -3065,9 +3086,13 @@ async function saveBudget(catKey, amount) {
     .eq('category', catKey)
     .single();
   if (existing) {
-    await sb.from('budgets').update({ amount: num }).eq('id', existing.id);
+    const { error } = await sb.from('budgets').update({ amount: num }).eq('id', existing.id);
+    if (error) toast('Could not save budget');
   } else {
-    await sb.from('budgets').insert({ month_id: monthId, category: catKey, amount: num });
+    const { error } = await sb
+      .from('budgets')
+      .insert({ month_id: monthId, category: catKey, amount: num });
+    if (error) toast('Could not save budget');
   }
   logChange(
     'edit',
@@ -3498,10 +3523,11 @@ async function loadBizData() {
   // If no row exists, state.biz = null and renderBizTab shows a "Set up this
   // month" empty state. Insert only happens when she clicks Set Up or edits a
   // field. Avoids placeholder rows being silently created on navigation.
-  const { data: bizRows } = await sb
+  const { data: bizRows, error: bizErr } = await sb
     .from('biz_months')
     .select('*')
     .eq('month_id', state.currentMonthId);
+  if (bizErr) toast('Could not load business data');
   state.biz = bizRows && bizRows.length > 0 ? bizRows[0] : null;
 
   // PT client/session data via Edge Function (pt-sessions). The function uses
@@ -3554,11 +3580,12 @@ async function loadBizData() {
 
 // ── Admin data loading ────────────────────────────────────────────────
 async function loadAdminData() {
-  const { data: items } = await sb
+  const { data: items, error: itemsErr } = await sb
     .from('admin_items')
     .select('*')
     .eq('year', state.currentYear)
     .order('created_at');
+  if (itemsErr) toast('Could not load admin data');
   state.admin.items = items || [];
 
   const { data: allocs } = await sb
@@ -3576,11 +3603,12 @@ async function loadAdminData() {
 
 // ── Travel data loading ────────────────────────────────────────────────
 async function loadTravelData() {
-  const { data: items } = await sb
+  const { data: items, error: itemsErr } = await sb
     .from('travel_items')
     .select('*')
     .eq('year', state.currentYear)
     .order('created_at');
+  if (itemsErr) toast('Could not load travel data');
   state.travel.items = items || [];
   const { data: payments } = await sb
     .from('travel_payments')
@@ -3604,11 +3632,12 @@ async function loadTravelData() {
 
 // ── Charity data loading ──────────────────────────────────────────────
 async function loadCharityData() {
-  const { data: items } = await sb
+  const { data: items, error: itemsErr } = await sb
     .from('charity_items')
     .select('*')
     .eq('year', state.currentYear)
     .order('created_at');
+  if (itemsErr) toast('Could not load charity data');
   state.charity.items = items || [];
   const { data: payments } = await sb
     .from('charity_payments')
@@ -4222,11 +4251,11 @@ function renderTravelTab() {
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
   const payments = state.travel.payments || [];
 
-  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
-  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
-  const gap = budget - totalAlloc;
-  const totalSpent = payments.reduce((s, p) => s + Number(p.amount), 0);
-  const remaining = budget - totalSpent;
+  const budget = ag(items.reduce((s, i) => s + Number(i.projected_amount), 0));
+  const totalAlloc = ag(Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0));
+  const gap = ag(budget - totalAlloc);
+  const totalSpent = ag(payments.reduce((s, p) => s + Number(p.amount), 0));
+  const remaining = ag(budget - totalSpent);
 
   const fmtA = (n) =>
     '₪' +
@@ -4827,13 +4856,13 @@ function renderCharityTab() {
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
   const payments = state.charity.payments || [];
 
-  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
-  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
-  const gap = budget - totalAlloc;
-  const totalPaid = payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0);
-  const totalPledged = payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0);
-  const totalSpent = totalPaid + totalPledged;
-  const remaining = budget - totalSpent;
+  const budget = ag(items.reduce((s, i) => s + Number(i.projected_amount), 0));
+  const totalAlloc = ag(Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0));
+  const gap = ag(budget - totalAlloc);
+  const totalPaid = ag(payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0));
+  const totalPledged = ag(payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0));
+  const totalSpent = ag(totalPaid + totalPledged);
+  const remaining = ag(budget - totalSpent);
 
   const fmtA = (n) =>
     '₪' +
@@ -5297,13 +5326,13 @@ function renderAdminTab() {
   const currentMonthObj = state.months.find((m) => m.id === state.currentMonthId);
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
 
-  const budget = items.reduce((s, i) => s + Number(i.projected_amount), 0);
-  const totalAlloc = Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0);
-  const gap = budget - totalAlloc;
-  const totalSpent = (state.admin.subItems || [])
-    .filter((s) => s.is_paid)
-    .reduce((n, s) => n + Number(s.amount), 0);
-  const remaining = budget - totalSpent;
+  const budget = ag(items.reduce((s, i) => s + Number(i.projected_amount), 0));
+  const totalAlloc = ag(Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0));
+  const gap = ag(budget - totalAlloc);
+  const totalSpent = ag(
+    (state.admin.subItems || []).filter((s) => s.is_paid).reduce((n, s) => n + Number(s.amount), 0),
+  );
+  const remaining = ag(budget - totalSpent);
 
   const fmtA = (n) =>
     '₪' +
@@ -6150,7 +6179,7 @@ function renderBizTab(current) {
     if (!earnedByClient[s.client_id]) earnedByClient[s.client_id] = [];
     earnedByClient[s.client_id].push(s);
   });
-  const trackerTotal = earned.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0);
+  const trackerTotal = ag(earned.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0));
 
   // Group scheduled sessions by client
   const scheduledByClient = {};
@@ -6158,7 +6187,7 @@ function renderBizTab(current) {
     if (!scheduledByClient[s.client_id]) scheduledByClient[s.client_id] = [];
     scheduledByClient[s.client_id].push(s);
   });
-  const scheduledTotal = scheduled.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0);
+  const scheduledTotal = ag(scheduled.reduce((sum, s) => sum + clientRate(s.client_id) * 0.85, 0));
 
   const net = (biz.confirmed_amount || 0) - (biz.accountant_fee || 0) - (biz.spending || 0);
   const prevMonthName = current.month_num > 1 ? MONTHS[current.month_num - 2] : 'December';
@@ -6562,9 +6591,9 @@ function renderCashTab() {
   // Split into holdings vs owed
   const holdings = accounts.filter((a) => !a.is_owed);
   const owed = accounts.filter((a) => a.is_owed);
-  const totalHoldings = holdings.reduce((s, a) => s + cashILS(a), 0);
-  const totalOwed = owed.reduce((s, a) => s + cashILS(a), 0);
-  const totalLiquid = totalHoldings + totalOwed;
+  const totalHoldings = ag(holdings.reduce((s, a) => s + cashILS(a), 0));
+  const totalOwed = ag(owed.reduce((s, a) => s + cashILS(a), 0));
+  const totalLiquid = ag(totalHoldings + totalOwed);
 
   const renderRow = (a) => {
     const ilsVal = cashILS(a);
@@ -6753,6 +6782,9 @@ async function loadYearData() {
     sb.from('budgets').select('*').in('month_id', monthIds),
     sb.from('income_items').select('*').in('month_id', monthIds),
   ]);
+  if (txRes.error || biRes.error || budgetRes.error || incItemsRes.error) {
+    toast('Could not load year data');
+  }
   if (!state.admin.items.length) await loadAdminData();
   state.yearData = {
     txns: txRes.data || [],
@@ -7132,43 +7164,43 @@ function renderYearSnapshot() {
       return { row, values, total: totalI ? totalCh / totalI : 0, avg: 0, isPct: true };
     }
     const values = months.map((m) => row.valFn(m, m.month_num > todayMonth) || 0);
-    const total = values.reduce((s, v) => s + v, 0);
+    const total = ag(values.reduce((s, v) => s + v, 0));
     return { row, values, total, avg: total / 12 };
   });
 
-  const totalAnnInc = months.reduce((s, m) => s + incFor(m), 0);
+  const totalAnnInc = ag(months.reduce((s, m) => s + incFor(m), 0));
   const pastMs = months.filter((m) => m.month_num <= todayMonth);
-  const ytdIncome = pastMs.reduce((s, m) => s + incFor(m), 0);
-  const ytdSavings = pastMs.reduce(
-    (s, m) =>
-      s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
-    0,
+  const ytdIncome = ag(pastMs.reduce((s, m) => s + incFor(m), 0));
+  const ytdSavings = ag(
+    pastMs.reduce(
+      (s, m) =>
+        s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
+      0,
+    ),
   );
-  const projSavings = months.reduce(
-    (s, m) =>
-      s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
-    0,
+  const projSavings = ag(
+    months.reduce(
+      (s, m) =>
+        s + (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0),
+      0,
+    ),
   );
 
   // Travel & Admin: projected budget from items, allocated from monthly allocations, gap = budget - allocated
-  const totalTravelProjected = (state.travel.items || []).reduce(
-    (s, i) => s + (Number(i.projected_amount) || 0),
-    0,
+  const totalTravelProjected = ag(
+    (state.travel.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
-  const totalTravelAlloc = Object.values(state.travel.allocations || {}).reduce(
-    (s, a) => s + (Number(a.amount) || 0),
-    0,
+  const totalTravelAlloc = ag(
+    Object.values(state.travel.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
-  const travelGap = totalTravelProjected - totalTravelAlloc;
-  const totalAdminProjected = (state.admin.items || []).reduce(
-    (s, i) => s + (Number(i.projected_amount) || 0),
-    0,
+  const travelGap = ag(totalTravelProjected - totalTravelAlloc);
+  const totalAdminProjected = ag(
+    (state.admin.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
-  const totalAdminAlloc = Object.values(state.admin.allocations || {}).reduce(
-    (s, a) => s + (Number(a.amount) || 0),
-    0,
+  const totalAdminAlloc = ag(
+    Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
-  const adminGap = totalAdminProjected - totalAdminAlloc;
+  const adminGap = ag(totalAdminProjected - totalAdminAlloc);
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = (n) => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
@@ -7469,16 +7501,18 @@ function openSnapshot() {
   const spent = spentByCategory();
   // Match ribbon logic: for hasTab categories (charity/travel/admin), count budget allocation as "spent"
   // Also include savings as "spent" (money allocated out of income)
-  const totalSpent =
+  const totalSpent = ag(
     CATEGORIES.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0) +
-    (state.budgets['savings_bank'] || 0) +
-    (state.budgets['savings_invested'] || 0);
-  const totalBudgeted =
+      (state.budgets['savings_bank'] || 0) +
+      (state.budgets['savings_invested'] || 0),
+  );
+  const totalBudgeted = ag(
     CATEGORIES.reduce((sum, c) => sum + catBudget(c.key), 0) +
-    (state.budgets['savings_bank'] || 0) +
-    (state.budgets['savings_invested'] || 0);
-  const leftToBudget = income - totalBudgeted;
-  const remainingInBudget = totalBudgeted - totalSpent;
+      (state.budgets['savings_bank'] || 0) +
+      (state.budgets['savings_invested'] || 0),
+  );
+  const leftToBudget = ag(income - totalBudgeted);
+  const remainingInBudget = ag(totalBudgeted - totalSpent);
 
   const n = (v) =>
     v == null || v === ''
@@ -7487,12 +7521,11 @@ function openSnapshot() {
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
     const cats = group.keys.map((k) => CATEGORIES.find((c) => c.key === k)).filter(Boolean);
-    const gs = cats.reduce(
-      (sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0),
-      0,
+    const gs = ag(
+      cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
     );
-    const gb = cats.reduce((sum, c) => sum + catBudget(c.key), 0);
-    const gr = gb - gs;
+    const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
+    const gr = ag(gb - gs);
     const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
     const catRows = cats
       .map((c) => {
@@ -8207,8 +8240,8 @@ async function runSearch(query) {
     return;
   }
 
-  const total = matches.reduce((sum, t) => sum + (t.amount || 0), 0);
-  const biTotal = budgetItemMatches.reduce((sum, bi) => sum + (bi.amount || 0), 0);
+  const total = ag(matches.reduce((sum, t) => sum + (t.amount || 0), 0));
+  const biTotal = ag(budgetItemMatches.reduce((sum, bi) => sum + (bi.amount || 0), 0));
   const catLabel = (key) => {
     const c = CATEGORIES.find((cat) => cat.key === key);
     return c ? `${c.emoji} ${c.label}` : key;
@@ -8698,7 +8731,7 @@ function computeOwed() {
     (s, a) => s + (Number(a.amount) || 0),
     0,
   );
-  const tGap = Math.max(0, tProj - tAlloc);
+  const tGap = ag(Math.max(0, tProj - tAlloc));
   const aProj = (state.admin?.items || []).reduce(
     (s, i) => s + (Number(i.projected_amount) || 0),
     0,
@@ -8707,8 +8740,8 @@ function computeOwed() {
     (s, a) => s + (Number(a.amount) || 0),
     0,
   );
-  const aGap = Math.max(0, aProj - aAlloc);
-  return { tGap, aGap, total: tGap + aGap };
+  const aGap = ag(Math.max(0, aProj - aAlloc));
+  return { tGap, aGap, total: ag(tGap + aGap) };
 }
 
 // ── B3 — Pending decisions surface ─────────────────────────────────────
