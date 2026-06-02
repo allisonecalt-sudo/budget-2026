@@ -1,4 +1,6 @@
 const prettier = require('eslint-config-prettier');
+const tsParser = require('@typescript-eslint/parser');
+const tsPlugin = require('@typescript-eslint/eslint-plugin');
 
 module.exports = [
   {
@@ -75,6 +77,45 @@ module.exports = [
       eqeqeq: ['warn', 'smart'],
       'no-eval': 'error',
       'no-implied-eval': 'error',
+    },
+  },
+  {
+    files: ['app.ts'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        fetch: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearTimeout: 'readonly',
+        requestAnimationFrame: 'readonly',
+        prompt: 'readonly',
+        confirm: 'readonly',
+        CSS: 'readonly',
+        Touch: 'readonly',
+        TouchEvent: 'readonly',
+        MutationObserver: 'readonly',
+      },
+    },
+    plugins: { '@typescript-eslint': tsPlugin },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'error',
+      // TS itself enforces no-undef / unused; use the TS-aware unused-vars rule
+      // with the leading-underscore escape hatch used during the migration.
+      'no-undef': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' },
+      ],
     },
   },
   prettier,

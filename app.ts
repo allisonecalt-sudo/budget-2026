@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars -- functions called from inline HTML onclick handlers */
-
 // Type-only import: erased at compile time (runtime still uses the @supabase CDN
 // global). Its presence also marks this file as an ES module, matching the
 // `<script type="module">` load in index.html.
@@ -381,8 +379,8 @@ interface CategorySection {
   subItems: AdminSubItemRow[] | TravelSubItemRow[] | CharitySubItemRow[];
 }
 
-// App state. Row collections are `any[]` in Phase 2; Phase 3 (strict, no-any)
-// replaces them with concrete row interfaces (Month, Transaction, BudgetItem…).
+// App state. Row collections use concrete row interfaces (MonthRow,
+// TransactionRow, BudgetItemRow, …) — see the interface declarations above.
 interface State {
   currentYear: number;
   availableYears: number[];
@@ -6071,8 +6069,7 @@ function renderAdminTab() {
       if (!grouped[cat]) grouped[cat] = [];
       grouped[cat].push(item);
     });
-    activeItemsHtml = (Object.keys(ADMIN_CATEGORIES) as string[])
-      .filter((c) => grouped[c] && grouped[c].length > 0)
+    activeItemsHtml = ADMIN_CATEGORIES.filter((c) => grouped[c] && grouped[c].length > 0)
       .map((cat) => {
         const catItems = grouped[cat];
         const catTotal = catItems.reduce((s, i) => s + Number(i.projected_amount), 0);
@@ -6308,9 +6305,9 @@ function renderAdminTab() {
               ]?.category || 'Other') as string;
               (byCat[c] = byCat[c] || []).push(s as AdminSubItemRow);
             });
-            const orderedCats = Object.keys(ADMIN_CATEGORIES)
-              .filter((c) => byCat[c] && byCat[c].length)
-              .concat(Object.keys(byCat).filter((c) => !(c in (ADMIN_CATEGORIES as object))));
+            const orderedCats = ADMIN_CATEGORIES.filter((c) => byCat[c] && byCat[c].length).concat(
+              Object.keys(byCat).filter((c) => !ADMIN_CATEGORIES.includes(c)),
+            );
             return `
             <div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
