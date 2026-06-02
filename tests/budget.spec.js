@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 // ─── Page Load ───
 test('page loads with correct title', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Budget 2026');
+  await expect(page).toHaveTitle(/^Budget( \d{4})?$/);
 });
 
 test('root element exists', async ({ page }) => {

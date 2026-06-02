@@ -141,6 +141,8 @@ async function doRedo() {
 }
 
 let state = {
+  currentYear: parseInt(localStorage.getItem('activeYear'), 10) || 2026,
+  availableYears: [],
   months: [],
   currentMonthId: null,
   transactions: [],
@@ -172,15 +174,19 @@ let state = {
 };
 
 // ── Cache (stale-while-revalidate for fast startup) ──────────────────
-const CACHE_KEY = 'budget_v1_cache';
 const CACHE_TTL = 20 * 60 * 1000; // 20 minutes
+// Cache is year-scoped so switching years never serves stale cross-year months.
+function cacheKey() {
+  return `budget_v1_cache_${state.currentYear}`;
+}
 
 function saveCache() {
   try {
     localStorage.setItem(
-      CACHE_KEY,
+      cacheKey(),
       JSON.stringify({
         ts: Date.now(),
+        year: state.currentYear,
         monthId: state.currentMonthId,
         months: state.months,
         transactions: state.transactions,
@@ -198,10 +204,11 @@ function saveCache() {
 
 function restoreCache() {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey());
     if (!raw) return false;
     const c = JSON.parse(raw);
     if (Date.now() - c.ts > CACHE_TTL) return false;
+    if (c.year !== state.currentYear) return false;
     const savedId = localStorage.getItem('activeMonthId');
     if (savedId && c.monthId !== savedId) return false;
     state.months = c.months || [];
@@ -311,7 +318,11 @@ function today() {
 
 // ── Data loading ──────────────────────────────────────────────────────
 async function loadMonths() {
-  const { data } = await sb.from('months').select('*').eq('year', 2026).order('month_num');
+  const { data } = await sb
+    .from('months')
+    .select('*')
+    .eq('year', state.currentYear)
+    .order('month_num');
   state.months = data || [];
 }
 
@@ -440,7 +451,7 @@ function renderRecurringGrid() {
     bills: 'Bills',
     fitness: 'Fitness',
   };
-  const today = new Date().getMonth() + 1; // current month num
+  const today = todayMonthForYear(); // current month num
 
   // Get all unique items with their subcategory (from any month that has them)
   const itemMap = {}; // label -> subcategory
@@ -635,7 +646,7 @@ function editRecurringCell(label, monthNum, currentVal) {
     const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
     if (raw === null || raw.trim() === '') return;
     const amount = raw.trim();
-    const isFuture = monthNum >= new Date().getMonth() + 1;
+    const isFuture = monthNum >= todayMonthForYear();
     const forward =
       isFuture &&
       confirm('Apply ' + amount + ' to ' + MNAMES[monthNum - 1] + ' and all future months?');
@@ -672,7 +683,7 @@ function editRecurringCell(label, monthNum, currentVal) {
       restore();
       return;
     }
-    const isFuture = monthNum >= new Date().getMonth() + 1;
+    const isFuture = monthNum >= todayMonthForYear();
     if (isFuture) {
       // Inline confirm strip in place of native confirm()
       td.innerHTML =
@@ -809,7 +820,7 @@ function editHousingCell(label, monthNum, currentVal) {
   const raw = prompt(MNAMES[monthNum - 1] + ' — ' + label + '\nAmount:', currentVal || '');
   if (raw === null || raw.trim() === '') return;
   const amount = raw.trim();
-  const isFuture = monthNum >= new Date().getMonth() + 1;
+  const isFuture = monthNum >= todayMonthForYear();
   const forward =
     isFuture &&
     confirm('Apply ' + amount + ' to ' + MNAMES[monthNum - 1] + ' and all future months?');
@@ -838,7 +849,7 @@ function renderHousingGrid() {
     bills: 'Bills',
     household: 'Household',
   };
-  const today = new Date().getMonth() + 1;
+  const today = todayMonthForYear();
 
   const itemMap = {};
   Object.values(state.allHousingItems).forEach((items) => {
@@ -988,7 +999,7 @@ function renderSpendingGrid(catKey) {
     'Nov',
     'Dec',
   ];
-  const today = new Date().getMonth() + 1;
+  const today = todayMonthForYear();
   const existingMonths = state.months.slice().sort((a, b) => a.month_num - b.month_num);
   const txs = state.allCatTxData[catKey] || [];
 
@@ -1500,6 +1511,90 @@ async function seedBudgetItemsFromTemplate(monthId) {
   }
 }
 
+// ── Multi-year ────────────────────────────────────────────────────────
+async function loadAvailableYears() {
+  const { data } = await sb.from('months').select('year');
+  const years = [...new Set((data || []).map((r) => r.year))];
+  if (!years.includes(state.currentYear)) years.push(state.currentYear);
+  state.availableYears = years.sort((a, b) => a - b);
+}
+
+async function onYearSelect(val) {
+  if (val === '__add__') {
+    const input = prompt('Create a new (empty) budget year. Enter the year:');
+    const year = parseInt(input, 10);
+    if (!year || year < 2000 || year > 2100) {
+      renderApp(); // reset the dropdown back to the current year
+      return;
+    }
+    if (!state.availableYears.includes(year)) await seedYear(year);
+    await switchYear(year);
+    return;
+  }
+  await switchYear(parseInt(val, 10));
+}
+
+async function switchYear(year) {
+  if (year === state.currentYear) return;
+  state.currentYear = year;
+  localStorage.setItem('activeYear', String(year));
+  localStorage.removeItem('activeMonthId'); // belonged to the prior year
+  state.currentMonthId = null;
+  state.loading = true;
+  renderApp();
+  await loadFresh();
+  renderApp();
+}
+
+// Create a brand-new EMPTY year: 12 zeroed month rows + zeroed housing/recurring
+// line items seeded from templates (structure present, all amounts 0).
+async function seedYear(year) {
+  const monthRows = MONTHS.map((name, i) => ({
+    month_name: name,
+    month_num: i + 1,
+    year,
+    income_petachya: 0,
+    income_clalit: 0,
+    income_private: 0,
+    income_other: 0,
+    savings_bank: 0,
+    savings_invested: 0,
+    charity_pct: null,
+  }));
+  const { data: newMonths, error } = await sb.from('months').insert(monthRows).select();
+  if (error || !newMonths) {
+    toast('Could not create year ' + year);
+    return;
+  }
+  const lineCats = CATEGORIES.filter((c) => c.hasLines).map((c) => c.key);
+  for (const catKey of lineCats) {
+    const { data: tmpl } = await sb
+      .from('budget_item_templates')
+      .select('*')
+      .eq('category', catKey)
+      .order('sort_order');
+    if (!tmpl || tmpl.length === 0) continue;
+    const inserts = [];
+    for (const m of newMonths) {
+      for (const t of tmpl) {
+        inserts.push({
+          month_id: m.id,
+          category: catKey,
+          label: t.label,
+          amount: 0,
+          sort_order: t.sort_order,
+        });
+      }
+    }
+    if (inserts.length) await sb.from('budget_items').insert(inserts);
+  }
+  if (!state.availableYears.includes(year)) {
+    state.availableYears.push(year);
+    state.availableYears.sort((a, b) => a - b);
+  }
+  toast('Created ' + year + ' (empty)');
+}
+
 async function switchMonth(monthId) {
   state.currentMonthId = monthId;
   localStorage.setItem('activeMonthId', monthId);
@@ -1822,7 +1917,7 @@ async function createMonth(num) {
     .insert({
       month_name: MONTHS[num - 1],
       month_num: num,
-      year: 2026,
+      year: state.currentYear,
     })
     .select()
     .single();
@@ -1838,6 +1933,7 @@ async function createMonth(num) {
 // ── Render ────────────────────────────────────────────────────────────
 function renderApp() {
   const root = document.getElementById('root');
+  document.title = `Budget ${state.currentYear}`;
   requestAnimationFrame(applyRibbonHeight);
   requestAnimationFrame(updateUndoButtons);
 
@@ -1845,7 +1941,7 @@ function renderApp() {
     root.innerHTML = `
       <div class="main">
         <div class="setup">
-          <h2>Welcome to Budget 2026 👋</h2>
+          <h2>Welcome to Budget ${state.currentYear} 👋</h2>
           <p>Which month do you want to start with?</p>
           <div class="setup-form">
             <div class="fg">
@@ -1925,7 +2021,7 @@ function renderApp() {
 
   root.innerHTML = `
     <div class="hdr">
-      <h1>Budget 2026</h1>
+      <h1>Budget ${state.currentYear}</h1>
       <div class="hdr-tabs">
         <div class="page-tabs">
           <button class="ptab ${state.activeTab === 'budget' ? 'active' : ''}" onclick="switchTab('budget')">Budget</button>
@@ -1950,6 +2046,15 @@ function renderApp() {
         <button class="mtab toolbar-overflow-btn" onclick="openToolbarOverflow(event)" aria-label="More tools" title="More tools">⋯</button>
       </div>
       <div class="hdr-months">
+        <select class="year-select" onchange="onYearSelect(this.value)" aria-label="Year" title="Year">
+          ${(state.availableYears.length ? state.availableYears : [state.currentYear])
+            .map(
+              (y) =>
+                `<option value="${y}" ${y === state.currentYear ? 'selected' : ''}>${y}</option>`,
+            )
+            .join('')}
+          <option value="__add__">+ Add year</option>
+        </select>
         <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
         <div class="month-tabs">
           ${state.months
@@ -2318,7 +2423,7 @@ function renderApp() {
           let leisureTrend = '';
           if (group.label === 'Leisure & Lifestyle' && state.yearData) {
             try {
-              const todayMonthNum2 = new Date().getMonth() + 1;
+              const todayMonthNum2 = todayMonthForYear();
               const monthsSorted2 = [...state.months].sort((a, b) => a.month_num - b.month_num);
               const past = monthsSorted2.filter((m) => m.month_num < todayMonthNum2);
               if (past.length > 0) {
@@ -2965,7 +3070,7 @@ async function saveBudget(catKey, amount) {
       const { data } = await sb
         .from('admin_allocations')
         .upsert(
-          { year: 2026, month_num: month.month_num, amount: num },
+          { year: state.currentYear, month_num: month.month_num, amount: num },
           { onConflict: 'year,month_num' },
         )
         .select()
@@ -3389,7 +3494,7 @@ async function loadBizData() {
   // (not name) + rate, plus per-session amount (rate * 0.85). Bypasses PT's
   // RLS which blocks anon reads from the browser.
   const prevMonthNum = current.month_num - 1;
-  const prevYear = prevMonthNum === 0 ? 2025 : 2026;
+  const prevYear = prevMonthNum === 0 ? state.currentYear - 1 : state.currentYear;
   const actualPrevMonthNum = prevMonthNum === 0 ? 12 : prevMonthNum;
   const monthStart = `${prevYear}-${String(actualPrevMonthNum).padStart(2, '0')}-01`;
   const monthEnd = `${current.year}-${String(current.month_num).padStart(2, '0')}-01`;
@@ -3437,11 +3542,14 @@ async function loadAdminData() {
   const { data: items } = await sb
     .from('admin_items')
     .select('*')
-    .eq('year', 2026)
+    .eq('year', state.currentYear)
     .order('created_at');
   state.admin.items = items || [];
 
-  const { data: allocs } = await sb.from('admin_allocations').select('*').eq('year', 2026);
+  const { data: allocs } = await sb
+    .from('admin_allocations')
+    .select('*')
+    .eq('year', state.currentYear);
   state.admin.allocations = {};
   (allocs || []).forEach((a) => {
     state.admin.allocations[a.month_num] = a;
@@ -3456,13 +3564,13 @@ async function loadTravelData() {
   const { data: items } = await sb
     .from('travel_items')
     .select('*')
-    .eq('year', 2026)
+    .eq('year', state.currentYear)
     .order('created_at');
   state.travel.items = items || [];
   const { data: payments } = await sb
     .from('travel_payments')
     .select('*')
-    .eq('year', 2026)
+    .eq('year', state.currentYear)
     .order('month_num,created_at');
   state.travel.payments = payments || [];
   const { data: subs } = await sb.from('travel_sub_items').select('*').order('created_at');
@@ -3484,13 +3592,13 @@ async function loadCharityData() {
   const { data: items } = await sb
     .from('charity_items')
     .select('*')
-    .eq('year', 2026)
+    .eq('year', state.currentYear)
     .order('created_at');
   state.charity.items = items || [];
   const { data: payments } = await sb
     .from('charity_payments')
     .select('*')
-    .eq('year', 2026)
+    .eq('year', state.currentYear)
     .order('month_num,created_at');
   state.charity.payments = payments || [];
   const { data: subs } = await sb.from('charity_sub_items').select('*').order('created_at');
@@ -3511,7 +3619,7 @@ async function loadCharityData() {
 async function addCharityItem() {
   const { data, error } = await sb
     .from('charity_items')
-    .insert({ year: 2026, label: 'New item', projected_amount: 0 })
+    .insert({ year: state.currentYear, label: 'New item', projected_amount: 0 })
     .select()
     .single();
   if (error) {
@@ -3701,7 +3809,7 @@ async function addCharityPayment() {
   }
   const { data, error } = await sb
     .from('charity_payments')
-    .insert({ year: 2026, month_num: monthNum, label, amount, payment_date: dateVal })
+    .insert({ year: state.currentYear, month_num: monthNum, label, amount, payment_date: dateVal })
     .select()
     .single();
   if (error) {
@@ -3798,7 +3906,7 @@ async function updateCharityPayment(id, field, value) {
 async function addTravelItem() {
   const { data, error } = await sb
     .from('travel_items')
-    .insert({ year: 2026, label: 'New item', projected_amount: 0 })
+    .insert({ year: state.currentYear, label: 'New item', projected_amount: 0 })
     .select()
     .single();
   if (error) {
@@ -3988,7 +4096,7 @@ async function addTravelPayment() {
   }
   const { data, error } = await sb
     .from('travel_payments')
-    .insert({ year: 2026, month_num: monthNum, label, destination, amount })
+    .insert({ year: state.currentYear, month_num: monthNum, label, destination, amount })
     .select()
     .single();
   if (error) {
@@ -5291,7 +5399,7 @@ function renderAdminTab() {
           const sRowOp = sPaid ? 'opacity:.55;' : '';
           const sStrike = sPaid ? 'text-decoration:line-through;' : '';
           const sEstimate = s.is_estimate;
-          const sMonthNum = s.month_num || new Date().getMonth() + 1;
+          const sMonthNum = s.month_num || todayMonthForYear();
           const monthOptions = MONTH_NAMES.map(
             (mn, mi) =>
               '<option value="' +
@@ -5727,7 +5835,7 @@ function renderAdminTab() {
 async function addAdminItem() {
   const { data, error } = await sb
     .from('admin_items')
-    .insert({ year: 2026, label: '', projected_amount: 0 })
+    .insert({ year: state.currentYear, label: '', projected_amount: 0 })
     .select()
     .single();
   if (error) {
@@ -5952,7 +6060,7 @@ async function saveAdminAllocation(monthNum, value) {
   } else {
     const { data } = await sb
       .from('admin_allocations')
-      .insert({ year: 2026, month_num: monthNum, amount: num })
+      .insert({ year: state.currentYear, month_num: monthNum, amount: num })
       .select()
       .single();
     if (data) state.admin.allocations[monthNum] = data;
@@ -6094,7 +6202,7 @@ function renderBizTab(current) {
 
 function renderAccountantTracker(current) {
   const allBiz = state.allBiz || [];
-  const todayMonth = new Date().getMonth() + 1;
+  const todayMonth = todayMonthForYear();
   const upToMonth = current.month_num;
   // Sum fees for all months up to the tab month
   const paidUpTo = allBiz
@@ -6644,7 +6752,7 @@ function renderYearSnapshot() {
     return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
   const { txns, budgetItems, allBudgets, incomeItems } = state.yearData;
   const months = [...state.months].sort((a, b) => a.month_num - b.month_num);
-  const todayMonth = new Date().getMonth() + 1;
+  const todayMonth = todayMonthForYear();
   const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
   const LEISURE = ['takeout', 'eatingout', 'entertainment', 'retail', 'holiday', 'gifts'];
 
@@ -7433,15 +7541,18 @@ async function refreshBiz() {
 //   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
 async function loadFresh() {
   await loadMonths();
+  await loadAvailableYears();
   if (!state.months.length) {
     state.loading = false;
     return;
   }
   const savedId = localStorage.getItem('activeMonthId');
   const now = new Date();
+  const isCurrentCalendarYear = state.currentYear === now.getFullYear();
   const currentMonth =
     (savedId && state.months.find((m) => m.id === savedId)) ||
-    state.months.find((m) => m.month_num === now.getMonth() + 1) ||
+    (isCurrentCalendarYear && state.months.find((m) => m.month_num === now.getMonth() + 1)) ||
+    state.months.find((m) => m.month_num === 1) ||
     state.months[state.months.length - 1];
   const monthId = currentMonth.id;
   state.currentMonthId = monthId;
@@ -8443,7 +8554,7 @@ async function submitQuickAdd(kind) {
     }
     const { data, error } = await sb
       .from('travel_payments')
-      .insert({ year: 2026, month_num: monthNum, label, destination, amount })
+      .insert({ year: state.currentYear, month_num: monthNum, label, destination, amount })
       .select()
       .single();
     if (error) {
@@ -8467,7 +8578,13 @@ async function submitQuickAdd(kind) {
     }
     const { data, error } = await sb
       .from('charity_payments')
-      .insert({ year: 2026, month_num: monthNum, label, amount, payment_date: dateVal })
+      .insert({
+        year: state.currentYear,
+        month_num: monthNum,
+        label,
+        amount,
+        payment_date: dateVal,
+      })
       .select()
       .single();
     if (error) {
@@ -8495,7 +8612,7 @@ async function submitQuickAdd(kind) {
       const { data: newItem, error: itemErr } = await sb
         .from('admin_items')
         .insert({
-          year: 2026,
+          year: state.currentYear,
           label: 'Quick Payments',
           projected_amount: 0,
           category: 'Admin',
@@ -8539,9 +8656,18 @@ async function submitQuickAdd(kind) {
   }
 }
 
+// "Today's month" relative to the year being viewed. Only the real current
+// calendar month counts as "today" when viewing the current year; a past year
+// reads as all-months-past (13), a future year as all-months-future (0).
+function todayMonthForYear() {
+  const now = new Date();
+  if (state.currentYear === now.getFullYear()) return now.getMonth() + 1;
+  return state.currentYear < now.getFullYear() ? 13 : 0;
+}
+
 function currentMonthNum() {
   const m = state.months.find((x) => x.id === state.currentMonthId);
-  return (m && m.month_num) || new Date().getMonth() + 1;
+  return (m && m.month_num) || todayMonthForYear();
 }
 
 // ── M5 — Always-visible Owed widget (global, all tabs) ─────────────────

@@ -1,4 +1,4 @@
-// Budget 2026 — service worker
+// Budget — service worker
 // Strategy:
 //   - App shell (this scope's HTML/CSS/JS/icons/manifest): network-first, cache
 //     fallback. Online users always get the freshest build; a broken/stale cached
@@ -9,7 +9,7 @@
 //     successful network call or 'online'-style replay tick.
 //   - Each queued write gets a UUID 'op_id' to guard against double-flush.
 
-const VERSION = 'budget-2026-v4';
+const VERSION = 'budget-v5';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const SHELL_ASSETS = [

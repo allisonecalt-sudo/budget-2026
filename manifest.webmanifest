@@ -1,7 +1,7 @@
 {
-  "name": "Budget 2026",
+  "name": "Budget",
   "short_name": "Budget",
-  "description": "Allison's personal 2026 budget — pay-period months, multi-category tracking, offline-capable.",
+  "description": "Allison's personal budget — pay-period months, multi-year, multi-category tracking, offline-capable.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
