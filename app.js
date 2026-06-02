@@ -323,6 +323,10 @@ const ICON_HISTORY = _SVG(
   '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
 );
 const ICON_SEARCH = _SVG('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>');
+// logout = door with exit arrow
+const ICON_LOGOUT = _SVG(
+  '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+);
 
 // Snackbar helper for delete actions: shows "Deleted: <label> ₪<amount> · UNDO"
 function toastDeleted(label, amount) {
@@ -7652,6 +7656,156 @@ async function init() {
   renderApp();
 }
 
+// ── Auth gate ──────────────────────────────────────────────────────────
+// The whole app is gated behind a Supabase Auth session. bootstrap() runs the
+// session check on startup: a session → run init() exactly as before; no
+// session → render the calm login screen instead of the app. Sessions persist
+// in localStorage (sb client default), so this is a no-op once logged in.
+const AUTH_DEFAULT_EMAIL = 'allisonecalt@gmail.com';
+let _authBootstrapped = false;
+
+async function bootstrap() {
+  let session = null;
+  try {
+    const { data } = await sb.auth.getSession();
+    session = data ? data.session : null;
+  } catch (err) {
+    console.warn('[auth] getSession failed:', err);
+  }
+  if (session) {
+    _authBootstrapped = true;
+    await init();
+  } else {
+    _authBootstrapped = false;
+    renderLogin();
+  }
+}
+
+function renderLogin(errMsg) {
+  const root = document.getElementById('root');
+  if (!root) return;
+  root.style.marginRight = '';
+  root.innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card card">
+        <h1 class="login-title">Budget</h1>
+        <p class="login-sub">Sign in to continue</p>
+        <form id="login-form" class="login-form" autocomplete="on">
+          <div class="fg">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" autocomplete="username"
+              value="${esc(AUTH_DEFAULT_EMAIL)}" required />
+          </div>
+          <div class="fg">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password"
+              autocomplete="current-password" required />
+          </div>
+          <div class="login-err" id="login-err" ${errMsg ? '' : 'hidden'}>${esc(errMsg || '')}</div>
+          <button type="submit" class="btn btn-primary login-btn" id="login-btn">Log in</button>
+          <button type="button" class="login-forgot" id="login-forgot">Forgot password?</button>
+        </form>
+      </div>
+    </div>`;
+  const form = document.getElementById('login-form');
+  if (form) form.addEventListener('submit', handleLoginSubmit);
+  const forgot = document.getElementById('login-forgot');
+  if (forgot) forgot.addEventListener('click', handleForgotPassword);
+  const pw = document.getElementById('login-password');
+  if (pw) pw.focus();
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  const emailEl = document.getElementById('login-email');
+  const pwEl = document.getElementById('login-password');
+  const btn = document.getElementById('login-btn');
+  const email = (emailEl && emailEl.value.trim()) || '';
+  const password = (pwEl && pwEl.value) || '';
+  if (!email || !password) {
+    showLoginError('Enter your email and password.');
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Logging in…';
+  }
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      showLoginError(error.message || 'Login failed.');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Log in';
+      }
+      return;
+    }
+    // Success → run the normal startup. onAuthStateChange may also fire; the
+    // _authBootstrapped guard keeps init() from running twice.
+    if (!_authBootstrapped) {
+      _authBootstrapped = true;
+      await init();
+    }
+  } catch (err) {
+    showLoginError((err && err.message) || 'Login failed.');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Log in';
+    }
+  }
+}
+
+async function handleForgotPassword() {
+  const emailEl = document.getElementById('login-email');
+  const email = (emailEl && emailEl.value.trim()) || AUTH_DEFAULT_EMAIL;
+  if (!email) {
+    showLoginError('Enter your email first.');
+    return;
+  }
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email);
+    if (error) {
+      showLoginError(error.message || 'Could not send reset link.');
+      return;
+    }
+    toast(`Reset link sent to ${email}`);
+  } catch (err) {
+    showLoginError((err && err.message) || 'Could not send reset link.');
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-err');
+  if (el) {
+    el.textContent = msg;
+    el.hidden = false;
+  } else {
+    toast(msg);
+  }
+}
+
+async function authSignOut() {
+  try {
+    await sb.auth.signOut();
+  } catch (err) {
+    console.warn('[auth] signOut failed:', err);
+  }
+  _authBootstrapped = false;
+  renderLogin();
+}
+
+// Re-render on auth changes (e.g. token refresh, sign-out from another tab).
+// Guarded so a SIGNED_IN event during a normal page load doesn't double-init.
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    _authBootstrapped = false;
+    renderLogin();
+  } else if (session && !_authBootstrapped) {
+    _authBootstrapped = true;
+    init().catch((err) => console.warn('[auth] init after sign-in failed:', err));
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
     e.preventDefault();
@@ -7757,7 +7911,7 @@ document.addEventListener(
   },
   { passive: true },
 );
-init();
+bootstrap();
 
 // ── History Panel ──────────────────────────────────────────────────────
 // M6 — Weekly digest builder. Aggregates the last 7 days of change_log entries
@@ -8901,6 +9055,7 @@ function openToolbarOverflow(ev) {
     <button class="toolbar-overflow-item" onclick="collapseAll();${close}">${ICON_COLLAPSE}<span>Collapse all</span></button>
     <button class="toolbar-overflow-item" onclick="openHistoryPanel();${close}">${ICON_HISTORY}<span>History log</span></button>
     <button class="toolbar-overflow-item" onclick="openSearchPanel();${close}">${ICON_SEARCH}<span>Search</span></button>
+    <button class="toolbar-overflow-item" onclick="authSignOut();${close}">${ICON_LOGOUT}<span>Log out</span></button>
   `;
   document.body.appendChild(menu);
   // Position near the overflow button

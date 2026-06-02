@@ -1520,6 +1520,84 @@ input:focus {
   gap: 0.75rem;
 }
 
+/* ── Login gate ─────────────────────────────────────────────────────────
+   Calm card centered on the page, reusing card/btn/fg tokens. Shown by
+   renderLogin() when there is no Supabase Auth session. */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 2rem 1.75rem;
+}
+.login-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: var(--text);
+}
+.login-sub {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 1.5rem;
+}
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.login-form input[type='email'],
+.login-form input[type='password'] {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  transition:
+    border-color var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out);
+}
+.login-form input[type='email']:focus,
+.login-form input[type='password']:focus {
+  border-color: var(--info);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.login-btn {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+.login-err {
+  background: var(--rsoft);
+  color: var(--red);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+}
+.login-forgot {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0.25rem;
+  align-self: center;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.login-forgot:hover {
+  color: var(--accent);
+}
+
 /* Page tabs (Budget / Biz) */
 .page-tabs {
   display: flex;
