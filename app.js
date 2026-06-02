@@ -9176,6 +9176,10 @@ document.addEventListener(
   'touchstart',
   (e) => {
     if (window.innerWidth > 600) return;
+    // Year view shows the whole year and drives its own month chip selector
+    // (setYearViewMonth); the global month-swipe would jump months out from
+    // under a vertical scroll, so it's disabled here.
+    if (state.activeTab === 'year') return;
     if (e.target.closest('.app-panel') || e.target.closest('input,textarea,select,button')) return;
     if (e.touches.length !== 1) return;
     _swipeStartX = e.touches[0].clientX;
@@ -9194,8 +9198,10 @@ document.addEventListener(
     const dt = Date.now() - _swipeStartT;
     _swipeStartX = null;
     _swipeStartY = null;
-    // Horizontal swipe: > 60px X, < 50px |Y|, < 600ms duration
-    if (Math.abs(dx) > 60 && Math.abs(dy) < 50 && dt < 600) {
+    // Horizontal swipe: > 60px X, < 50px |Y|, < 600ms duration, AND clearly
+    // horizontal (X travel dominates Y) so a vertical scroll with a little
+    // sideways drift never registers as a month change.
+    if (Math.abs(dx) > 60 && Math.abs(dy) < 50 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 600) {
       // Right swipe -> prev month, Left swipe -> next month
       navMonth(dx > 0 ? -1 : 1);
     }
