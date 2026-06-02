@@ -16,15 +16,27 @@ const EMAIL = process.env.BUDGET_TEST_EMAIL || 'allisonecalt@gmail.com';
 const PASSWORD = process.env.BUDGET_TEST_PASSWORD;
 const STATE_PATH = path.join(__dirname, '.auth', 'state.json');
 
-module.exports = async () => {
-  if (!PASSWORD) {
-    throw new Error(
-      'BUDGET_TEST_PASSWORD is not set. The app is behind an auth gate; ' +
-        'set BUDGET_TEST_PASSWORD (and optionally BUDGET_TEST_EMAIL) to run the suite.'
-    );
-  }
-
+// Always write a state file so config's `storageState` path resolves.
+function writeEmptyState() {
   fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+  fs.writeFileSync(STATE_PATH, JSON.stringify({ cookies: [], origins: [] }));
+}
+
+module.exports = async () => {
+  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+
+  // No password → degrade gracefully with an empty (logged-out) session.
+  // The smoke workflow tests the live URL and needs no auth; only the
+  // budget.spec math-audit suite (run where the secret IS set) needs login.
+  if (!PASSWORD) {
+    console.warn(
+      '[global-setup] BUDGET_TEST_PASSWORD not set — writing logged-out ' +
+        'storageState. Auth-gated tests (budget.spec.js) will fail; set ' +
+        'BUDGET_TEST_PASSWORD to run them.'
+    );
+    writeEmptyState();
+    return;
+  }
 
   const browser = await chromium.launch();
   const page = await browser.newPage();
