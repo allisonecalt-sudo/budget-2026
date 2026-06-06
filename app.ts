@@ -5630,6 +5630,10 @@ function renderCharityTab() {
     const labelWeight = isCurrent ? '700' : '600';
     const inputColor = isCurrent ? 'var(--accent)' : 'var(--text)';
     const inputWeight = isCurrent ? '600' : '400';
+    // % of that month's income the charity allocation represents
+    const monthObj = state.months.find((m) => m.month_num === mnum);
+    const monthIncome = monthObj ? totalIncome(monthObj) : 0;
+    const pct = val && monthIncome ? ((Number(val) / monthIncome) * 100).toFixed(1) : null;
     return (
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:' +
       rowBg +
@@ -5643,12 +5647,19 @@ function renderCharityTab() {
       ';">' +
       mn +
       '</span>' +
-      "<span style=\"width:60px;font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:" +
+      '<span style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;">' +
+      "<span style=\"font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:" +
       inputColor +
       ';font-weight:' +
       inputWeight +
-      ';display:inline-block;" title="Set from Budget page">' +
+      ';" title="Set from Budget page">' +
       (val ? fmtA(val) : '₪0') +
+      '</span>' +
+      (pct
+        ? "<span style=\"font-size:.58rem;font-family:'DM Mono',monospace;color:var(--dim);\">" +
+          pct +
+          '% of income</span>'
+        : '') +
       '</span>' +
       '</div>'
     );
@@ -10052,6 +10063,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   snToggle,
   spentByCategory,
   startRibbonDrag,
+  state,
   submitQuickAdd,
   switchMonth,
   switchTab,
