@@ -5656,7 +5656,7 @@ function renderCharityTab() {
       (val ? fmtA(val) : '₪0') +
       '</span>' +
       (pct
-        ? "<span style=\"font-size:.58rem;font-family:'DM Mono',monospace;color:var(--dim);\">" +
+        ? '<span style="font-size:.58rem;font-family:\'DM Mono\',monospace;color:var(--dim);">' +
           pct +
           '% of income</span>'
         : '') +
