@@ -9906,6 +9906,35 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Refresh data when the app is brought back to the foreground (e.g. reopening
+// the installed PWA on a phone after editing on the desktop). A backgrounded
+// PWA otherwise keeps showing whatever it had when last active — the source of
+// "my phone doesn't show what the computer shows." Guarded so it never
+// interrupts typing and never refetches in a tight loop. Benefits every tab.
+let _lastVisibilityRefresh = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  // Only once the app is past the login gate / initial load.
+  if (!state.currentMonthId || state.loading) return;
+  if (navigator.onLine === false) return;
+  const now = Date.now();
+  if (now - _lastVisibilityRefresh < 4000) return; // debounce rapid tab toggles
+  _lastVisibilityRefresh = now;
+  loadFresh()
+    .then(() => {
+      // Don't re-render over a focused field (avoid interrupting typing) —
+      // same guard bootstrap() uses after its background refresh.
+      if (
+        !document.activeElement ||
+        document.activeElement.tagName === 'BODY' ||
+        document.activeElement === document.documentElement
+      ) {
+        renderApp();
+      }
+    })
+    .catch(() => {});
+});
+
 // ─────────────────────────────────────────────────────────────────────
 // Inline on* handlers in the rendered HTML resolve names against the global
 // scope. As a classic script every top-level function was implicitly global;
