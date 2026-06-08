@@ -5884,8 +5884,8 @@ function renderAdminTab() {
   const creditAll = ag(creditReceived + creditExpected);
   // Gap KPI: budget − allocated − money in. Floored at 0.
   const kpiGap = ag(Math.max(0, gap - creditAll));
-  // Remaining nets received credits back in (budget − spent + received).
-  const remaining = ag(budget - totalSpent + creditReceived);
+  // Remaining = budget − spent. Money-in is a funding source for the Gap, not a spend offset.
+  const remaining = ag(budget - totalSpent);
 
   const fmtA = (n: number): string =>
     '₪' +
@@ -6203,20 +6203,6 @@ function renderAdminTab() {
       .map((cat) => {
         const catItems = grouped[cat];
         const catTotal = catItems.reduce((s, i) => s + Number(i.projected_amount), 0);
-        // Net "Money In" line: when a category has credits, show Cost · In · Net.
-        // Net < 0 means credits exceed cost → cash-positive → GREEN minus (never red).
-        const catCredits = creditsForCategory(cat);
-        const catNet = ag(catTotal - catCredits);
-        const netLine =
-          catCredits > 0
-            ? '<span style="font-size:.58rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:.5rem;">In <span style="color:var(--green);">−' +
-              fmtA(catCredits) +
-              '</span> · Net <span style="color:' +
-              (catNet < 0 ? 'var(--green)' : 'var(--text)') +
-              ';font-weight:600;">' +
-              (catNet < 0 ? '−' + fmtA(Math.abs(catNet)) : fmtA(catNet)) +
-              '</span></span>'
-            : '';
         return (
           '<div style="margin-top:.6rem;">' +
           '<div style="display:flex;align-items:center;gap:.35rem;padding:.25rem .2rem;margin-bottom:.15rem;">' +
@@ -6229,7 +6215,6 @@ function renderAdminTab() {
           '<span style="font-size:.62rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:auto;">' +
           fmtA(catTotal) +
           '</span>' +
-          netLine +
           '</div>' +
           catItems.map(renderItemRow).join('') +
           '</div>'
@@ -6270,12 +6255,12 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD${creditReceived > 0 ? `<span style="color:var(--green);font-weight:600;"> · +${fmtA(creditReceived)} back</span>` : ''}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent${creditReceived > 0 ? ' + money in' : ''}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
       </div>
     </div>
 
@@ -6508,24 +6493,6 @@ function renderMoneyInCard(): string {
     'Nov',
     'Dec',
   ];
-  const ADMIN_CATEGORIES = [
-    'Apartment',
-    'Car',
-    'Furniture',
-    'Health',
-    'Professional',
-    'Admin',
-    'Other',
-  ];
-  const catEmoji: Record<string, string> = {
-    Apartment: '🏠',
-    Car: '🚗',
-    Furniture: '🪑',
-    Health: '🏥',
-    Professional: '📚',
-    Admin: '📋',
-    Other: '📌',
-  };
   const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -6543,12 +6510,12 @@ function renderMoneyInCard(): string {
     fmtA(runningTotal) +
     '</span>' +
     '</div>' +
-    '<div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">credits that offset what admin costs</div>';
+    '<div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">money coming in this year — lowers your gap</div>';
 
   let bodyHtml: string;
   if (credits.length === 0) {
     bodyHtml =
-      '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No money in yet — add a rebate, deposit return, or reimbursement →</div>';
+      '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No money in yet — add rent income, a refund, or a deposit return →</div>';
   } else {
     const sorted = [...credits].sort((a, b) =>
       String(a.created_at || '').localeCompare(String(b.created_at || '')),
@@ -6560,7 +6527,6 @@ function renderMoneyInCard(): string {
       const rowOpacity = received ? '' : 'opacity:.6;';
       const occ = creditOccurrences(c);
       const rowTotal = creditTotal(c);
-      const cat = c.category || 'Other';
       const startMo = c.month_start || 0;
       const endMo = c.month_end || 0;
       // Range badge: one-off shows nothing; a true range shows "Aug→Dec ×5".
@@ -6574,18 +6540,6 @@ function renderMoneyInCard(): string {
             occ +
             '</span>'
           : '';
-      const catOptions = ADMIN_CATEGORIES.map(
-        (k) =>
-          '<option value="' +
-          k +
-          '"' +
-          (k === cat ? ' selected' : '') +
-          '>' +
-          (catEmoji[k] || '') +
-          ' ' +
-          k +
-          '</option>',
-      ).join('');
       const monthOpt = (selected: number): string =>
         '<option value="">—</option>' +
         MONTH_ABBR.map(
@@ -6623,12 +6577,6 @@ function renderMoneyInCard(): string {
         '" placeholder="What came in?" style="font-size:.78rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onfocus="this.style.borderBottomColor=\'var(--green)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminCredit(\'' +
         c.id +
         "','label',this.value)\">" +
-        // Category
-        '<select class="mi-cat" onchange="saveAdminCredit(\'' +
-        c.id +
-        '\',\'category\',this.value)" title="Category" style="font-size:.62rem;padding:.1rem .25rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;">' +
-        catOptions +
-        '</select>' +
         // Month range — 2nd blank = one-off.
         '<span class="mi-range" style="display:inline-flex;align-items:center;gap:.15rem;">' +
         '<select onchange="saveAdminCredit(\'' +
@@ -8158,10 +8106,9 @@ function renderYearSnapshot(): string {
   const totalAdminGross = ag(
     (state.admin.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
-  // Net RECEIVED "Money In" credits into the annual admin number only (not the
-  // per-month allocation grid). Received cash genuinely lowers what admin cost.
-  const adminCreditReceived = creditsTotal({ receivedOnly: true });
-  const totalAdminProjected = ag(totalAdminGross - adminCreditReceived);
+  // Money In does NOT reduce the admin expense total — it's a funding source
+  // that lowers the Gap (shown on the Admin tab), not a spend offset.
+  const totalAdminProjected = totalAdminGross;
   const totalAdminAlloc = ag(
     Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
