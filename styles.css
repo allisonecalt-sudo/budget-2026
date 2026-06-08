@@ -1825,6 +1825,31 @@ input:focus {
   font-size: 0.9rem;
 }
 
+/* "Money In" / admin credits — green mirror of the editable sub-payment row.
+   Desktop: a single dense line (check · label · category · month-range · amount
+   · est · delete). Mobile (≤600px): wraps to two lines like the sub-payment
+   rows, so the 412px Pixel never truncates. Greens reuse --green/--gsoft. */
+.money-in-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto 64px auto 18px;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.28rem 0.1rem;
+  border-bottom: 1px solid var(--border);
+}
+/* Keep the two month selects + badge on ONE line so the row stays short. */
+.money-in-row .mi-range {
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+.money-in-row .mi-range select {
+  width: 48px;
+  flex: 0 0 auto;
+}
+.money-in-row .mi-cat {
+  max-width: 96px;
+}
+
 @media (max-width: 600px) {
   html,
   body {
@@ -2047,6 +2072,50 @@ input:focus {
   .admin-pay-est {
     /* Hidden on mobile — the amber row tint already signals estimate */
     display: none !important;
+  }
+  /* "Money In" row on mobile: collapse the dense 7-col line into two rows so
+     the Pixel (412px) never truncates. Flex-wrap (not rigid grid) so nothing
+     overlaps. Line 1: check · label · amount · delete. Line 2 wraps below:
+     category · month-range · est. */
+  .money-in-row {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.4rem;
+    row-gap: 0.35rem;
+    padding: 0.5rem 0.1rem !important;
+  }
+  .money-in-row .mi-check {
+    order: 1;
+  }
+  .money-in-row .mi-label {
+    order: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .money-in-row .mi-amt {
+    order: 3;
+    flex: 0 0 auto;
+    width: 70px !important;
+  }
+  .money-in-row .mi-del {
+    order: 4;
+    flex: 0 0 auto;
+  }
+  /* Second row wraps naturally — line 1 (check·label·amt·del) is full width,
+     so category·range·est flow onto line 2. */
+  .money-in-row .mi-cat {
+    order: 5;
+    flex: 0 0 auto;
+  }
+  .money-in-row .mi-range {
+    order: 6;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .money-in-row .mi-est {
+    order: 7;
+    flex: 0 0 auto;
   }
   /* DM6 — Admin Allocation grid: 3 cols × 4 rows clip values on a 390px viewport.
      Switch to 2 cols × 6 rows so each cell gets ~165px — enough for the

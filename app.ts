@@ -239,7 +239,26 @@ interface AdminItemRow {
   label: string;
   projected_amount: number;
   is_estimate?: boolean;
+  is_logged?: boolean;
   category?: string;
+  [key: string]: unknown;
+}
+
+// "Money In" / credit rows — money that offsets what admin costs (rebates,
+// landlord refunds, deposit returns, reimbursements). One-off or a month range.
+interface AdminCreditRow {
+  id: string;
+  year: number;
+  label: string;
+  amount: number;
+  category: string;
+  item_id?: string | null;
+  month_start?: number | null;
+  month_end?: number | null;
+  is_estimate: boolean;
+  is_received: boolean;
+  notes?: string | null;
+  created_at: string;
   [key: string]: unknown;
 }
 
@@ -379,6 +398,12 @@ interface CategorySection {
   subItems: AdminSubItemRow[] | TravelSubItemRow[] | CharitySubItemRow[];
 }
 
+// Admin extends the shared block with "Money In" credit rows. Only the admin
+// tab carries credits; travel/charity keep the plain CategorySection.
+interface AdminSection extends CategorySection {
+  credits: AdminCreditRow[];
+}
+
 // App state. Row collections use concrete row interfaces (MonthRow,
 // TransactionRow, BudgetItemRow, …) — see the interface declarations above.
 interface State {
@@ -405,7 +430,7 @@ interface State {
   allCatBudgets: Record<string, Record<string, number>>;
   spendingGridCats: string[];
   txSort: string;
-  admin: CategorySection;
+  admin: AdminSection;
   travel: CategorySection;
   charity: CategorySection;
   openCats: Set<string>;
@@ -443,7 +468,7 @@ let state: State = {
   allCatBudgets: {}, // { catKey: { month_id: amount } } for spending grids
   spendingGridCats: JSON.parse(localStorage.getItem('spendingGridCats') || '[]'),
   txSort: localStorage.getItem('txSort') || 'newest',
-  admin: { items: [], allocations: {}, payments: [], subItems: [] },
+  admin: { items: [], allocations: {}, payments: [], subItems: [], credits: [] },
   travel: { items: [], allocations: {}, payments: [], subItems: [] },
   charity: { items: [], allocations: {}, payments: [], subItems: [] },
   openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
@@ -501,7 +526,16 @@ function restoreCache() {
     state.budgets = c.budgets || {};
     state.budgetItems = c.budgetItems || {};
     state.incomeItems = c.incomeItems || [];
-    state.admin = c.admin || { items: [], allocations: {}, payments: [], subItems: [] };
+    state.admin = c.admin || {
+      items: [],
+      allocations: {},
+      payments: [],
+      subItems: [],
+      credits: [],
+    };
+    // Older caches predate the credits array — guarantee it's present so
+    // creditsForCategory() and renderMoneyInCard() never read undefined.
+    if (!state.admin.credits) state.admin.credits = [];
     state.travel = c.travel || { items: [], allocations: {}, payments: [], subItems: [] };
     state.charity = c.charity || { items: [], allocations: {}, payments: [], subItems: [] };
     if (c.yearData) state.yearData = c.yearData;
@@ -533,6 +567,66 @@ const status = (spent: number, budget: number): string => {
   if (p >= 0.85) return 'warn';
   return 'ok';
 };
+
+// ── "Money In" / credit math (pure, unit-testable — no DB, no DOM) ──────
+// How many times a credit lands. A one-off (no range, or start===end, or a
+// missing bound) counts once. A month range (start..end) counts inclusively,
+// clamped to a sane 1..12 so a fat-fingered range can't blow up a total.
+function creditOccurrences(row: {
+  month_start?: number | null;
+  month_end?: number | null;
+}): number {
+  const s = row.month_start;
+  const e = row.month_end;
+  // One-off: either bound missing, or both equal.
+  if (s == null || e == null || s === e) return 1;
+  const span = e - s + 1;
+  if (span <= 1) return 1;
+  return Math.min(12, span);
+}
+
+// Total money a credit row brings in = per-occurrence amount × occurrences.
+function creditTotal(row: {
+  amount?: number | null;
+  month_start?: number | null;
+  month_end?: number | null;
+}): number {
+  return ag((Number(row.amount) || 0) * creditOccurrences(row));
+}
+
+// Sum of credit totals for one admin category. Optional filters narrow to
+// received-only (cash actually in) or expected-only (not yet received).
+function creditsForCategory(
+  cat: string,
+  opts?: { receivedOnly?: boolean; expectedOnly?: boolean },
+): number {
+  const credits = (state.admin.credits || []) as AdminCreditRow[];
+  return ag(
+    credits
+      .filter((c) => (c.category || 'Other') === cat)
+      .filter((c) => {
+        if (opts?.receivedOnly) return c.is_received === true;
+        if (opts?.expectedOnly) return c.is_received !== true;
+        return true;
+      })
+      .reduce((n, c) => n + creditTotal(c), 0),
+  );
+}
+
+// All credits, optionally filtered, summed across every category. Convenience
+// roll-up for the KPI sub-lines and the year-tab annual admin number.
+function creditsTotal(opts?: { receivedOnly?: boolean; expectedOnly?: boolean }): number {
+  const credits = (state.admin.credits || []) as AdminCreditRow[];
+  return ag(
+    credits
+      .filter((c) => {
+        if (opts?.receivedOnly) return c.is_received === true;
+        if (opts?.expectedOnly) return c.is_received !== true;
+        return true;
+      })
+      .reduce((n, c) => n + creditTotal(c), 0),
+  );
+}
 
 let _toastTimer: ReturnType<typeof setTimeout> | null = null;
 function toast(msg: string, opts?: ToastOpts): void {
@@ -3965,6 +4059,19 @@ async function loadAdminData() {
 
   const { data: subs } = await sb.from('admin_sub_items').select('*').order('created_at');
   state.admin.subItems = subs || [];
+
+  await loadAdminCredits();
+}
+
+// "Money In" credits for the active year — money that offsets admin cost.
+async function loadAdminCredits() {
+  const { data, error } = await sb
+    .from('admin_credits')
+    .select('*')
+    .eq('year', state.currentYear)
+    .order('created_at');
+  if (error) toast('Could not load Money In');
+  state.admin.credits = (data || []) as AdminCreditRow[];
 }
 
 // ── Travel data loading ────────────────────────────────────────────────
@@ -5766,7 +5873,15 @@ function renderAdminTab() {
   const totalSpent = ag(
     (state.admin.subItems || []).filter((s) => s.is_paid).reduce((n, s) => n + Number(s.amount), 0),
   );
-  const remaining = ag(budget - totalSpent);
+  // "Money In" roll-ups: received = cash actually in; expected = not yet in.
+  // Received offsets what we've spent (→ Remaining + back); expected reduces
+  // what's still missing (→ Gap). Estimates count toward Gap, not Remaining.
+  const creditReceived = creditsTotal({ receivedOnly: true });
+  const creditExpected = creditsTotal({ expectedOnly: true });
+  // Gap KPI nets expected credits (budget − allocated − expected). Floored at 0.
+  const kpiGap = ag(Math.max(0, gap - creditExpected));
+  // Remaining nets received credits back in (budget − spent + received).
+  const remaining = ag(budget - totalSpent + creditReceived);
 
   const fmtA = (n: number): string =>
     '₪' +
@@ -6084,6 +6199,20 @@ function renderAdminTab() {
       .map((cat) => {
         const catItems = grouped[cat];
         const catTotal = catItems.reduce((s, i) => s + Number(i.projected_amount), 0);
+        // Net "Money In" line: when a category has credits, show Cost · In · Net.
+        // Net < 0 means credits exceed cost → cash-positive → GREEN minus (never red).
+        const catCredits = creditsForCategory(cat);
+        const catNet = ag(catTotal - catCredits);
+        const netLine =
+          catCredits > 0
+            ? '<span style="font-size:.58rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:.5rem;">In <span style="color:var(--green);">−' +
+              fmtA(catCredits) +
+              '</span> · Net <span style="color:' +
+              (catNet < 0 ? 'var(--green)' : 'var(--text)') +
+              ';font-weight:600;">' +
+              (catNet < 0 ? '−' + fmtA(Math.abs(catNet)) : fmtA(catNet)) +
+              '</span></span>'
+            : '';
         return (
           '<div style="margin-top:.6rem;">' +
           '<div style="display:flex;align-items:center;gap:.35rem;padding:.25rem .2rem;margin-bottom:.15rem;">' +
@@ -6096,6 +6225,7 @@ function renderAdminTab() {
           '<span style="font-size:.62rem;color:var(--dim);font-family:\'DM Mono\',monospace;margin-left:auto;">' +
           fmtA(catTotal) +
           '</span>' +
+          netLine +
           '</div>' +
           catItems.map(renderItemRow).join('') +
           '</div>'
@@ -6130,18 +6260,18 @@ function renderAdminTab() {
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(gap))}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(kpiGap))}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : 'fully covered ✓'}${creditExpected > 0 ? ` · after +${fmtA(creditExpected)} expected` : ''}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD${creditReceived > 0 ? `<span style="color:var(--green);font-weight:600;"> · +${fmtA(creditReceived)} back</span>` : ''}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − YTD spent</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent${creditReceived > 0 ? ' + money in' : ''}</div>
       </div>
     </div>
 
@@ -6348,9 +6478,218 @@ function renderAdminTab() {
             </div>`;
           })()}
         </div>
+
+        ${renderMoneyInCard()}
       </div>
     </div>
   </div>`;
+}
+
+// "Money In" card — a green mirror of the Payment Log. Lives directly below it
+// in the Admin right column. Editable rows (inline insert, no modal): money
+// that offsets what admin costs (rebates, deposit returns, reimbursements).
+// One-off or a month range (e.g. a rent credit Aug→Dec). RTL-safe like the log.
+function renderMoneyInCard(): string {
+  const MONTH_ABBR = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const ADMIN_CATEGORIES = [
+    'Apartment',
+    'Car',
+    'Furniture',
+    'Health',
+    'Professional',
+    'Admin',
+    'Other',
+  ];
+  const catEmoji: Record<string, string> = {
+    Apartment: '🏠',
+    Car: '🚗',
+    Furniture: '🪑',
+    Health: '🏥',
+    Professional: '📚',
+    Admin: '📋',
+    Other: '📌',
+  };
+  const fmtA = (n: number): string =>
+    '₪' +
+    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
+
+  const credits = (state.admin.credits || []) as AdminCreditRow[];
+  const runningTotal = ag(credits.reduce((n, c) => n + creditTotal(c), 0));
+  const receivedTotal = creditsTotal({ receivedOnly: true });
+  const expectedTotal = creditsTotal({ expectedOnly: true });
+
+  const headerHtml =
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.2rem;">' +
+    '<span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);">💰 Money In</span>' +
+    '<span style="font-family:\'DM Mono\',monospace;font-size:.95rem;font-weight:600;color:var(--green);">+' +
+    fmtA(runningTotal) +
+    '</span>' +
+    '</div>' +
+    '<div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">credits that offset what admin costs</div>';
+
+  let bodyHtml: string;
+  if (credits.length === 0) {
+    bodyHtml =
+      '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No money in yet — add a rebate, deposit return, or reimbursement →</div>';
+  } else {
+    const sorted = [...credits].sort((a, b) =>
+      String(a.created_at || '').localeCompare(String(b.created_at || '')),
+    );
+    const rowHtml = (c: AdminCreditRow): string => {
+      const received = c.is_received === true;
+      const estimate = c.is_estimate === true;
+      // Faded until received; solid once cash is actually in.
+      const rowOpacity = received ? '' : 'opacity:.6;';
+      const occ = creditOccurrences(c);
+      const rowTotal = creditTotal(c);
+      const cat = c.category || 'Other';
+      const startMo = c.month_start || 0;
+      const endMo = c.month_end || 0;
+      // Range badge: one-off shows nothing; a true range shows "Aug→Dec ×5".
+      const rangeBadge =
+        occ > 1 && startMo && endMo
+          ? '<span style="font-size:.58rem;color:var(--green);font-weight:700;background:var(--gsoft);border-radius:99px;padding:.05rem .3rem;white-space:nowrap;">' +
+            (MONTH_ABBR[startMo - 1] || '?') +
+            '→' +
+            (MONTH_ABBR[endMo - 1] || '?') +
+            ' ×' +
+            occ +
+            '</span>'
+          : '';
+      const catOptions = ADMIN_CATEGORIES.map(
+        (k) =>
+          '<option value="' +
+          k +
+          '"' +
+          (k === cat ? ' selected' : '') +
+          '>' +
+          (catEmoji[k] || '') +
+          ' ' +
+          k +
+          '</option>',
+      ).join('');
+      const monthOpt = (selected: number): string =>
+        '<option value="">—</option>' +
+        MONTH_ABBR.map(
+          (mn, mi) =>
+            '<option value="' +
+            (mi + 1) +
+            '"' +
+            (mi + 1 === selected ? ' selected' : '') +
+            '>' +
+            mn +
+            '</option>',
+        ).join('');
+      // Per-occurrence amount drives the row; the ×N total shows in the badge.
+      return (
+        '<div class="money-in-row" style="' +
+        rowOpacity +
+        '">' +
+        // Received checkbox — green ✓ once cash is in.
+        '<div class="mi-check" onclick="saveAdminCredit(\'' +
+        c.id +
+        "','is_received'," +
+        !received +
+        ')" title="' +
+        (received ? 'Received — click to mark expected' : 'Mark as received') +
+        '" style="width:18px;height:18px;border-radius:4px;border:2px solid ' +
+        (received ? 'var(--green)' : 'var(--border)') +
+        ';background:' +
+        (received ? 'var(--green)' : 'none') +
+        ';cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:.66rem;font-weight:700;transition:all .15s ease;flex-shrink:0;">' +
+        (received ? '✓' : '') +
+        '</div>' +
+        // Label
+        '<input class="mi-label" data-money-in-label type="text" value="' +
+        esc(c.label) +
+        '" placeholder="What came in?" style="font-size:.78rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onfocus="this.style.borderBottomColor=\'var(--green)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminCredit(\'' +
+        c.id +
+        "','label',this.value)\">" +
+        // Category
+        '<select class="mi-cat" onchange="saveAdminCredit(\'' +
+        c.id +
+        '\',\'category\',this.value)" title="Category" style="font-size:.62rem;padding:.1rem .25rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;">' +
+        catOptions +
+        '</select>' +
+        // Month range — 2nd blank = one-off.
+        '<span class="mi-range" style="display:inline-flex;align-items:center;gap:.15rem;">' +
+        '<select onchange="saveAdminCredit(\'' +
+        c.id +
+        '\',\'month_start\',this.value)" title="From month (blank = one-off)" style="font-size:.62rem;padding:.1rem .1rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;">' +
+        monthOpt(startMo) +
+        '</select>' +
+        '<span style="font-size:.6rem;color:var(--dim);">→</span>' +
+        '<select onchange="saveAdminCredit(\'' +
+        c.id +
+        '\',\'month_end\',this.value)" title="To month (blank = one-off)" style="font-size:.62rem;padding:.1rem .1rem;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);font-family:\'DM Sans\',sans-serif;cursor:pointer;outline:none;">' +
+        monthOpt(endMo) +
+        '</select>' +
+        rangeBadge +
+        '</span>' +
+        // Amount (per occurrence) — green, leading +, tabular mono.
+        '<input class="mi-amt" type="number" inputmode="decimal" min="0" step="1" value="' +
+        (c.amount || '') +
+        '" placeholder="0" title="Amount per occurrence' +
+        (occ > 1 ? ' — total +' + fmtA(rowTotal) : '') +
+        '" style="font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--green);font-weight:600;outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onfocus="this.style.borderBottomColor=\'var(--green)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminCredit(\'' +
+        c.id +
+        "','amount',this.value)\">" +
+        // ~est toggle (amber — identical to expense est)
+        '<button class="mi-est" onclick="saveAdminCredit(\'' +
+        c.id +
+        "','is_estimate'," +
+        !estimate +
+        ')" title="' +
+        (estimate ? 'Marked as estimate — click to confirm' : 'Mark as estimate') +
+        '" style="background:' +
+        (estimate ? 'var(--ambersoft,#fff3cd)' : 'none') +
+        ';border:1px solid ' +
+        (estimate ? 'var(--amber)' : 'var(--border)') +
+        ';border-radius:4px;color:' +
+        (estimate ? 'var(--amber)' : 'var(--dim)') +
+        ';cursor:pointer;font-size:.58rem;padding:.1rem .1rem;font-weight:' +
+        (estimate ? '700' : '400') +
+        ";font-family:'DM Sans',sans-serif;line-height:1;\">~est</button>" +
+        // Delete
+        '<button class="mi-del" onclick="deleteAdminCredit(\'' +
+        c.id +
+        '\')" title="Delete" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:.85rem;padding:0;line-height:1;opacity:.5;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.5">×</button>' +
+        '</div>'
+      );
+    };
+    bodyHtml =
+      sorted.map(rowHtml).join('') +
+      '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;">' +
+      '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Received <span style="color:var(--green);">+' +
+      fmtA(receivedTotal) +
+      '</span></span>' +
+      '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Expected <span style="color:var(--dim);">+' +
+      fmtA(expectedTotal) +
+      '</span></span>' +
+      '</div>';
+  }
+
+  return (
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">' +
+    headerHtml +
+    bodyHtml +
+    '<button onclick="addAdminCredit()" style="margin-top:.6rem;background:none;border:none;color:var(--green);font-size:.78rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.2rem 0;">+ add money in</button>' +
+    '</div>'
+  );
 }
 
 // ── Admin CRUD ────────────────────────────────────────────────────────
@@ -6537,6 +6876,123 @@ async function deleteAdminItem(id: string): Promise<void> {
   });
   renderApp();
   toastDeleted(snap.label, snap.projected_amount);
+}
+
+// ── "Money In" / admin_credits CRUD (mirrors admin_items: logChange + undo) ──
+async function addAdminCredit(): Promise<void> {
+  const { data, error } = await sb
+    .from('admin_credits')
+    .insert({
+      year: state.currentYear,
+      label: '',
+      amount: 0,
+      category: 'Apartment',
+      is_estimate: false,
+      is_received: false,
+    })
+    .select()
+    .single();
+  if (error) {
+    toast('Error adding Money In');
+    return;
+  }
+  state.admin.credits.push(data as AdminCreditRow);
+  logChange(
+    'add',
+    'admin_credit',
+    (data as Record<string, unknown>)?.['id'] as string,
+    'Added Money In',
+    null,
+    data,
+  );
+  renderApp();
+  // Auto-focus the new row's label input so she can start typing immediately.
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('input[data-money-in-label]');
+    const last = inputs[inputs.length - 1] as HTMLInputElement | undefined;
+    if (last && !last.value) last.focus();
+  }, 50);
+}
+
+async function saveAdminCredit(id: string, field: string, value: unknown): Promise<void> {
+  const credit = state.admin.credits.find((c) => c.id === id);
+  if (!credit) return;
+  const oldVal = credit[field];
+  let val: unknown;
+  if (field === 'amount') {
+    val = parseFloat(String(value)) || 0;
+  } else if (field === 'month_start' || field === 'month_end') {
+    // Empty string / "0" → null (one-off / cleared bound). Otherwise clamp 1..12.
+    const n = parseInt(String(value), 10);
+    val = !n || Number.isNaN(n) ? null : Math.min(12, Math.max(1, n));
+  } else if (field === 'is_received' || field === 'is_estimate') {
+    val = Boolean(value);
+  } else {
+    val = String(value);
+  }
+  await sb
+    .from('admin_credits')
+    .update({ [field]: val })
+    .eq('id', id);
+  credit[field] = val;
+  logChange(
+    'edit',
+    'admin_credit',
+    id,
+    `Money In changed: ${credit.label || '(unnamed)'} ${field} ${String(oldVal)} → ${String(val)}`,
+    { [field]: oldVal },
+    { [field]: val },
+  );
+  pushUndo({
+    label: 'edit money in',
+    undo: async () => {
+      await sb
+        .from('admin_credits')
+        .update({ [field]: oldVal })
+        .eq('id', id);
+      credit[field] = oldVal;
+      renderApp();
+    },
+    redo: async () => {
+      await sb
+        .from('admin_credits')
+        .update({ [field]: val })
+        .eq('id', id);
+      credit[field] = val;
+      renderApp();
+    },
+  });
+  renderApp();
+}
+
+async function deleteAdminCredit(id: string): Promise<void> {
+  const snap = state.admin.credits.find((c) => c.id === id);
+  if (!snap) return;
+  await sb.from('admin_credits').delete().eq('id', id);
+  logChange(
+    'delete',
+    'admin_credit',
+    id,
+    `Deleted Money In: ${snap.label || '(unnamed)'} +₪${snap.amount}`,
+    snap,
+    null,
+  );
+  state.admin.credits = state.admin.credits.filter((c) => c.id !== id);
+  pushUndo({
+    label: 'delete money in',
+    undo: async () => {
+      const { data } = await sb.from('admin_credits').insert(snap).select().single();
+      if (data) state.admin.credits.push(data as AdminCreditRow);
+      renderApp();
+    },
+    redo: async () => {
+      await sb.from('admin_credits').delete().eq('id', id);
+      state.admin.credits = state.admin.credits.filter((c) => c.id !== id);
+      renderApp();
+    },
+  });
+  renderApp();
+  toastDeleted(snap.label || 'Money In', snap.amount);
 }
 
 async function addAdminSub(itemId: string): Promise<void> {
@@ -7695,13 +8151,17 @@ function renderYearSnapshot(): string {
     Object.values(state.travel.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
   const travelGap = ag(totalTravelProjected - totalTravelAlloc);
-  const totalAdminProjected = ag(
+  const totalAdminGross = ag(
     (state.admin.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
+  // Net RECEIVED "Money In" credits into the annual admin number only (not the
+  // per-month allocation grid). Received cash genuinely lowers what admin cost.
+  const adminCreditReceived = creditsTotal({ receivedOnly: true });
+  const totalAdminProjected = ag(totalAdminGross - adminCreditReceived);
   const totalAdminAlloc = ag(
     Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
-  const adminGap = ag(totalAdminProjected - totalAdminAlloc);
+  const adminGap = ag(totalAdminGross - totalAdminAlloc);
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = (n: number): string => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
@@ -9943,6 +10403,7 @@ document.addEventListener('visibilitychange', () => {
 // ─────────────────────────────────────────────────────────────────────
 Object.assign(window as unknown as Record<string, unknown>, {
   _installInputModeObserver,
+  addAdminCredit,
   addAdminItem,
   addAdminSub,
   addBudgetItem,
@@ -9977,7 +10438,12 @@ Object.assign(window as unknown as Record<string, unknown>, {
   computeOwed,
   computePending,
   createMonth,
+  creditOccurrences,
+  creditTotal,
+  creditsForCategory,
+  creditsTotal,
   currentMonthNum,
+  deleteAdminCredit,
   deleteAdminItem,
   deleteAdminSub,
   deleteBudgetItem,
@@ -10009,6 +10475,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   jumpTo,
   jumpToHistoryEntry,
   jumpToTransaction,
+  loadAdminCredits,
   loadAdminData,
   loadAllHousingItems,
   loadAllRecurringItems,
@@ -10049,6 +10516,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   renderHousingGrid,
   renderLogin,
   renderMobileTabBar,
+  renderMoneyInCard,
   renderRecurringGrid,
   renderSpendingGrid,
   renderTravelTab,
@@ -10056,6 +10524,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   restoreCache,
   runSearch,
   saveAdminAllocation,
+  saveAdminCredit,
   saveAdminItem,
   saveBizField,
   saveBudget,
