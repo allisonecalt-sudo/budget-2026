@@ -2635,7 +2635,7 @@ function renderApp() {
               (s, a) => s + (Number(a.amount) || 0),
               0,
             );
-            const aGap = ag(Math.max(0, aProj - aAlloc));
+            const aGap = ag(Math.max(0, aProj - aAlloc - creditsTotal()));
             const totalOwed = ag(tGap + aGap);
             const seg = (emoji: string, val: number, tab: string, label: string): string =>
               val > 0
@@ -6371,7 +6371,7 @@ function renderAdminTab() {
           </div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${gap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${gap > 0 ? '(−' + fmtA(gap) + ' gap)' : '✓'}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + ' gap)' : '✓'}</span>
           </div>
         </div>
 
@@ -7603,7 +7603,7 @@ function categoryYearlyGap(catKey: string): number {
       (s, a) => s + (Number(a.amount) || 0),
       0,
     );
-    return Math.max(0, proj - alloc);
+    return Math.max(0, proj - alloc - creditsTotal());
   }
   return 0;
 }
@@ -8112,7 +8112,7 @@ function renderYearSnapshot(): string {
   const totalAdminAlloc = ag(
     Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
-  const adminGap = ag(totalAdminGross - totalAdminAlloc);
+  const adminGap = ag(Math.max(0, totalAdminGross - totalAdminAlloc - creditsTotal()));
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = (n: number): string => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
