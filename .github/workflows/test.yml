@@ -37,6 +37,9 @@ jobs:
       - run: npm ci
       # The app loads dist/app.js, so the suite needs a fresh build first.
       - run: npm run build
+      # Fast, DOM-free unit tests (e.g. history-panel date formatter). Does NOT
+      # touch Supabase — safe to run before the browser suite.
+      - run: npm run test:unit
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
         env:

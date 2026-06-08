@@ -2,6 +2,9 @@
 // global). Its presence also marks this file as an ES module, matching the
 // `<script type="module">` load in index.html.
 import type { SupabaseClient } from '@supabase/supabase-js';
+// Runtime import (kept in dist/lib/ by the build). The `.js` extension is
+// required so the emitted dist/app.js resolves the sibling module in the browser.
+import { fmtHistoryDate } from './lib/history-format.js';
 
 declare global {
   interface Window {
@@ -9118,14 +9121,6 @@ async function openHistoryPanel() {
     delete: 'var(--log-delete)',
     edit: 'var(--log-edit)',
   };
-  const fmtDate = (iso: string | null | undefined): string => {
-    const d = new Date(iso || '');
-    return (
-      d.toLocaleDateString('en-IL', { weekday: 'short', day: 'numeric', month: 'short' }) +
-      ', ' +
-      d.toLocaleTimeString('en-IL', { hour: '2-digit', minute: '2-digit' })
-    );
-  };
   // M6 — Weekly digest at TOP of history list. Auto-generated rollup of the
   // last 7 days of change_log entries.
   const digestHtml = buildWeeklyDigest(data);
@@ -9151,7 +9146,7 @@ async function openHistoryPanel() {
       <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action as string] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
       <div style="min-width:0;">
         <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate((r as Record<string, unknown>).created_at as string | null)}</div>
+        <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtHistoryDate((r as Record<string, unknown>).created_at as string | null)}</div>
       </div>
     </div>`;
       })
@@ -9174,14 +9169,6 @@ async function refreshHistoryIfOpen() {
       add: 'var(--log-add)',
       delete: 'var(--log-delete)',
       edit: 'var(--log-edit)',
-    };
-    const fmtDate = (iso: string | null | undefined): string => {
-      const d = new Date(iso || '');
-      return (
-        d.toLocaleDateString('en-IL', { weekday: 'short', day: 'numeric', month: 'short' }) +
-        ', ' +
-        d.toLocaleTimeString('en-IL', { hour: '2-digit', minute: '2-digit' })
-      );
     };
     const digestHtml2 = buildWeeklyDigest(data);
     list.innerHTML =
@@ -9206,7 +9193,7 @@ async function refreshHistoryIfOpen() {
         <span style="width:8px;height:8px;border-radius:50%;background:${colors[r.action as string] || 'var(--log-default)'};flex-shrink:0;margin-top:.35rem;"></span>
         <div style="min-width:0;">
           <div style="font-size:.82rem;color:var(--text);word-break:break-word;">${esc(r.description)}${clickHandler ? ' ↗' : ''}</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtDate(r.created_at.created_at)}</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem;">${fmtHistoryDate((r as Record<string, unknown>).created_at as string | null)}</div>
         </div>
       </div>`;
         })

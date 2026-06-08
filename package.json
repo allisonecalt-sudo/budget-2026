@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
+    "test:unit": "tsc && node -e \"require('fs').writeFileSync('dist/package.json','{\\\"type\\\":\\\"module\\\"}')\" && node --test tests/**/*.test.mjs",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint app.ts sw.js",
