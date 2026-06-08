@@ -5878,8 +5878,12 @@ function renderAdminTab() {
   // what's still missing (→ Gap). Estimates count toward Gap, not Remaining.
   const creditReceived = creditsTotal({ receivedOnly: true });
   const creditExpected = creditsTotal({ expectedOnly: true });
-  // Gap KPI nets expected credits (budget − allocated − expected). Floored at 0.
-  const kpiGap = ag(Math.max(0, gap - creditExpected));
+  // Total money in (received + expected) — a second funding source alongside
+  // the monthly allocations. It reduces the Gap (less still to set aside),
+  // whether or not the cash is in hand yet.
+  const creditAll = ag(creditReceived + creditExpected);
+  // Gap KPI: budget − allocated − money in. Floored at 0.
+  const kpiGap = ag(Math.max(0, gap - creditAll));
   // Remaining nets received credits back in (budget − spent + received).
   const remaining = ag(budget - totalSpent + creditReceived);
 
@@ -6261,7 +6265,7 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(kpiGap))}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : 'fully covered ✓'}${creditExpected > 0 ? ` · after +${fmtA(creditExpected)} expected` : ''}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : 'fully covered ✓'}${creditAll > 0 ? ` · after +${fmtA(creditAll)} money in` : ''}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
