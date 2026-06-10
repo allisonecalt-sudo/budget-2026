@@ -22,10 +22,12 @@ test('admin tab: summary cards are consistent and payment log has no "?" month',
   await page.evaluate(() => window.switchTab('admin'));
   await page.waitForTimeout(800);
 
-  // Pull payment log text and verify no bare "?" as a month indicator
+  // Pull payment log text and verify no bare "?" as a month indicator.
+  // The heading is styled text-transform:uppercase, so innerText sees
+  // "PAYMENT LOG" — match case-insensitively or it's never found.
   const paymentLogText = await page.evaluate(() => {
     const all = document.body.innerText;
-    const idx = all.indexOf('Payment Log');
+    const idx = all.toUpperCase().indexOf('PAYMENT LOG');
     return idx >= 0 ? all.slice(idx, idx + 3000) : '';
   });
   expect(paymentLogText, 'Payment Log section should exist on the admin tab').not.toBe('');
