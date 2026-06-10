@@ -13,7 +13,6 @@ declare global {
     // SW → app bridge (assigned below, read by the inline SW script in index.html).
     onQueueUpdate?: (data: { count?: number }) => void;
     // Cross-module handler also assigned explicitly elsewhere.
-    syncPtOwedToCash: () => void;
     // One-time guard flag for the numeric-input-mode observer.
     _inputModeObserverInstalled?: boolean;
   }
@@ -444,7 +443,6 @@ interface State {
   yearMobileFull: boolean;
   allBiz: BizMonthRow[];
   _lastCharitySync: Record<string, number> | null;
-  ptOwedTotal: number;
 }
 
 let state: State = {
@@ -482,7 +480,6 @@ let state: State = {
   yearMobileFull: false, // mobile Year view: false = one-month layout, true = full 12-month grid
   allBiz: [],
   _lastCharitySync: null,
-  ptOwedTotal: 0,
 };
 
 // ── Cache (stale-while-revalidate for fast startup) ──────────────────
@@ -4026,13 +4023,10 @@ async function loadBizData() {
       earned: sessions.filter((s: Record<string, unknown>) => s.status === 'happened'),
       scheduled: sessions.filter((s: Record<string, unknown>) => s.status === 'scheduled'),
     };
-    // Cash tab "Owed to You" — drift detection against cash_accounts (C1).
-    state.ptOwedTotal = Number(payload.owed_total) || 0;
   } catch (err) {
     console.error('pt-sessions edge function failed:', err);
     state.ptClients = [];
     state.ptSessions = { earned: [], scheduled: [] };
-    state.ptOwedTotal = 0;
   }
 
   // Load all biz_months for accountant fee tracking
@@ -7396,21 +7390,6 @@ async function loadCashData() {
   } catch (e) {
     state.usdRate = state.usdRate || 3.13;
   }
-  // Pull live owed total from PT (sessions where status=happened & paid=false).
-  // Lets the Cash tab show a drift indicator vs the manually-tracked owed rows.
-  try {
-    const fnUrl = `${SB_URL}/functions/v1/pt-sessions`;
-    const resp = await fetch(fnUrl, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${SB_KEY}`, apikey: SB_KEY },
-    });
-    if (resp.ok) {
-      const payload = await resp.json();
-      state.ptOwedTotal = Number(payload.owed_total) || 0;
-    }
-  } catch (e) {
-    // Silent — Cash tab still works without drift indicator
-  }
 }
 
 function cashILS(acct: CashAccountRow): number {
@@ -7418,32 +7397,6 @@ function cashILS(acct: CashAccountRow): number {
   if (acct.currency === 'USD') return Math.round(amt * (state.usdRate || 3.13));
   return amt;
 }
-
-// One-click sync: creates or updates a "PT clinical (auto)" row in cash_accounts
-// with state.ptOwedTotal. Splitwise/manual rows are preserved separately.
-async function syncPtOwedToCash() {
-  if (!state.ptOwedTotal) {
-    toast('No PT owed total to sync');
-    return;
-  }
-  const existing = (state.cashAccounts || []).find((a) => a.name === 'PT clinical (auto)');
-  if (existing) {
-    await sb.from('cash_accounts').update({ amount: state.ptOwedTotal }).eq('id', existing.id);
-  } else {
-    await sb.from('cash_accounts').insert({
-      name: 'PT clinical (auto)',
-      amount: state.ptOwedTotal,
-      currency: 'ILS',
-      is_owed: true,
-      notes: 'Auto-synced from PT — click sync button on drift warning to refresh',
-      sort_order: 10,
-    });
-  }
-  await loadCashData();
-  renderApp();
-  toast('Synced from PT ✓');
-}
-window.syncPtOwedToCash = syncPtOwedToCash;
 
 async function saveCashField(id: string, field: string, value: unknown): Promise<void> {
   const acct = state.cashAccounts.find((a) => a.id === id);
@@ -7480,6 +7433,75 @@ async function deleteCashAccount(id: string): Promise<void> {
   await sb.from('cash_accounts').delete().eq('id', id);
   state.cashAccounts = state.cashAccounts.filter((a) => a.id !== id);
   renderApp();
+}
+
+// Reserve ladder — investing rule decided 2026-06-10 (decisions.md, second-brain).
+// Based on Holdings only: owed money isn't liquid until it lands.
+// <₪25K = red line (pause investing) · 25–35 build · 35–45 invest ₪1K/mo ·
+// 45–55 invest ₪2K/mo · >55 invest everything above 55 (→ Schwab Individual).
+function renderReserveLadder(liquid: number, n: (v: number) => string): string {
+  let status: string;
+  let color: string;
+  let active: number; // index of active segment
+  if (liquid < 25000) {
+    status = `Below the ₪25K red line — pause investing, rebuild to ₪35K`;
+    color = 'var(--red)';
+    active = 0;
+  } else if (liquid < 35000) {
+    status = `Build zone — invest ₪0 this month`;
+    color = 'var(--dim)';
+    active = 1;
+  } else if (liquid < 45000) {
+    status = `Invest ₪1,000 this month`;
+    color = 'var(--green)';
+    active = 2;
+  } else if (liquid < 55000) {
+    status = `Invest ₪2,000 this month`;
+    color = 'var(--green)';
+    active = 3;
+  } else {
+    status = `Invest ₪${n(liquid - 55000)} this month (everything above ₪55K)`;
+    color = 'var(--green)';
+    active = 4;
+  }
+  const segs = [
+    { range: '< 25K', label: 'red line' },
+    { range: '25–35', label: 'build' },
+    { range: '35–45', label: '+₪1,000' },
+    { range: '45–55', label: '+₪2,000' },
+    { range: '55K +', label: 'all extra' },
+  ];
+  const segHtml = segs
+    .map((s, i) => {
+      const isActive = i === active;
+      const bg = isActive
+        ? i === 0
+          ? 'var(--rsoft)'
+          : i === 1
+            ? 'var(--gsoft)'
+            : 'var(--asoft)'
+        : 'var(--bg)';
+      const fg = isActive
+        ? i === 0
+          ? 'var(--red)'
+          : i === 1
+            ? 'var(--dim)'
+            : 'var(--accent)'
+        : 'var(--muted)';
+      const border = isActive ? (i === 0 ? 'var(--red)' : 'var(--accent)') : 'var(--border)';
+      return `<div style="flex:1;text-align:center;padding:.35rem .2rem;border:1px solid ${border};border-radius:6px;background:${bg};${isActive ? 'font-weight:700;' : ''}">
+        <div style="font-size:.62rem;font-family:'DM Mono',monospace;color:${fg};">${s.range}</div>
+        <div style="font-size:.58rem;color:${fg};">${s.label}</div>
+      </div>`;
+    })
+    .join('');
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;margin-bottom:1.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.3rem .75rem;">
+      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder</span>
+      <span style="font-size:.8rem;font-weight:700;color:${color};">${status}</span>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:.6rem;">${segHtml}</div>
+  </div>`;
 }
 
 function renderCashTab(): string {
@@ -7526,12 +7548,10 @@ function renderCashTab(): string {
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
       <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
-      <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div>${
-        state.ptOwedTotal && Math.abs(state.ptOwedTotal - totalOwed) > 1
-          ? `<div style="font-size:.6rem;color:var(--amber);margin-top:.2rem;font-weight:600;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;" title="PT shows ₪${n(state.ptOwedTotal)} in unpaid sessions. Cash row shows ₪${n(totalOwed)}. Click Sync to add/update a 'PT clinical (auto)' row.">⚠ PT: ₪${n(state.ptOwedTotal)} (drift ₪${n(state.ptOwedTotal - totalOwed > 0 ? state.ptOwedTotal - totalOwed : totalOwed - state.ptOwedTotal)})<button onclick="syncPtOwedToCash()" style="font-size:.6rem;padding:.15rem .4rem;border:1px solid var(--amber);background:var(--ambersoft);color:var(--amber);border-radius:.25rem;cursor:pointer;font-weight:700;">Sync →</button></div>`
-          : ''
-      }</div>
+      <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
     </div>
+
+    ${renderReserveLadder(totalHoldings, n)}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
       <div style="padding:.6rem .75rem;background:var(--gsoft);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">💰 Holdings</div>
@@ -10504,7 +10524,6 @@ Object.assign(window as unknown as Record<string, unknown>, {
   switchMonth,
   switchTab,
   switchYear,
-  syncPtOwedToCash,
   syncQueueNow,
   toast,
   toastDeleted,
