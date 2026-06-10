@@ -11,7 +11,7 @@ const { chromium } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://localhost:3100'; // keep in sync with playwright.config.js (3000 is squatted by Gmail MCP locally)
 const EMAIL = process.env.BUDGET_TEST_EMAIL || 'allisonecalt@gmail.com';
 const PASSWORD = process.env.BUDGET_TEST_PASSWORD;
 const STATE_PATH = path.join(__dirname, '.auth', 'state.json');

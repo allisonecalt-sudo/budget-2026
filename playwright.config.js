@@ -10,12 +10,14 @@ module.exports = defineConfig({
   // Authenticate once (app is behind the E4 login gate) and reuse the session.
   globalSetup: require.resolve('./tests/global-setup.js'),
   use: {
-    baseURL: 'http://localhost:3000',
+    // 3100, not 3000: the Gmail MCP server squats on 3000 locally, and with
+    // reuseExistingServer Playwright would happily run the suite against it.
+    baseURL: 'http://localhost:3100',
     storageState: './tests/.auth/state.json',
   },
   webServer: {
-    command: 'npx serve -l 3000 .',
-    port: 3000,
+    command: 'npx serve -l 3100 .',
+    port: 3100,
     reuseExistingServer: true,
   },
 });
