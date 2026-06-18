@@ -153,6 +153,14 @@ textarea {
   gap: 0.4rem;
   flex-shrink: 0;
 }
+/* Tiny muted build tag next to the title — lets her confirm a new build loaded. */
+.app-version {
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: var(--dim);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
 .year-select {
   flex: 0 0 auto;
   width: auto;

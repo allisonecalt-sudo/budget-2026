@@ -32,6 +32,10 @@ const SB_KEY =
 const PT_URL = 'https://fxpaacqnsbnbzbcabpvi.supabase.co';
 const PT_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4cGFhY3Fuc2JuYnpiY2FicHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjM0MzgsImV4cCI6MjA4NzY5OTQzOH0.cLIEMR4ZpH3buhMjC8nwHu8h9p-WfHPfNZpHQXua3Oc';
+// Visible build version (shown small + muted in the header) so she can tell at a
+// glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
+// VERSION constant ('budget-vN') on every deploy.
+const APP_VERSION = 'v12';
 
 const MONTHS = [
   'January',
@@ -2474,6 +2478,7 @@ function renderApp() {
             .join('')}
           <option value="__add__">+ Add year</option>
         </select>
+        <span class="app-version" title="Build version">${APP_VERSION}</span>
       </div>
       <div class="hdr-tabs">
         <div class="page-tabs">
