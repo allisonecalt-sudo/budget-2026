@@ -35,7 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
+const BUILD_DATE = 'Jun 18, 2026';
 
 const MONTHS = [
   'January',
@@ -195,6 +196,10 @@ interface MonthRow {
   income_private: number | null;
   income_other: number | null;
   savings_bank: number | null;
+  // Charity is stored as a PERCENT of income (cross-device, in the DB). The cash
+  // budget is always derived = income × charity_pct, recomputed on every render so
+  // it adapts to income changes on any device. null = not set.
+  charity_pct: number | null;
   [key: string]: unknown;
 }
 
@@ -2419,10 +2424,11 @@ function renderApp() {
     : Number(current.income_private) || 0;
 
   const income = totalIncome(current);
-  // Sync charity % from localStorage into state.budgets AND Supabase (quietly, no undo/log)
-  const _chPct = parseFloat(
-    localStorage.getItem('charityPct_' + (state.currentMonthId || '')) || '0',
-  );
+  // Charity is a PERCENT stored on months.charity_pct (DB → cross-device). The cash
+  // budget is always derived = income × pct, recomputed here on every render so it
+  // adapts when income changes, on web AND mobile. Sync the derived cash into the
+  // budgets table quietly (no undo/log) so the rest of the app sees a normal budget.
+  const _chPct = Number(current.charity_pct) || 0;
   if (_chPct && income) {
     const _chCalc = Math.round((income * _chPct) / 100);
     state.budgets['charity'] = _chCalc;
@@ -2478,7 +2484,7 @@ function renderApp() {
             .join('')}
           <option value="__add__">+ Add year</option>
         </select>
-        <span class="app-version" title="Build version">${APP_VERSION}</span>
+        <span class="app-version" title="Build version">${APP_VERSION} · ${BUILD_DATE}</span>
       </div>
       <div class="hdr-tabs">
         <div class="page-tabs">
@@ -2947,14 +2953,12 @@ function renderApp() {
                   const txs = state.transactions.filter((tx) => tx.category === c.key);
                   if (c.hasTab) {
                     if (c.key === 'charity') {
-                      const charityPctKey = 'charityPct_' + state.currentMonthId;
+                      // Percent comes straight from the DB row (cross-device); cash is
+                      // always derived from current income so it adapts on every device.
                       const charityPct =
-                        parseFloat(localStorage.getItem(charityPctKey) || '') ||
-                        (state.budgets['charity'] && income
-                          ? +((state.budgets['charity'] / income) * 100).toFixed(1)
-                          : '');
+                        current.charity_pct != null ? Number(current.charity_pct) : '';
                       const charityCalc = charityPct
-                        ? Math.round((income * charityPct) / 100)
+                        ? Math.round((income * Number(charityPct)) / 100)
                         : state.budgets['charity'] || 0;
                       return `<div class="cat-row" id="cat-charity">
                       <div class="cat-top">
@@ -2962,8 +2966,8 @@ function renderApp() {
                         <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
                           <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
                             onclick="event.stopPropagation()"
-                            oninput="(function(el){const pct=parseFloat(el.value)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
-                            onblur="(function(v){const pct=parseFloat(v)||0;localStorage.setItem('charityPct_'+state.currentMonthId,pct);const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);saveBudget('charity',calc);state.budgets['charity']=calc;renderApp();})(this.value)"
+                            oninput="(function(el){const pct=parseFloat(el.value)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
+                            onblur="saveCharityPct(this.value)"
                             onkeydown="if(event.key==='Enter'){this.blur()}"
                             style="width:60px">
                           <span style="font-size:.8rem;color:var(--muted);">%</span>
@@ -3522,6 +3526,32 @@ async function saveSavingsField(field: string, value: string | number): Promise<
     .update({ [field]: num })
     .eq('id', state.currentMonthId!);
   if (month) month[field] = num;
+}
+
+// Charity is entered as a PERCENT and stored on months.charity_pct (DB → it follows
+// her across web + mobile, and Claude can read it — tandem rule). This writes the
+// percent, then derives + saves the cash budget (income × pct) so the amount adapts
+// to income on every device. Called from the charity row's % input onblur.
+async function saveCharityPct(value: string | number): Promise<void> {
+  const pct = parseFloat(String(value)) || 0;
+  const month = state.months.find((m) => m.id === state.currentMonthId);
+  const newPct = pct > 0 ? pct : null;
+  const { error } = await sb
+    .from('months')
+    .update({ charity_pct: newPct })
+    .eq('id', state.currentMonthId!);
+  if (error) {
+    toast('Could not save charity %');
+    return;
+  }
+  if (month) month.charity_pct = newPct;
+  const income = month ? totalIncome(month) : 0;
+  const calc = Math.round((income * pct) / 100);
+  // Pre-seed the sync marker so the next render doesn't redundantly re-write the same cash.
+  if (!state._lastCharitySync) state._lastCharitySync = {};
+  state._lastCharitySync[state.currentMonthId!] = calc;
+  await saveBudget('charity', calc);
+  renderApp();
 }
 
 async function saveBudget(catKey: string, amount: string | number): Promise<void> {
@@ -10496,6 +10526,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   saveCashField,
   saveCharityAllocation,
   saveCharityItem,
+  saveCharityPct,
   saveHousingFromMonth,
   saveIncome,
   saveIncomeField,
