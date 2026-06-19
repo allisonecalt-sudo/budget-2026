@@ -694,7 +694,10 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
       if ((await valLoc.count()) === 0) continue; // owed-strip has segments not val when open
       const label = await stat.locator('.ribbon-label').textContent();
       const raw = await valLoc.first().textContent();
-      const num = parseFloat(raw.replace(/[₪,~]/g, ''));
+      // Strip ₪, commas, ~ AND the bidi marks (U+200E/U+200F) that the he-IL locale
+      // inserts before a NEGATIVE value's minus sign — otherwise parseFloat() returns
+      // NaN the first time a ribbon value goes negative (e.g. an over-budgeted month).
+      const num = parseFloat(raw.replace(/[₪,~‎‏]/g, ''));
       if (label.includes('Income')) vals.income = num;
       if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
         vals.budgeted = num;
