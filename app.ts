@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v13';
-const BUILD_DATE = 'Jun 18, 2026';
+const APP_VERSION = 'v14';
+const BUILD_DATE = 'Jun 19, 2026';
 
 const MONTHS = [
   'January',
@@ -2134,6 +2134,10 @@ function totalIncome(month: MonthRow): number {
     (Number(month.income_petachya) || 0) +
       (Number(month.income_clalit) || 0) +
       (Number(month.income_private) || 0) +
+      // Parents/Other counts toward net too (kept simple — it's small, and the
+      // income breakdown shows it as a source, so it should be in the total +
+      // the charity base). Mirrors incFor (year view). 2026-06-19.
+      (Number(month.income_other) || 0) +
       extras,
   );
 }
