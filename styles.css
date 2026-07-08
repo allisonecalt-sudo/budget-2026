@@ -2868,6 +2868,12 @@ tr.collapsed {
 .owed-seg.owed-seg-zero:hover {
   background: var(--gsoft);
 }
+.owed-seg.owed-seg-surplus {
+  color: var(--green);
+}
+.owed-seg.owed-seg-surplus:hover {
+  background: var(--gsoft);
+}
 .owed-sep {
   color: var(--dim);
   font-size: 0.7rem;

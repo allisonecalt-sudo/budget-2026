@@ -2641,7 +2641,7 @@ function renderApp() {
               (s, a) => s + (Number(a.amount) || 0),
               0,
             );
-            const tGap = ag(Math.max(0, tProj - tAlloc));
+            const tGap = ag(tProj - tAlloc); // signed: >0 short, <0 surplus
             const aProj = (state.admin.items || []).reduce(
               (s, i) => s + (Number(i.projected_amount) || 0),
               0,
@@ -2650,12 +2650,17 @@ function renderApp() {
               (s, a) => s + (Number(a.amount) || 0),
               0,
             );
-            const aGap = ag(Math.max(0, aProj - aAlloc - creditsTotal()));
+            const aGap = ag(aProj - aAlloc - creditsTotal()); // signed: >0 short, <0 surplus
             const totalOwed = ag(tGap + aGap);
-            const seg = (emoji: string, val: number, tab: string, label: string): string =>
-              val > 0
-                ? `<span class="owed-seg" title="${label}: -${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`
-                : `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
+            const seg = (emoji: string, val: number, tab: string, label: string): string => {
+              if (val > 0)
+                // shortfall — still owe this much
+                return `<span class="owed-seg" title="${label}: short ${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`;
+              if (val < 0)
+                // surplus — over-funded
+                return `<span class="owed-seg owed-seg-surplus" title="${label}: surplus ${fmt(-val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">+${fmt(-val)}</span></span>`;
+              return `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
+            };
             const chev = owedOpen ? '▾' : '▸';
             return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
               <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
@@ -2667,7 +2672,7 @@ function renderApp() {
                 <span class="owed-sep">·</span>
                 ${seg('📋', aGap, 'admin', 'Admin gap')}
               </div>
-              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? '-' : ''}${fmt(totalOwed)}</div>` : ''}
+              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? '-' + fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
             </div>`;
           })()}
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
