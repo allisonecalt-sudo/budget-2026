@@ -4098,8 +4098,13 @@ async function loadAdminData() {
     state.admin.allocations[a.month_num] = a as AdminAllocationRow;
   });
 
+  // admin_sub_items has no year column — a sub-item is scoped to a year only through
+  // its parent admin_items row (item_id). Load all, then keep only those whose parent
+  // item is in THIS year, so the year-level Spent + Payment Log + monthly "paid"
+  // tooltips don't bleed other years' payments into the current year's Admin view.
+  const yearItemIds = new Set((items || []).map((i) => i.id));
   const { data: subs } = await sb.from('admin_sub_items').select('*').order('created_at');
-  state.admin.subItems = subs || [];
+  state.admin.subItems = (subs || []).filter((s) => yearItemIds.has(s.item_id));
 
   await loadAdminCredits();
 }
