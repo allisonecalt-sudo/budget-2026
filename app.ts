@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v14';
-const BUILD_DATE = 'Jun 19, 2026';
+const APP_VERSION = 'v15';
+const BUILD_DATE = 'Jul 14, 2026 09:15';
 
 const MONTHS = [
   'January',
@@ -7820,7 +7820,10 @@ function renderYearSnapshot(): string {
   const charityV = (mn: number, future: boolean): number => {
     if (!showProjected && future) return 0;
     const m = months.find((mo) => mo.month_num === mn);
-    return m ? budgetMap[m.id]?.['charity'] || 0 : 0;
+    // Route through yearCatBudget so the Charity row shows the same number the
+    // Total Spent/Budgeted math counts (pct-derived, DB-backed), even for months
+    // whose budgets-table charity row hasn't been synced by a month-page visit.
+    return m ? yearCatBudget(m.id, 'charity') : 0;
   };
   const adminV = (mn: number, future: boolean): number =>
     !showProjected && future ? 0 : Number(state.admin.allocations?.[mn]?.amount || 0);
@@ -7847,10 +7850,13 @@ function renderYearSnapshot(): string {
     return items.length ? items.reduce((s, b) => s + (Number(b.amount) || 0), 0) : null;
   };
   const yearCatBudget = (mid: string, catKey: string): number => {
-    // Mirror month page charity % override
+    // Mirror month page charity % override — pct lives on months.charity_pct (DB →
+    // cross-device). Never read the legacy charityPct_<mid> localStorage key: it is
+    // written nowhere anymore, so a device that still carries an old value would
+    // silently diverge from the month page (May 2026 showed ₪175 vs ₪7 remaining).
     if (catKey === 'charity') {
-      const chPct = parseFloat(localStorage.getItem('charityPct_' + (mid || '')) || '0');
       const m = months.find((mo) => mo.id === mid);
+      const chPct = Number(m?.charity_pct) || 0;
       if (chPct && m) {
         const inc = incFor(m);
         if (inc) return Math.round((inc * chPct) / 100);
