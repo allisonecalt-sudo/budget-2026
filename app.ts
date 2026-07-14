@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v15';
-const BUILD_DATE = 'Jul 14, 2026 09:15';
+const APP_VERSION = 'v16';
+const BUILD_DATE = 'Jul 14, 2026 10:05';
 
 const MONTHS = [
   'January',
@@ -5783,10 +5783,13 @@ function renderCharityTab() {
     const labelWeight = isCurrent ? '700' : '600';
     const inputColor = isCurrent ? 'var(--accent)' : 'var(--text)';
     const inputWeight = isCurrent ? '600' : '400';
-    // % of that month's income the charity allocation represents
+    // % label = the stored months.charity_pct the allocation is DERIVED from.
+    // Never divide by totalIncome(otherMonth): state.incomeItems only holds the
+    // OPEN month's custom income rows, so cross-month division mixes two months
+    // (Jan showed 5.3% instead of its true 5% while July was the active month).
     const monthObj = state.months.find((m) => m.month_num === mnum);
-    const monthIncome = monthObj ? totalIncome(monthObj) : 0;
-    const pct = val && monthIncome ? ((Number(val) / monthIncome) * 100).toFixed(1) : null;
+    const dbPct = monthObj && monthObj.charity_pct != null ? Number(monthObj.charity_pct) : 0;
+    const pct = val && dbPct ? dbPct.toFixed(1) : null;
     return (
       '<div style="display:flex;justify-content:space-between;align-items:center;padding:.25rem .4rem;background:' +
       rowBg +
