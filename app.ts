@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v22';
-const BUILD_DATE = 'Jul 21, 2026 16:50';
+const APP_VERSION = 'v23';
+const BUILD_DATE = 'Jul 21, 2026 17:10';
 
 const MONTHS = [
   'January',
@@ -2594,7 +2594,7 @@ function renderApp() {
       const leisureSubRibbon = `<div class="sub-ribbon">
         <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
           ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
-          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${n(leisureSpent)}${leisureBudget ? ` / ${n(leisureBudget)}` : ''}${leisureBudget && leisureSpent > leisureBudget ? `<span class="sn-over"> · ${n(ag(leisureSpent - leisureBudget))} over</span>` : ''}
+          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${fmt(leisureSpent)} spent${leisureBudget ? ` of ${fmt(leisureBudget)}` : ''}${leisureBudget && leisureSpent > leisureBudget ? `<span class="sn-over"> · ${fmt(ag(leisureSpent - leisureBudget))} over</span>` : ''}
           </span>
         </span>
         ${

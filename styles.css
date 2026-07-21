@@ -93,12 +93,17 @@ textarea:focus-visible {
   margin: 0;
   padding: 0;
 }
+html {
+  /* Readability bump (v23): rows/tables/labels use rem sizes off the root, so
+     nudging the root up scales the whole app's text at once. */
+  font-size: 17px;
+}
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  font-size: 14px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   /* V2 — tabular-nums everywhere numbers appear; DM Mono is metrically tabular,
      this forces all glyphs to identical advance even when feature-detection fails */
