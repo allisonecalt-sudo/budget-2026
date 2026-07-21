@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v16';
-const BUILD_DATE = 'Jul 14, 2026 10:05';
+const APP_VERSION = 'v17';
+const BUILD_DATE = 'Jul 21, 2026 10:10';
 
 const MONTHS = [
   'January',
@@ -2567,7 +2567,7 @@ function renderApp() {
             // DC5 — gap triangles dropped from ribbon Summary too (same
             // reason as Snapshot modal). Owed-elsewhere strip carries
             // the gap signal at a higher hierarchy level.
-            return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+            return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
           })
           .join('');
         if (cats.length === 1) {
@@ -2575,7 +2575,7 @@ function renderApp() {
           const b = catBudget(c.key) || 0;
           const s = c.hasTab ? b : spent[c.key] || 0;
           const r = b - s;
-          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
         }
         return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
           <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td></tr>${catRows}`;
@@ -2597,7 +2597,7 @@ function renderApp() {
       const leisureSubRibbon = `<div class="sub-ribbon">
         <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
           ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
-          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${n(leisureSpent)}${leisureBudget ? ` / ${n(leisureBudget)}` : ''}
+          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${n(leisureSpent)}${leisureBudget ? ` / ${n(leisureBudget)}` : ''}${leisureBudget && leisureSpent > leisureBudget ? `<span class="sn-over"> · ${n(ag(leisureSpent - leisureBudget))} over</span>` : ''}
           </span>
         </span>
         ${
@@ -2827,7 +2827,7 @@ function renderApp() {
           <div class="income-row"><span class="income-source">Petachya</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['petachya'] ? 'est' : 'act'}" onclick="toggleIncomeEst('petachya')" title="Toggle estimated/actual">${_est['petachya'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['petachya'] ? ' is-est' : ''}" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Clalit</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['clalit'] ? 'est' : 'act'}" onclick="toggleIncomeEst('clalit')" title="Toggle estimated/actual">${_est['clalit'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['clalit'] ? ' is-est' : ''}" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Private (Vivi)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['private'] ? 'est' : 'act'}" onclick="toggleIncomeEst('private')" title="Toggle estimated/actual">${_est['private'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['private'] ? ' is-est' : ''}" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div></div>
-          ${(Number(current.income_other) || 0) > 0 || state.incomeItems.length === 0 ? `<div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other'] ? 'est' : 'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['other'] ? ' is-est' : ''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>` : '<input type="hidden" id="inc-other" value="0">'}
+          ${(Number(current.income_other) || 0) !== 0 || state.incomeItems.length === 0 ? `<div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other'] ? 'est' : 'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['other'] ? ' is-est' : ''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>` : '<input type="hidden" id="inc-other" value="0">'}
           `;
           })()}
           ${state.incomeItems
@@ -4912,12 +4912,16 @@ function renderTravelTab() {
             );
           })
           .join('');
+        const paidOver = paidTotal > Number(item.projected_amount || 0);
         const paidSummary =
           subs.length > 0
-            ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
+            ? '<div style="font-size:.68rem;color:' +
+              (paidOver ? 'var(--red)' : 'var(--muted)') +
+              ';margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
               fmtA(paidTotal) +
               ' of ' +
               fmtA(Number(item.projected_amount || 0)) +
+              (paidOver ? ' · ' + fmtA(paidTotal - Number(item.projected_amount || 0)) + ' over' : '') +
               '</div>'
             : '';
         subsHtml =
@@ -5147,11 +5151,15 @@ function renderTravelTab() {
             0,
           );
           const tripAlloc = allocByTrip[tripKey] || 0;
+          const tripOver = tripAlloc > 0 && tripSpent > tripAlloc;
           const headerNote = tripAlloc
-            ? '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
+            ? '<span style="font-size:.7rem;color:' +
+              (tripOver ? 'var(--red);font-weight:700' : 'var(--muted)') +
+              ';font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
               ' of ' +
               fmtA(tripAlloc) +
+              (tripOver ? ' · ' + fmtA(tripSpent - tripAlloc) + ' over' : '') +
               '</span>'
             : '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
@@ -5221,11 +5229,15 @@ function renderTravelTab() {
       // you can see at a glance how close YTD spending is to the year pot.
       '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>' +
-      '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">' +
+      '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;color:' +
+      (totalSpent > budget ? 'var(--red)' : 'var(--text)') +
+      ';">' +
       fmtA(totalSpent) +
       '<span style="font-weight:400;color:var(--dim);font-size:.72rem;margin-left:.35rem;">of ' +
       fmtA(budget) +
-      ' budget</span>' +
+      ' budget' +
+      (totalSpent > budget ? ' · ' + fmtA(totalSpent - budget) + ' over' : '') +
+      '</span>' +
       '</span>' +
       '</div>';
   }
@@ -5335,10 +5347,10 @@ function renderTravelTab() {
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − YTD spent</div>
+      <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'budget − YTD spent'}</div>
       </div>
     </div>
 
@@ -5556,12 +5568,16 @@ function renderCharityTab() {
           .join('');
         void _itemsCharityHtml_u;
 
+        const paidOver = paidTotal > Number(item.projected_amount || 0);
         const paidSummary =
           subs.length > 0
-            ? '<div style="font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
+            ? '<div style="font-size:.68rem;color:' +
+              (paidOver ? 'var(--red)' : 'var(--muted)') +
+              ';margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
               fmtA(paidTotal) +
               ' of ' +
               fmtA(Number(item.projected_amount || 0)) +
+              (paidOver ? ' · ' + fmtA(paidTotal - Number(item.projected_amount || 0)) + ' over' : '') +
               '</div>'
             : '';
         subsHtml =
@@ -5849,8 +5865,8 @@ function renderCharityTab() {
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">+ <span style="color:var(--amber);font-weight:600;">${fmtA(totalPledged)}</span> pledged · <strong>${fmtA(totalSpent)}</strong> total</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining to Give</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(totalAlloc - totalPaid)}</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${totalAlloc - totalPaid < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining to Give</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${totalAlloc - totalPaid < 0 ? 'var(--red)' : 'var(--accent)'};">${fmtA(totalAlloc - totalPaid)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">free now · after pledges: <strong style="color:${totalAlloc - totalSpent < 0 ? 'var(--red)' : 'var(--text)'};">${fmtA(totalAlloc - totalSpent)}</strong></div>
       </div>
     </div>
@@ -5931,8 +5947,8 @@ function renderAdminTab() {
   // the monthly allocations. It reduces the Gap (less still to set aside),
   // whether or not the cash is in hand yet.
   const creditAll = ag(creditReceived + creditExpected);
-  // Gap KPI: budget − allocated − money in. Floored at 0.
-  const kpiGap = ag(Math.max(0, gap - creditAll));
+  // Gap KPI: budget − allocated − money in. Signed: >0 still to find, <0 over-covered.
+  const kpiGap = ag(gap - creditAll);
   // Remaining = budget − spent. Money-in is a funding source for the Gap, not a spend offset.
   const remaining = ag(budget - totalSpent);
 
@@ -6023,7 +6039,11 @@ function renderAdminTab() {
             ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">' +
               fmtA(remaining) +
               ' left</span>'
-            : '')
+            : remaining < 0
+              ? '<span style="font-size:.6rem;color:var(--red);font-weight:600;margin-left:.3rem;">' +
+                fmtA(-remaining) +
+                ' over</span>'
+              : '')
         : '';
     const rowOpacity = item.is_logged ? 'opacity:.55;' : '';
     const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
@@ -6299,17 +6319,17 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(kpiGap))}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : 'fully covered ✓'}${creditAll > 0 ? ` · after +${fmtA(creditAll)} money in` : ''}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : kpiGap < 0 ? 'over-covered · surplus' : 'fully covered ✓'}${creditAll > 0 ? ` · after +${fmtA(creditAll)} money in` : ''}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:var(--accent);">${fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">budget − spent</div>
+      <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'budget − spent'}</div>
       </div>
     </div>
 
@@ -6420,7 +6440,7 @@ function renderAdminTab() {
           </div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + ' gap)' : '✓'}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + ' gap)' : kpiGap < 0 ? '(+' + fmtA(-kpiGap) + ' over) ✓' : '✓'}</span>
           </div>
         </div>
 
@@ -7908,8 +7928,9 @@ function renderYearSnapshot(): string {
     { type: 'sub', label: '\u2937 Clalit', valFn: (m: MonthRow) => Number(m.income_clalit) || 0 },
     { type: 'sub', label: '\u2937 Private', valFn: (m: MonthRow) => Number(m.income_private) || 0 },
   ];
-  // Add a row for income_other if any month has it
-  if (months.some((m) => Number(m.income_other) > 0)) {
+  // Add a row for income_other if any month has it (non-zero: negative
+  // corrections must stay visible too, or sub-rows won't sum to the total)
+  if (months.some((m) => (Number(m.income_other) || 0) !== 0)) {
     incomeSubRows.push({
       type: 'sub',
       label: '\u2937 Other',
@@ -8193,7 +8214,7 @@ function renderYearSnapshot(): string {
   const totalAdminAlloc = ag(
     Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
   );
-  const adminGap = ag(Math.max(0, totalAdminGross - totalAdminAlloc - creditsTotal()));
+  const adminGap = ag(totalAdminGross - totalAdminAlloc - creditsTotal());
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = (n: number): string => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
@@ -8681,8 +8702,8 @@ function openSnapshot(): void {
         return `<tr class="sn-cat ${gid} collapsed">
         <td data-label="Category" style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td data-label="Budget">${b ? n(b) : ''}</td>
-        <td data-label="Spent">${b ? n(s) : ''}</td>
-        <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td>
+        <td data-label="Spent">${b || s ? n(s) : ''}</td>
+        <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td>
       </tr>`;
       })
       .join('');
@@ -8691,7 +8712,7 @@ function openSnapshot(): void {
       const b = catBudget(c.key) || 0;
       const s = c.hasTab ? b : spent[c.key] || 0;
       const r = b - s;
-      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : ''}</td></tr>`;
+      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b || s ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
         <td data-label="Category"><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
