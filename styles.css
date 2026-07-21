@@ -236,12 +236,18 @@ textarea {
     'tnum' 1,
     'lnum' 1;
 }
-/* Ribbon hierarchy (v20): the 3 "where am I now" numbers read big; the
-   inputs (Income/Budgeted/Left to Budget) shrink so the eye finds the
-   decision numbers first. */
+/* Ribbon hierarchy (v20, revised v21): the decision numbers read big and the
+   inputs (Income/Budgeted/Used) shrink so the eye finds them first. Left to
+   Budget = unallocated money = her #1, so it gets the biggest treatment (rs-key). */
 .ribbon-stat.rs-hero .ribbon-val {
   font-size: 1.32rem;
   font-weight: 700;
+}
+.ribbon-stat.rs-key .ribbon-val {
+  font-size: 1.5rem;
+}
+.ribbon-stat.rs-key .ribbon-label {
+  color: var(--accent);
 }
 .ribbon-stat.rs-input {
   flex: 0.72;
