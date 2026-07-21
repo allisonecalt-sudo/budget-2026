@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v23';
-const BUILD_DATE = 'Jul 21, 2026 17:10';
+const APP_VERSION = 'v24';
+const BUILD_DATE = 'Jul 21, 2026 17:35';
 
 const MONTHS = [
   'January',
@@ -564,7 +564,7 @@ function ag(n: unknown): number {
 }
 const fmt = (n: unknown): string =>
   '₪' +
-  Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const pct = (spent: number, budget: number): number =>
   budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
 const status = (spent: number, budget: number): string => {
@@ -2539,7 +2539,7 @@ function renderApp() {
           ? ''
           : Number(v).toLocaleString('en-IL', {
               minimumFractionDigits: 0,
-              maximumFractionDigits: 2,
+              maximumFractionDigits: 0,
             });
 
       if (ribbonHidden)
@@ -3437,7 +3437,7 @@ function renderApp() {
         <div style="display:flex;flex-direction:column;gap:.65rem;">
           <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
           <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
-          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${bizNetCurrent.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
+          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${bizNetCurrent.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
           <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
           <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
         </div>
@@ -4823,7 +4823,7 @@ function renderTravelTab() {
 
   const fmtA = (n: number): string =>
     '₪' +
-    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const esc = (s: string | null | undefined): string => (s || '').replace(/"/g, '&quot;');
 
   const tvSort = localStorage.getItem('travelItemSort') || 'created';
@@ -5454,7 +5454,7 @@ function renderCharityTab() {
 
   const fmtA = (n: number): string =>
     '₪' +
-    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute payment log HTML
@@ -5760,7 +5760,7 @@ function renderAdminTab() {
 
   const fmtA = (n: number): string =>
     '₪' +
-    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute sort buttons HTML
@@ -6374,7 +6374,7 @@ function renderMoneyInCard(): string {
   ];
   const fmtA = (n: number): string =>
     '₪' +
-    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   const credits = (state.admin.credits || []) as AdminCreditRow[];
@@ -8488,7 +8488,7 @@ function openSnapshot(): void {
   const n = (v: number | null | undefined): string =>
     v == null
       ? ''
-      : Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      : Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
     const cats = group.keys
@@ -9416,7 +9416,7 @@ async function runSearch(query: string): Promise<void> {
   });
 
   const n = (v: number): string =>
-    Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    Number(v).toLocaleString('en-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   let html = '';
 
