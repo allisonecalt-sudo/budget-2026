@@ -701,7 +701,7 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
       if (label.includes('Income')) vals.income = num;
       if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
         vals.budgeted = num;
-      if (label.includes('Left to Budget')) vals.leftToBudget = num;
+      if (label.includes('Unallocated')) vals.leftToBudget = num;
       if (label === 'Used') vals.spent = num;
       if (label === 'Remaining' || (label.includes('Remaining') && !label.includes('Budget')))
         vals.remaining = num;
@@ -1283,7 +1283,7 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
       const valLoc = stat.locator('.ribbon-val');
       if ((await valLoc.count()) === 0) continue;
       const label = await stat.locator('.ribbon-label').textContent();
-      if (label.includes('Left to Budget')) {
+      if (label.includes('Unallocated')) {
         const val = await valLoc.first().textContent();
         leftToBudget = parseFloat(val.replace(/[₪,~−]/g, (m) => (m === '−' ? '-' : '')).trim());
       }
@@ -1369,9 +1369,9 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
 
     // ── 2. Ribbon math checks ──
     // Income - Budgeted = Left to Budget
-    if (ribbon['Income'] && ribbon['Budgeted'] && ribbon['Left to Budget'] !== undefined) {
+    if (ribbon['Income'] && ribbon['Budgeted'] && ribbon['Unallocated'] !== undefined) {
       const expected = ribbon['Income'] - ribbon['Budgeted'];
-      const diff = Math.abs(expected - ribbon['Left to Budget']);
+      const diff = Math.abs(expected - ribbon['Unallocated']);
       console.log(
         `  Income(${ribbon['Income']}) - Budgeted(${ribbon['Budgeted']}) = ${expected}, Left to Budget = ${ribbon['Left to Budget']}, diff = ${diff}`,
       );

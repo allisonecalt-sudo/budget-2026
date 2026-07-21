@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v21';
-const BUILD_DATE = 'Jul 21, 2026 16:45';
+const APP_VERSION = 'v22';
+const BUILD_DATE = 'Jul 21, 2026 16:50';
 
 const MONTHS = [
   'January',
@@ -2621,7 +2621,7 @@ function renderApp() {
         <div class="ribbon">
           <div class="ribbon-stat rs-input"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:var(--est);font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
           <div class="ribbon-stat rs-input"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-          <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div></div>
+          <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job"><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${leftToBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div></div>
           <div class="ribbon-stat rs-input"><div class="ribbon-label">Used</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
           <div class="ribbon-stat rs-hero"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${income - totalSpent >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div></div>
           <div class="ribbon-stat rs-hero"><div class="ribbon-label">Left to Spend</div><div class="ribbon-val" style="color:${remainingInBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div></div>
@@ -9890,7 +9890,9 @@ function computeOwed() {
     (s, a) => s + (Number(a.amount) || 0),
     0,
   );
-  const aGap = ag(Math.max(0, aProj - aAlloc));
+  // Subtract Money-In credits so the Pending "Admin gap" matches the Owed strip
+  // (L2653 does the same). Without this the two surfaces disagree by the credit total.
+  const aGap = ag(Math.max(0, aProj - aAlloc - creditsTotal()));
   return { tGap, aGap, total: ag(tGap + aGap) };
 }
 

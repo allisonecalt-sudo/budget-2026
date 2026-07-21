@@ -250,12 +250,11 @@ textarea {
   color: var(--accent);
 }
 .ribbon-stat.rs-input {
-  flex: 0.72;
+  flex: 0.85;
 }
 .ribbon-stat.rs-input .ribbon-val {
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 500;
-  color: var(--muted);
 }
 .ribbon-toggle {
   font-size: 0.65rem;
