@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v25';
-const BUILD_DATE = 'Jul 21, 2026 17:50';
+const APP_VERSION = 'v26';
+const BUILD_DATE = 'Jul 21, 2026 18:10';
 
 const MONTHS = [
   'January',
@@ -2707,9 +2707,9 @@ function renderApp() {
         </div>`
             : ''
         }
-        ${leisureSubRibbon}
         <div class="ribbon-drag-handle" id="ribbon-drag" onmousedown="startRibbonDrag(event)"></div>
-      </div>`;
+      </div>
+      ${leisureSubRibbon}`;
     })()}
 
     <div class="${state.activeTab === 'year' ? 'main-full' : 'main'}">

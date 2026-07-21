@@ -344,6 +344,7 @@ textarea {
   flex-direction: column;
   margin-top: 0.4rem;
   width: 100%;
+  max-width: 560px;
 }
 .leisure-row {
   display: grid;
