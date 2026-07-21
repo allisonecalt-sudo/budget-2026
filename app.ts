@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v18';
-const BUILD_DATE = 'Jul 21, 2026 12:15';
+const APP_VERSION = 'v20';
+const BUILD_DATE = 'Jul 21, 2026 15:40';
 
 const MONTHS = [
   'January',
@@ -1200,7 +1200,7 @@ async function saveHousingFromMonth(
     const item = items.find((i) => i.label === label);
     if (item) {
       const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
-      if (error) toast('Could not save recurring item');
+      if (error) toast('Could not save housing item');
       item.amount = num;
     } else {
       const { data: newItem } = await sb
@@ -1527,9 +1527,7 @@ function renderSpendingGrid(catKey: string): string {
       existingMonths
         .map((m) => {
           const v =
-            ((state.allCatBudgets['transport'] as Record<string, number>) || {})[m.id] ||
-            state.budgets['transport'] ||
-            0;
+            ((state.allCatBudgets['transport'] as Record<string, number>) || {})[m.id] || 0;
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
@@ -2503,7 +2501,7 @@ function renderApp() {
       </div>
       <div class="hdr-actions">
         <span id="offline-queue-indicator" class="offline-queue-indicator" style="display:none;" title="Pending writes — will sync when online" onclick="syncQueueNow()">
-          <span class="oqi-dot"></span><span id="offline-queue-count">0</span> pending
+          <span class="oqi-dot"></span><span id="offline-queue-count">0</span> to sync
         </span>
         <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
         <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
@@ -2622,12 +2620,12 @@ function renderApp() {
 
       return `<div class="ribbon-panel">
         <div class="ribbon">
-          <div class="ribbon-stat"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:var(--est);font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Spent</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${income - totalSpent >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div></div>
-          <div class="ribbon-stat"><div class="ribbon-label">Remaining in Budget</div><div class="ribbon-val" style="color:${remainingInBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div></div>
+          <div class="ribbon-stat rs-input"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:var(--est);font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
+          <div class="ribbon-stat rs-input"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
+          <div class="ribbon-stat rs-input"><div class="ribbon-label">Left to Budget</div><div class="ribbon-val" style="color:${leftToBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div></div>
+          <div class="ribbon-stat rs-hero"><div class="ribbon-label">Used</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
+          <div class="ribbon-stat rs-hero"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${income - totalSpent >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div></div>
+          <div class="ribbon-stat rs-hero"><div class="ribbon-label">Left to Spend</div><div class="ribbon-val" style="color:${remainingInBudget >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div></div>
           <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</div></div>
           ${(() => {
             // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
@@ -2655,7 +2653,7 @@ function renderApp() {
             const seg = (emoji: string, val: number, tab: string, label: string): string => {
               if (val > 0)
                 // shortfall — still owe this much
-                return `<span class="owed-seg" title="${label}: short ${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">-${fmt(val)}</span></span>`;
+                return `<span class="owed-seg" title="${label}: short ${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">${fmt(val)}</span></span>`;
               if (val < 0)
                 // surplus — over-funded
                 return `<span class="owed-seg owed-seg-surplus" title="${label}: surplus ${fmt(-val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">+${fmt(-val)}</span></span>`;
@@ -2672,7 +2670,7 @@ function renderApp() {
                 <span class="owed-sep">·</span>
                 ${seg('📋', aGap, 'admin', 'Admin gap')}
               </div>
-              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? '-' + fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
+              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
             </div>`;
           })()}
           <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
@@ -2687,7 +2685,7 @@ function renderApp() {
           <div style="display:flex;gap:2rem;align-items:flex-start;">
             <div style="flex:1;min-width:0;">
               <table class="sn-table">
-                <thead><tr><th>Category</th><th>Budget</th><th>Spent</th><th>Remaining</th></tr></thead>
+                <thead><tr><th>Category</th><th>Budget</th><th>Used</th><th>Remaining</th></tr></thead>
                 <tbody>
                   ${(() => {
                     const bkB = state.budgets['savings_bank'] || 0,
@@ -2989,7 +2987,7 @@ function renderApp() {
                     <div class="cat-top">
                       <div class="cat-name"><span class="cat-emoji">${c.emoji}</span>${c.label}</div>
                       <div class="cat-amounts">
-                        <input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="this month" min="0" step="1"
+                        <input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set aside" min="0" step="1"
                           onclick="event.stopPropagation()"
                           onchange="saveBudget('${c.key}', this.value)"
                           onkeydown="if(event.key==='Enter'){this.blur()}"
@@ -3341,11 +3339,11 @@ function renderApp() {
                           const localAmt = local.reduce((s, tx) => s + Number(tx.amount), 0);
                           txRows =
                             (big.length
-                              ? sectionHdr('🏪', 'Supermarket', bigAmt) +
+                              ? sectionHdr('🏪', 'Big stores', bigAmt) +
                                 big.map(renderTxRow).join('')
                               : '') +
                             (local.length
-                              ? sectionHdr('🛒', 'Local & Makolet', localAmt) +
+                              ? sectionHdr('🛒', 'Other stores', localAmt) +
                                 local.map(renderTxRow).join('')
                               : '');
                         } else {
@@ -4929,7 +4927,7 @@ function renderTravelTab() {
           subRows +
           '<button onclick="addTravelSub(\'' +
           item.id +
-          '\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>' +
+          '\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ sub-payment</button>' +
           paidSummary +
           '</div>';
       }
@@ -4940,7 +4938,7 @@ function renderTravelTab() {
         '">' +
         '<button onclick="var k=\'sn-trv-' +
         item.id +
-        "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide sub-payments\">" +
+        "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide payments\">" +
         (isOpen ? '▾' : '▸') +
         '</button>' +
         '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="' +
@@ -4984,7 +4982,7 @@ function renderTravelTab() {
         "','is_logged'," +
         !item.is_logged +
         ')" title="' +
-        (item.is_logged ? 'Mark as not logged' : 'Mark as logged/done') +
+        (item.is_logged ? 'Mark not done' : 'Mark done') +
         '" style="background:' +
         logBg +
         ';border:1px solid ' +
@@ -5323,7 +5321,11 @@ function renderTravelTab() {
          chip doesn't filter the strip, so make that contract visible. -->
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;flex-wrap:wrap;">
       <span style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--info,var(--muted));background:var(--infosoft,var(--surface2));padding:.18rem .45rem;border-radius:99px;border:1px solid var(--border);">📅 Yearly view</span>
-      <span style="font-size:.62rem;color:var(--dim);font-style:italic;">Travel is one year-long pot — the active month chip doesn't filter this strip.</span>
+      <span style="font-size:.62rem;color:var(--dim);font-style:italic;">Travel is one year-long pot — switching months doesn't change this page.</span>
+    </div>
+    <!-- Story line — the whole tab in one sentence -->
+    <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
+      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside → ${gap > 0 ? `<span>${fmtA(gap)} still to set aside</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
     </div>
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
@@ -5333,9 +5335,9 @@ function renderTravelTab() {
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected for the year</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Set aside</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside (all months)</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">all months</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
@@ -5345,12 +5347,12 @@ function renderTravelTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
       </div>
       <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'budget − YTD spent'}</div>
+        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'left to spend'}</div>
       </div>
     </div>
 
@@ -5369,7 +5371,7 @@ function renderTravelTab() {
         ${itemsTravelHtml}
         <button onclick="addTravelItem()" style="margin-top:.6rem;background:none;border:none;color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;padding:.2rem 0;">+ add item</button>
         <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">All items</span>
           <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
         </div>
       </div>
@@ -5382,7 +5384,7 @@ function renderTravelTab() {
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
           <div class="travel-alloc-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
-            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
+            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total set aside</span>
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColor};">${fmtA(totalAlloc)} ${gapText}</span>
           </div>
         </div>
@@ -5435,227 +5437,25 @@ function renderCharityTab() {
     'Nov',
     'Dec',
   ];
-  const items = state.charity.items || [];
   const allocs = state.charity.allocations || {};
   const currentMonthObj = state.months.find((m) => m.id === state.currentMonthId);
   const currentMonthNum = currentMonthObj ? currentMonthObj.month_num : null;
   const payments = state.charity.payments || [];
 
-  const budget = ag(items.reduce((s, i) => s + Number(i.projected_amount), 0));
+  // DC6 (2026-07-21) — planned-items machinery removed: the charity_items card
+  // stopped being rendered long ago and the list is empty, so the "(−gap)" it
+  // drove compared allocations against an invisible number. Tab = set aside vs given.
   const totalAlloc = ag(Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0));
-  const gap = ag(budget - totalAlloc);
   const totalPaid = ag(payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0));
   const totalPledged = ag(payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0));
   const totalSpent = ag(totalPaid + totalPledged);
-  const _remaining_u2 = ag(budget - totalSpent);
-  void _remaining_u2;
+  const leftToGive = ag(totalAlloc - totalPaid);
 
   const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
-  // Pre-compute sort buttons HTML
-  const ciSort = localStorage.getItem('charityItemSort') || 'created';
-  const _sortBtnsHtml_u2 = [
-    ['created', 'Added'],
-    ['alpha', 'A→Z'],
-    ['alpha-desc', 'Z→A'],
-    ['amount-high', 'High'],
-    ['amount-low', 'Low'],
-  ]
-    .map(([k, lbl]) => {
-      const active = ciSort === k;
-      return (
-        "<button onclick=\"localStorage.setItem('charityItemSort','" +
-        k +
-        '\');renderApp()" style="font-size:.6rem;padding:.1rem .35rem;border:1px solid ' +
-        (active ? 'var(--accent)' : 'var(--border)') +
-        ';border-radius:4px;background:' +
-        (active ? 'var(--gsoft)' : 'none') +
-        ';color:' +
-        (active ? 'var(--accent)' : 'var(--dim)') +
-        ";cursor:pointer;font-family:'DM Sans',sans-serif;\">" +
-        lbl +
-        '</button>'
-      );
-    })
-    .join('');
-  void _sortBtnsHtml_u2;
-
-  // Pre-compute items HTML
-  const sortedItems = [...items].sort((a, b) => {
-    if (ciSort === 'alpha') return (a.label || '').localeCompare(b.label || '');
-    if (ciSort === 'alpha-desc') return (b.label || '').localeCompare(a.label || '');
-    if (ciSort === 'amount-high') return Number(b.projected_amount) - Number(a.projected_amount);
-    if (ciSort === 'amount-low') return Number(a.projected_amount) - Number(b.projected_amount);
-    return 0;
-  });
-  const _itemsCharityHtml_u = sortedItems
-    .map((item) => {
-      const subs = (state.charity.subItems || []).filter((s) => s.item_id === item.id);
-      const isOpen = localStorage.getItem('sn-chr-' + item.id) === '1';
-      const paidTotal = subs.filter((s) => s.is_paid).reduce((n, s) => n + Number(s.amount), 0);
-      const subBadge =
-        subs.length > 0
-          ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">' +
-            subs.filter((s) => s.is_paid).length +
-            '/' +
-            subs.length +
-            ' paid</span>'
-          : '';
-      const rowOpacity = item.is_logged ? 'opacity:.45;' : '';
-      const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
-      const amtColor = item.is_estimate ? 'var(--amber)' : 'var(--text)';
-      const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
-      const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
-      const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
-      const estWeight = item.is_estimate ? '700' : '400';
-      const logBg = item.is_logged ? 'var(--gsoft)' : 'none';
-      const logBorder = item.is_logged ? 'var(--accent)' : 'var(--border)';
-      const logColor = item.is_logged ? 'var(--accent)' : 'var(--dim)';
-      const logIcon = item.is_logged ? '✓' : '○';
-      let subsHtml = '';
-      if (isOpen) {
-        const subRows = subs
-          .map((s) => {
-            const sPaid = s.is_paid;
-            const sRowOp = sPaid ? 'opacity:.5;' : '';
-            const sStrike = sPaid ? 'text-decoration:line-through;' : '';
-            const sBg = sPaid ? 'var(--gsoft)' : 'none';
-            const sBorder = sPaid ? 'var(--accent)' : 'var(--border)';
-            const sColor = sPaid ? 'var(--accent)' : 'var(--dim)';
-            const sIcon = sPaid ? '✓' : '○';
-            return (
-              '<div style="display:grid;grid-template-columns:1fr 80px 28px 28px;gap:.25rem;align-items:center;padding:.2rem 0;' +
-              sRowOp +
-              '">' +
-              '<input type="text" value="' +
-              esc(s.label) +
-              '" placeholder="note (optional)" style="font-size:.75rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;' +
-              sStrike +
-              '" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharitySub(\'' +
-              s.id +
-              "','label',this.value)\">" +
-              '<input type="number" value="' +
-              (s.amount || '') +
-              '" placeholder="₪" min="0" step="1" style="font-size:.75rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--text);outline:none;text-align:right;width:100%;-moz-appearance:textfield;' +
-              sStrike +
-              '" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharitySub(\'' +
-              s.id +
-              "','amount',this.value)\">" +
-              '<button onclick="updateCharitySub(\'' +
-              s.id +
-              "','is_paid'," +
-              !s.is_paid +
-              ')" title="' +
-              (sPaid ? 'Mark as unpaid' : 'Mark as paid') +
-              '" style="background:' +
-              sBg +
-              ';border:1px solid ' +
-              sBorder +
-              ';border-radius:4px;color:' +
-              sColor +
-              ';cursor:pointer;font-size:.75rem;padding:.1rem .2rem;line-height:1;font-weight:700;">' +
-              sIcon +
-              '</button>' +
-              '<button onclick="deleteCharitySub(\'' +
-              s.id +
-              '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;">×</button>' +
-              '</div>'
-            );
-          })
-          .join('');
-        void _itemsCharityHtml_u;
-
-        const paidOver = paidTotal > Number(item.projected_amount || 0);
-        const paidSummary =
-          subs.length > 0
-            ? '<div style="font-size:.68rem;color:' +
-              (paidOver ? 'var(--red)' : 'var(--muted)') +
-              ';margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
-              fmtA(paidTotal) +
-              ' of ' +
-              fmtA(Number(item.projected_amount || 0)) +
-              (paidOver ? ' · ' + fmtA(paidTotal - Number(item.projected_amount || 0)) + ' over' : '') +
-              '</div>'
-            : '';
-        subsHtml =
-          '<div style="padding:.3rem .5rem .5rem 1.5rem;background:var(--surface2);border-radius:0 0 6px 6px;">' +
-          subRows +
-          '<button onclick="addCharitySub(\'' +
-          item.id +
-          '\')" style="margin-top:.3rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.1rem 0;">+ add payment</button>' +
-          paidSummary +
-          '</div>';
-      }
-      return (
-        '<div style="border-bottom:1px solid var(--border);">' +
-        '<div style="display:grid;grid-template-columns:16px 1fr 90px 42px 28px 28px;gap:.25rem;align-items:center;padding:.3rem .1rem;' +
-        rowOpacity +
-        '">' +
-        '<button onclick="var k=\'sn-chr-' +
-        item.id +
-        "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide sub-payments\">" +
-        (isOpen ? '▾' : '▸') +
-        '</button>' +
-        '<div style="display:flex;align-items:baseline;min-width:0;"><input type="text" value="' +
-        esc(item.label) +
-        '" placeholder="Item name" style="font-size:.82rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;' +
-        strikeLabel +
-        '" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveCharityItem(\'' +
-        item.id +
-        "','label',this.value)\">" +
-        subBadge +
-        '</div>' +
-        '<input type="number" value="' +
-        (item.projected_amount || '') +
-        '" placeholder="0" min="0" step="1" style="font-size:.82rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .2rem;color:' +
-        amtColor +
-        ';outline:none;text-align:right;width:100%;-moz-appearance:textfield;' +
-        strikeLabel +
-        '" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveCharityItem(\'' +
-        item.id +
-        "','projected_amount',this.value)\">" +
-        '<button onclick="saveCharityItem(\'' +
-        item.id +
-        "','is_estimate'," +
-        !item.is_estimate +
-        ')" title="' +
-        (item.is_estimate ? 'Marked as estimate — click to confirm exact' : 'Mark as estimate') +
-        '" style="background:' +
-        estBg +
-        ';border:1px solid ' +
-        estBorder +
-        ';border-radius:4px;color:' +
-        estColor +
-        ';cursor:pointer;font-size:.65rem;padding:.1rem .2rem;font-weight:' +
-        estWeight +
-        ";font-family:'DM Sans',sans-serif;width:100%;\">~est</button>" +
-        '<button onclick="deleteCharityItem(\'' +
-        item.id +
-        '\')" title="Delete" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--dim);cursor:pointer;font-size:.85rem;padding:.1rem .2rem;line-height:1;">×</button>' +
-        '<button onclick="saveCharityItem(\'' +
-        item.id +
-        "','is_logged'," +
-        !item.is_logged +
-        ')" title="' +
-        (item.is_logged ? 'Mark as not logged' : 'Mark as logged/done') +
-        '" style="background:' +
-        logBg +
-        ';border:1px solid ' +
-        logBorder +
-        ';border-radius:4px;color:' +
-        logColor +
-        ';cursor:pointer;font-size:.8rem;padding:.1rem .2rem;line-height:1;font-weight:700;">' +
-        logIcon +
-        '</button>' +
-        '</div>' +
-        subsHtml +
-        '</div>'
-      );
-    })
-    .join('');
 
   // Pre-compute payment log HTML
   let payLogHtml = '';
@@ -5783,7 +5583,12 @@ function renderCharityTab() {
       '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total given</span>' +
       '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;">' +
-      fmtA(totalSpent) +
+      fmtA(totalPaid) +
+      (totalPledged > 0
+        ? '<span style="font-weight:400;color:var(--amber);font-size:.72rem;margin-left:.35rem;">+ ' +
+          fmtA(totalPledged) +
+          ' promised</span>'
+        : '') +
       '</span>' +
       '</div>';
   }
@@ -5836,9 +5641,6 @@ function renderCharityTab() {
       '</div>'
     );
   }).join('');
-  // const _gapColorC = gap > 0 ? 'var(--red)' : 'var(--green)'; // unused
-  const gapTextC = gap > 0 ? '(−' + fmtA(gap) + ' gap)' : '✓';
-  const allocTotalColorC = gap > 0 ? 'var(--red)' : 'var(--green)';
   const monthSelectHtml = MONTH_NAMES.map(
     (mn, i) =>
       '<option value="' +
@@ -5852,22 +5654,26 @@ function renderCharityTab() {
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Story line — the whole tab in one sentence -->
+    <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
+      ${fmtA(totalAlloc)} set aside → ${fmtA(totalPaid)} given → <strong style="color:${leftToGive < 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(leftToGive)}</strong> left${totalPledged > 0 ? ` · <span style="color:var(--amber);">${fmtA(totalPledged)} promised</span>` : ''}
+    </div>
     <!-- Summary Bar -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Set aside</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside so far</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">your monthly % · from the Budget page</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Paid</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Given</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalPaid)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">+ <span style="color:var(--amber);font-weight:600;">${fmtA(totalPledged)}</span> pledged · <strong>${fmtA(totalSpent)}</strong> total</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${totalPledged > 0 ? `+ <span style="color:var(--amber);font-weight:600;">${fmtA(totalPledged)}</span> promised, not given yet` : 'all payments ✓ given'}</div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${totalAlloc - totalPaid < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining to Give</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${totalAlloc - totalPaid < 0 ? 'var(--red)' : 'var(--accent)'};">${fmtA(totalAlloc - totalPaid)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">free now · after pledges: <strong style="color:${totalAlloc - totalSpent < 0 ? 'var(--red)' : 'var(--text)'};">${fmtA(totalAlloc - totalSpent)}</strong></div>
+      <div style="background:var(--surface);border:1px solid ${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Left to give</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};">${leftToGive < 0 ? fmtA(Math.abs(leftToGive)) : fmtA(leftToGive)}</div>
+        <div style="font-size:.68rem;color:${leftToGive < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${leftToGive < 0 ? 'given more than set aside' : totalPledged > 0 ? `set aside − given · ${fmtA(ag(totalAlloc - totalSpent))} after promises` : 'set aside − given'}</div>
       </div>
     </div>
 
@@ -5878,11 +5684,11 @@ function renderCharityTab() {
 
         <!-- Monthly Allocations -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Monthly Allocation</div>
+          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Set aside by month</div>
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
-            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColorC};">${fmtA(totalAlloc)} ${gapTextC}</span>
+            <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total set aside</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:var(--green);">${fmtA(totalAlloc)}</span>
           </div>
         </div>
 
@@ -6192,7 +5998,7 @@ function renderAdminTab() {
       '">' +
       '<button onclick="var k=\'sn-adm-' +
       item.id +
-      "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide sub-payments\">" +
+      "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"background:none;border:none;cursor:pointer;color:var(--dim);font-size:.7rem;padding:0;line-height:1;text-align:center;\" title=\"Show/hide payments\">" +
       (isOpen ? '▾' : '▸') +
       '</button>' +
       '<div style="display:flex;align-items:baseline;min-width:0;gap:.3rem;flex-wrap:wrap;"><input type="text" value="' +
@@ -6302,7 +6108,11 @@ function renderAdminTab() {
          while the active month chip says May. Admin is yearly per workflow. -->
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
       <span style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--info,var(--muted));background:var(--infosoft,var(--surface2));padding:.18rem .45rem;border-radius:99px;border:1px solid var(--border);">📅 Yearly view</span>
-      <span style="font-size:.62rem;color:var(--dim);font-style:italic;">Admin runs as a year-long budget — the active month chip doesn't filter this strip.</span>
+      <span style="font-size:.62rem;color:var(--dim);font-style:italic;">Admin is a year-long budget — the month tabs don't change these numbers.</span>
+    </div>
+    <!-- Story line — the whole tab in one sentence -->
+    <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
+      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside${creditAll > 0 ? ` + ${fmtA(creditAll)} money in` : ''} → ${kpiGap > 0 ? `<span>${fmtA(kpiGap)} still to find</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
     </div>
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
@@ -6312,9 +6122,9 @@ function renderAdminTab() {
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected for the year</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Allocated</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Set aside</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">set aside (all months)</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">all months</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
@@ -6324,12 +6134,12 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid YTD</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
       </div>
       <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'budget − spent'}</div>
+        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'not yet spent'}</div>
       </div>
     </div>
 
@@ -6381,7 +6191,7 @@ function renderAdminTab() {
             : ''
         }
         <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total</span>
+          <span style="font-size:.72rem;font-weight:700;color:var(--muted);">All items</span>
           <span style="font-family:'DM Mono',monospace;font-size:.88rem;font-weight:600;">${fmtA(budget)}</span>
         </div>
       </div>
@@ -6408,7 +6218,7 @@ function renderAdminTab() {
                 dotTitle = 'No allocation, no payments';
               } else if (val === 0 && paidForMonth > 0) {
                 dotColor = 'var(--red)';
-                dotTitle = `${fmtA(paidForMonth)} paid against ₪0 allocation`;
+                dotTitle = `${fmtA(paidForMonth)} paid, ₪0 allocated`;
               } else if (paidForMonth > val) {
                 dotColor = 'var(--red)';
                 dotTitle = `Over by ${fmtA(paidForMonth - val)}`;
@@ -6440,7 +6250,7 @@ function renderAdminTab() {
           </div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + ' gap)' : kpiGap < 0 ? '(+' + fmtA(-kpiGap) + ' over) ✓' : '✓'}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + (creditAll > 0 ? ' gap after money in)' : ' gap)') : kpiGap < 0 ? '(+' + fmtA(-kpiGap) + (creditAll > 0 ? ' over after money in) ✓' : ' over) ✓') : '✓'}</span>
           </div>
         </div>
 
@@ -6452,7 +6262,7 @@ function renderAdminTab() {
           ${(() => {
             const paidSubs = (state.admin.subItems || []).filter((s) => s.is_paid);
             if (paidSubs.length === 0) {
-              return '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet — mark sub-payments as paid in Yearly Expenses</div>';
+              return '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet — mark payments paid in Yearly Expenses</div>';
             }
             const ps = localStorage.getItem('adminPaySort') || 'month';
             const sorted = [...paidSubs].sort((a, b) => {
@@ -6664,8 +6474,8 @@ function renderMoneyInCard(): string {
         // Amount (per occurrence) — green, leading +, tabular mono.
         '<input class="mi-amt" type="number" inputmode="decimal" min="0" step="1" value="' +
         (c.amount || '') +
-        '" placeholder="0" title="Amount per occurrence' +
-        (occ > 1 ? ' — total +' + fmtA(rowTotal) : '') +
+        '" placeholder="0" title="' +
+        (occ > 1 ? 'Amount each month — total +' + fmtA(rowTotal) : 'Amount') +
         '" style="font-size:.78rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;color:var(--green);font-weight:600;outline:none;text-align:right;width:100%;-moz-appearance:textfield;" onfocus="this.style.borderBottomColor=\'var(--green)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="saveAdminCredit(\'' +
         c.id +
         "','amount',this.value)\">" +
@@ -7176,7 +6986,7 @@ function renderBizTab(): string {
               .join('')
       }
       <div class="biz-row" style="margin-top:.5rem;background:var(--gsoft);">
-        <span class="biz-label" style="font-weight:700;">Tracker total</span>
+        <span class="biz-label" style="font-weight:700;">Tracker net <span style="font-weight:400;color:var(--dim);font-size:.6rem;">after 15% cut</span></span>
         <span class="biz-val green">${fmt(trackerTotal)}</span>
       </div>
     </div>
@@ -7569,7 +7379,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
     .join('');
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;margin-bottom:1.5rem;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.3rem .75rem;">
-      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder</span>
+      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder (Holdings)</span>
       <span style="font-size:.8rem;font-weight:700;color:${color};">${status}</span>
     </div>
     <div style="display:flex;gap:4px;margin-top:.6rem;">${segHtml}</div>
@@ -8034,7 +7844,7 @@ function renderYearSnapshot(): string {
     },
     {
       type: 'sub',
-      label: '\u2937 Saved (Bank)',
+      label: '\u2937 In Bank',
       valFn: (m: MonthRow, f: boolean) =>
         !showProjected && f ? 0 : budgetMap[m.id]?.['savings_bank'] || 0,
       sectionGroup: 'savings',
@@ -8050,7 +7860,7 @@ function renderYearSnapshot(): string {
     { type: 'section', label: '\u{1F49A} Charity Overview', collapsible: 'charity' },
     {
       type: 'row',
-      label: 'Charity ₪',
+      label: 'Set aside',
       valFn: (m: MonthRow, f: boolean) => charityV(m.month_num, f),
       sectionGroup: 'charity',
     },
@@ -8222,7 +8032,7 @@ function renderYearSnapshot(): string {
   // Summary ribbon ABOVE the table
   const summaryHtml =
     '<div class="year-ribbon">' +
-    '<span class="yr-stat">YTD <strong>' +
+    '<span class="yr-stat">Income YTD <strong>' +
     fmtY(ytdIncome) +
     '</strong></span>' +
     '<span class="yr-sep">·</span>' +
@@ -8236,11 +8046,11 @@ function renderYearSnapshot(): string {
     '<span class="yr-sep">|</span>' +
     '<span class="yr-stat">💰 Saved + Invested <strong style="color:var(--green)">' +
     fmtY(ytdSavings) +
-    '</strong> / ' +
+    '</strong> / Proj ' +
     fmtY(projSavings) +
     '</span>' +
     '<span class="yr-sep">|</span>' +
-    '<span class="yr-stat">✈️ ' +
+    '<span class="yr-stat">✈️ Proj ' +
     fmtY(totalTravelProjected) +
     ' · <span style="color:' +
     (travelGap > 0 ? 'var(--red)' : 'var(--green)') +
@@ -8250,7 +8060,7 @@ function renderYearSnapshot(): string {
     (travelGap > 0 ? 'gap' : 'funded') +
     '</span></span>' +
     '<span class="yr-sep">·</span>' +
-    '<span class="yr-stat">📋 ' +
+    '<span class="yr-stat">📋 Proj ' +
     fmtY(totalAdminProjected) +
     ' · <span style="color:' +
     (adminGap > 0 ? 'var(--red)' : 'var(--green)') +
@@ -8283,7 +8093,7 @@ function renderYearSnapshot(): string {
         );
       })
       .join('') +
-    '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Inc</th>' +
+    '<th class="year-th-extra">Total</th><th class="year-th-extra">Avg/mo</th><th class="year-th-extra">% Income</th>' +
     '</tr></thead>';
 
   const tbody = computed
@@ -8725,11 +8535,11 @@ function openSnapshot(): void {
   byId('snapshot-modal').style.display = 'flex';
   byId('snapshot-body').innerHTML = `
     <table class="sn-table">
-      <thead><tr><th>Category</th><th>Budget ₪</th><th>Spent ₪</th><th>Remaining ₪</th></tr></thead>
+      <thead><tr><th>Category</th><th>Budget ₪</th><th>Used ₪</th><th>Remaining ₪</th></tr></thead>
       <tbody>
         <tr class="sn-section"><td colspan="4">📊 Summary — ${current.month_name}</td></tr>
         <tr class="sn-cat"><td data-label="Category">Income</td><td data-label="Budget"></td><td data-label="Spent">${n(income)}</td><td data-label="Remaining"></td></tr>
-        <tr class="sn-cat"><td data-label="Category">Spent</td><td data-label="Budget"></td><td data-label="Spent">${n(totalSpent)}</td><td data-label="Remaining"></td></tr>
+        <tr class="sn-cat"><td data-label="Category">Used</td><td data-label="Budget"></td><td data-label="Spent">${n(totalSpent)}</td><td data-label="Remaining"></td></tr>
         <tr class="sn-cat"><td data-label="Category">Remaining</td><td data-label="Budget"></td><td data-label="Spent"></td><td data-label="Remaining" class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
         <tr class="sn-group"><td data-label="Category">🏦 Savings</td><td data-label="Budget">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Spent">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Remaining">0</td></tr>
         <tr class="sn-cat"><td data-label="Category">🏦 In Bank</td><td data-label="Budget">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Spent">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Remaining">0</td></tr>
@@ -9208,7 +9018,7 @@ async function openHistoryPanel() {
     .order('created_at', { ascending: false })
     .limit(200);
   if (error || !data) {
-    list.innerHTML = `<div style="padding:1rem;color:var(--log-delete);font-size:.82rem;">Could not load history. Make sure the change_log table exists in Supabase.</div>`;
+    list.innerHTML = `<div style="padding:1rem;color:var(--log-delete);font-size:.82rem;">Could not load history — try again.</div>`;
     return;
   }
   if (data.length === 0) {
@@ -9765,7 +9575,7 @@ function fabSpec() {
     case 'budget':
       return { label: 'Add transaction', kind: 'tx' };
     case 'travel':
-      return { label: 'Add travel payment', kind: 'travel' };
+      return { label: 'Log travel payment', kind: 'travel' };
     case 'charity':
       return { label: 'Log charity payment', kind: 'charity' };
     case 'admin':
@@ -10364,7 +10174,7 @@ function updateOfflineQueueUI(count: number): void {
   if (count > 0) {
     num.textContent = String(count);
     el.style.display = '';
-    el.title = `${count} pending ${count === 1 ? 'write' : 'writes'} — click to retry sync`;
+    el.title = `${count} change${count === 1 ? '' : 's'} to sync — click to retry`;
   } else {
     el.style.display = 'none';
   }
@@ -10377,11 +10187,11 @@ window.onQueueUpdate = function (data) {
 
 function syncQueueNow() {
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-    toast('Sync not available — service worker not ready');
+    toast('Sync not ready — reload the app');
     return;
   }
   navigator.serviceWorker.controller.postMessage({ type: 'drain-now' });
-  toast('Syncing queued writes…');
+  toast('Syncing changes…');
 }
 
 // Ping the SW for the current queue count on load (e.g. after page reload

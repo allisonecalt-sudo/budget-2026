@@ -617,7 +617,7 @@ test('budget page totals match year view for each month', async ({ page }) => {
       const label = await stat.locator('.ribbon-label').textContent();
       const val = await valLoc.first().textContent();
       if (label.includes('Budgeted')) budgeted = val.replace(/[₪,~]/g, '').trim();
-      if (label === 'Spent') spent = val.replace(/[₪,~]/g, '').trim();
+      if (label === 'Used') spent = val.replace(/[₪,~]/g, '').trim();
     }
     budgetPageValues[monthName] = { budgeted: parseFloat(budgeted), spent: parseFloat(spent) };
     console.log(`Budget page ${monthName}: Budgeted=${budgeted}, Spent=${spent}`);
@@ -702,10 +702,10 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
       if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
         vals.budgeted = num;
       if (label.includes('Left to Budget')) vals.leftToBudget = num;
-      if (label === 'Spent') vals.spent = num;
+      if (label === 'Used') vals.spent = num;
       if (label === 'Remaining' || (label.includes('Remaining') && !label.includes('Budget')))
         vals.remaining = num;
-      if (label.includes('Remaining in Budget')) vals.remainingInBudget = num;
+      if (label.includes('Left to Spend')) vals.remainingInBudget = num;
       if (label.includes('Saved')) vals.saved = num;
     }
 
@@ -764,8 +764,8 @@ test('snapshot modal: group budgets sum to total budgeted', async ({ page }) => 
     const cells = rows.nth(r).locator('td');
     const cellCount = await cells.count();
 
-    // Summary row: "Spent" row has the total in cell 2
-    if (text.includes('Spent') && !text.includes('Savings') && cellCount >= 3) {
+    // Summary row: "Used" row (renamed from "Spent" v20) has the total in cell 2
+    if (text.includes('Used') && !text.includes('Savings') && cellCount >= 3) {
       const raw = await cells.nth(2).textContent();
       summarySpent = parseFloat(raw.replace(/[₪,]/g, '')) || null;
     }
@@ -1133,7 +1133,7 @@ test('admin tab shows summary cards', async ({ page }) => {
 
   // Check summary cards exist
   await expect(page.locator('text=Budget').first()).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('text=Allocated').first()).toBeVisible();
+  await expect(page.locator('text=Set aside').first()).toBeVisible();
   await expect(page.locator('text=Spent').first()).toBeVisible();
   await expect(page.locator('text=Remaining').first()).toBeVisible();
 });
@@ -1160,8 +1160,8 @@ test('admin page — yearly expenses and payment log are linked', async ({ page 
     .catch(() => false);
   console.log(`Payment Log auto-generated: ${hasAutoNote}`);
 
-  // Spent card shows a value (DA1 — sub-line is now "paid YTD")
-  await expect(page.locator('text=paid YTD')).toBeVisible();
+  // Spent card shows a value (DA1 — sub-line is now "paid so far")
+  await expect(page.locator('text=paid so far')).toBeVisible();
 });
 
 // ─── Search Panel ───
@@ -1382,11 +1382,11 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     }
 
     // Income - Spent = Remaining
-    if (ribbon['Income'] && ribbon['Spent'] && ribbon['Remaining'] !== undefined) {
-      const expected = ribbon['Income'] - ribbon['Spent'];
+    if (ribbon['Income'] && ribbon['Used'] && ribbon['Remaining'] !== undefined) {
+      const expected = ribbon['Income'] - ribbon['Used'];
       const diff = Math.abs(expected - ribbon['Remaining']);
       console.log(
-        `  Income(${ribbon['Income']}) - Spent(${ribbon['Spent']}) = ${expected}, Remaining = ${ribbon['Remaining']}, diff = ${diff}`,
+        `  Income(${ribbon['Income']}) - Spent(${ribbon['Used']}) = ${expected}, Remaining = ${ribbon['Remaining']}, diff = ${diff}`,
       );
       if (diff > 0.02)
         errors.push(
@@ -1395,15 +1395,15 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     }
 
     // Budgeted - Spent = Remaining in Budget
-    if (ribbon['Budgeted'] && ribbon['Spent'] && ribbon['Remaining in Budget'] !== undefined) {
-      const expected = ribbon['Budgeted'] - ribbon['Spent'];
-      const diff = Math.abs(expected - ribbon['Remaining in Budget']);
+    if (ribbon['Budgeted'] && ribbon['Used'] && ribbon['Left to Spend'] !== undefined) {
+      const expected = ribbon['Budgeted'] - ribbon['Used'];
+      const diff = Math.abs(expected - ribbon['Left to Spend']);
       console.log(
-        `  Budgeted(${ribbon['Budgeted']}) - Spent(${ribbon['Spent']}) = ${expected}, Remaining in Budget = ${ribbon['Remaining in Budget']}, diff = ${diff}`,
+        `  Budgeted(${ribbon['Budgeted']}) - Spent(${ribbon['Used']}) = ${expected}, Remaining in Budget = ${ribbon['Left to Spend']}, diff = ${diff}`,
       );
       if (diff > 0.02)
         errors.push(
-          `${monthName}: Budgeted - Spent != Remaining in Budget (${expected} vs ${ribbon['Remaining in Budget']})`,
+          `${monthName}: Budgeted - Spent != Remaining in Budget (${expected} vs ${ribbon['Left to Spend']})`,
         );
     }
 
@@ -1660,7 +1660,7 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     }
 
     if (monthRibbon && spt !== undefined) {
-      const pageSpent = monthRibbon['Spent'] || 0;
+      const pageSpent = monthRibbon['Used'] || 0;
       const diff = Math.abs(Math.round(pageSpent) - spt);
       console.log(`  ${name}: Page Spent(${pageSpent}) vs Year Spent(${spt}), diff = ${diff}`);
       if (diff > 2) errors.push(`${name}: Page Spent (${pageSpent}) != Year Spent (${spt})`);
