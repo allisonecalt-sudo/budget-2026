@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v24';
-const BUILD_DATE = 'Jul 21, 2026 17:35';
+const APP_VERSION = 'v25';
+const BUILD_DATE = 'Jul 21, 2026 17:50';
 
 const MONTHS = [
   'January',
@@ -2600,19 +2600,17 @@ function renderApp() {
         ${
           leisureExpanded
             ? `
-        <table class="leisure-table">
-          <thead><tr><th></th><th>Budget</th><th>Spent</th><th>Left</th></tr></thead>
-          <tbody>${leisureCats
+        <div class="leisure-list">
+          ${leisureCats
             .map((c) => {
               const s = spent[c.key] || 0;
               const b = state.budgets[c.key] || 0;
               const r = b - s;
-              return `<tr><td class="lt-cat">${c.emoji} ${c.label}</td><td class="lt-num">${b ? n(b) : '-'}</td><td class="lt-num">${n(s)}</td><td class="lt-num ${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b ? n(r) : '-'}</td></tr>`;
+              return `<div class="leisure-row"><span class="lz-cat">${c.emoji} ${c.label}</span><span class="lz-nums">${fmt(s)}${b ? ` <span class="lz-of">of ${fmt(b)}</span>` : ''}</span><span class="lz-left ${r < 0 ? 'sn-over' : 'sn-ok'}">${!b || r === 0 ? '' : r < 0 ? fmt(-r) + ' over' : fmt(r) + ' left'}</span></div>`;
             })
             .join('')}
-          <tr class="lt-total"><td class="lt-cat">Total</td><td class="lt-num">${n(leisureBudget)}</td><td class="lt-num">${n(leisureSpent)}</td><td class="lt-num ${leisureBudget - leisureSpent < 0 ? 'sn-over' : 'sn-ok'}">${n(leisureBudget - leisureSpent)}</td></tr>
-          </tbody>
-        </table>`
+          <div class="leisure-row lz-total"><span class="lz-cat">Total</span><span class="lz-nums">${fmt(leisureSpent)} <span class="lz-of">of ${fmt(leisureBudget)}</span></span><span class="lz-left ${leisureBudget - leisureSpent < 0 ? 'sn-over' : 'sn-ok'}">${leisureBudget - leisureSpent === 0 ? '' : leisureBudget - leisureSpent < 0 ? fmt(ag(leisureSpent - leisureBudget)) + ' over' : fmt(ag(leisureBudget - leisureSpent)) + ' left'}</span></div>
+        </div>`
             : ''
         }
       </div>`;

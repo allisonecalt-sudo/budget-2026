@@ -94,16 +94,16 @@ textarea:focus-visible {
   padding: 0;
 }
 html {
-  /* Readability bump (v23): rows/tables/labels use rem sizes off the root, so
-     nudging the root up scales the whole app's text at once. */
-  font-size: 17px;
+  /* Readability bump (v23, bigger again v25): rows/tables/labels use rem sizes
+     off the root, so nudging the root up scales the whole app's text at once. */
+  font-size: 18px;
 }
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  font-size: 15px;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   /* V2 — tabular-nums everywhere numbers appear; DM Mono is metrically tabular,
      this forces all glyphs to identical advance even when feature-detection fails */
@@ -288,10 +288,10 @@ textarea {
 }
 .sub-ribbon {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0;
   padding: 0.35rem 1.5rem;
-  overflow-x: auto;
   background: var(--surface2);
 }
 .sub-ribbon-label {
@@ -337,44 +337,48 @@ textarea {
   font-weight: 700;
   font-size: 0.7rem;
 }
-.leisure-table {
+/* Leisure expanded — a clean vertical list (v25), replacing the cramped
+   4-col table. Each category: name · spent of budget · left/over. */
+.leisure-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.4rem;
   width: 100%;
-  border-collapse: collapse;
-  font-size: 0.72rem;
-  margin-top: 0.2rem;
 }
-.leisure-table thead th {
-  font-size: 0.55rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-align: right;
-  padding: 0.15rem 0.5rem;
+.leisure-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem 0.85rem;
+  align-items: baseline;
+  padding: 0.34rem 0.1rem;
   border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
 }
-.leisure-table thead th:first-child {
-  text-align: left;
-}
-.leisure-table td {
-  padding: 0.2rem 0.5rem;
-  border-bottom: 1px solid var(--border);
-}
-.lt-cat {
-  font-weight: 500;
+.lz-cat {
+  color: var(--text);
   white-space: nowrap;
 }
-.lt-num {
+.lz-nums {
   font-family: 'DM Mono', monospace;
-  font-size: 0.72rem;
+  color: var(--text);
   text-align: right;
+  white-space: nowrap;
 }
-.lt-total {
-  font-weight: 700;
+.lz-of {
+  color: var(--muted);
 }
-.lt-total td {
-  border-top: 2px solid var(--border);
+.lz-left {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.82rem;
+  text-align: right;
+  min-width: 62px;
+  white-space: nowrap;
+}
+.leisure-row.lz-total {
   border-bottom: none;
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  margin-top: 0.15rem;
 }
 .month-tabs {
   display: flex;
