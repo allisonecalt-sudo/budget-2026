@@ -1526,8 +1526,7 @@ function renderSpendingGrid(catKey: string): string {
       '<tr><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>' +
       existingMonths
         .map((m) => {
-          const v =
-            ((state.allCatBudgets['transport'] as Record<string, number>) || {})[m.id] || 0;
+          const v = ((state.allCatBudgets['transport'] as Record<string, number>) || {})[m.id] || 0;
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
@@ -4915,11 +4914,13 @@ function renderTravelTab() {
           subs.length > 0
             ? '<div style="font-size:.68rem;color:' +
               (paidOver ? 'var(--red)' : 'var(--green)') +
-              ';margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
+              ";margin-top:.2rem;font-family:'DM Mono',monospace;\">paid " +
               fmtA(paidTotal) +
               ' of ' +
               fmtA(Number(item.projected_amount || 0)) +
-              (paidOver ? ' · ' + fmtA(paidTotal - Number(item.projected_amount || 0)) + ' over' : '') +
+              (paidOver
+                ? ' · ' + fmtA(paidTotal - Number(item.projected_amount || 0)) + ' over'
+                : '') +
               '</div>'
             : '';
         subsHtml =
@@ -5153,7 +5154,7 @@ function renderTravelTab() {
           const headerNote = tripAlloc
             ? '<span style="font-size:.7rem;color:' +
               (tripOver ? 'var(--red);font-weight:700' : 'var(--green)') +
-              ';font-family:\'DM Mono\',monospace;">' +
+              ";font-family:'DM Mono',monospace;\">" +
               fmtA(tripSpent) +
               ' of ' +
               fmtA(tripAlloc) +
@@ -5227,7 +5228,7 @@ function renderTravelTab() {
       // you can see at a glance how close YTD spending is to the year pot.
       '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>' +
-      '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;color:' +
+      "<span style=\"font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:" +
       (totalSpent > budget ? 'var(--red)' : 'var(--green)') +
       ';">' +
       fmtA(totalSpent) +
@@ -5455,7 +5456,6 @@ function renderCharityTab() {
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
-
 
   // Pre-compute payment log HTML
   let payLogHtml = '';
