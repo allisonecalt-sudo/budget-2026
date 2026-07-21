@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v17';
-const BUILD_DATE = 'Jul 21, 2026 10:10';
+const APP_VERSION = 'v18';
+const BUILD_DATE = 'Jul 21, 2026 12:15';
 
 const MONTHS = [
   'January',
@@ -4916,7 +4916,7 @@ function renderTravelTab() {
         const paidSummary =
           subs.length > 0
             ? '<div style="font-size:.68rem;color:' +
-              (paidOver ? 'var(--red)' : 'var(--muted)') +
+              (paidOver ? 'var(--red)' : 'var(--green)') +
               ';margin-top:.2rem;font-family:\'DM Mono\',monospace;">paid ' +
               fmtA(paidTotal) +
               ' of ' +
@@ -5154,7 +5154,7 @@ function renderTravelTab() {
           const tripOver = tripAlloc > 0 && tripSpent > tripAlloc;
           const headerNote = tripAlloc
             ? '<span style="font-size:.7rem;color:' +
-              (tripOver ? 'var(--red);font-weight:700' : 'var(--muted)') +
+              (tripOver ? 'var(--red);font-weight:700' : 'var(--green)') +
               ';font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
               ' of ' +
@@ -5230,7 +5230,7 @@ function renderTravelTab() {
       '<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:baseline;">' +
       '<span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>' +
       '<span style="font-family:\'DM Mono\',monospace;font-size:.85rem;font-weight:600;color:' +
-      (totalSpent > budget ? 'var(--red)' : 'var(--text)') +
+      (totalSpent > budget ? 'var(--red)' : 'var(--green)') +
       ';">' +
       fmtA(totalSpent) +
       '<span style="font-weight:400;color:var(--dim);font-size:.72rem;margin-left:.35rem;">of ' +
@@ -6036,7 +6036,7 @@ function renderAdminTab() {
           fmtA(paidTotal) +
           ' paid</span>' +
           (remaining > 0
-            ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem;">' +
+            ? '<span style="font-size:.6rem;color:var(--green);margin-left:.3rem;">' +
               fmtA(remaining) +
               ' left</span>'
             : remaining < 0
