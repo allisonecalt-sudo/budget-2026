@@ -5209,13 +5209,9 @@ function renderTravelTab() {
             (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
           const tripItem = (items || []).find((it) => norm(it.label) === tripKey);
           const configuredCats =
-            tripItem && Array.isArray(tripItem.categories)
-              ? (tripItem.categories as string[])
-              : [];
+            tripItem && Array.isArray(tripItem.categories) ? (tripItem.categories as string[]) : [];
           const catsInPayments = Array.from(
-            new Set(
-              ps.map((p) => (p.category as string) || '').filter((c) => c.length > 0),
-            ),
+            new Set(ps.map((p) => (p.category as string) || '').filter((c) => c.length > 0)),
           );
           const catOrder: string[] = [];
           configuredCats.forEach((c) => {
@@ -5252,7 +5248,10 @@ function renderTravelTab() {
                         esc(catLabel) +
                         '</button>';
                     const bodyInner = catOpen
-                      ? '<div style="padding:.15rem .25rem .45rem 1.1rem;">' + rowsHtml + addBtn + '</div>'
+                      ? '<div style="padding:.15rem .25rem .45rem 1.1rem;">' +
+                        rowsHtml +
+                        addBtn +
+                        '</div>'
                       : '';
                     return (
                       '<div style="border-bottom:1px solid var(--border);">' +
@@ -5269,10 +5268,12 @@ function renderTravelTab() {
                       esc(catLabel) +
                       '</span>' +
                       (catPays.length
-                        ? '<span style="font-size:.6rem;color:var(--muted);">' + catPays.length + '</span>'
+                        ? '<span style="font-size:.6rem;color:var(--muted);">' +
+                          catPays.length +
+                          '</span>'
                         : '') +
                       '<span style="flex:1;"></span>' +
-                      '<span style="font-family:\'DM Mono\',monospace;font-size:.78rem;color:' +
+                      "<span style=\"font-family:'DM Mono',monospace;font-size:.78rem;color:" +
                       (catTotal > 0 ? 'var(--text)' : 'var(--dim)') +
                       ';">' +
                       fmtA(catTotal) +
