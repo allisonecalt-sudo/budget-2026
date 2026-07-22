@@ -4714,6 +4714,37 @@ async function addTravelPayment() {
   toast('Payment logged ✓');
 }
 
+// Log a payment straight into a specific trip + category (the "+ log in Food"
+// buttons inside each collapsible category on the Travel tab). Inserts a blank
+// row pre-tagged with destination + category, keeps that category open, and
+// lets her fill label + amount inline.
+async function addTravelPaymentCat(dest: string, category: string): Promise<void> {
+  const mObj = state.months.find((m) => m.id === state.currentMonthId);
+  const monthNum = mObj ? mObj.month_num : new Date().getMonth() + 1;
+  const { data, error } = await sb
+    .from('travel_payments')
+    .insert({
+      year: state.currentYear,
+      month_num: monthNum,
+      label: '',
+      destination: dest,
+      amount: 0,
+      category,
+    })
+    .select()
+    .single();
+  if (error) {
+    toast('Error adding');
+    return;
+  }
+  state.travel.payments.push(data);
+  state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+  const tripKey = (dest || '').trim().toLowerCase();
+  localStorage.setItem('sn-trvcat-' + tripKey + '-' + category, '1');
+  renderApp();
+  toast('Added — type the details');
+}
+
 async function deleteTravelPayment(id: string): Promise<void> {
   const snap = { ...state.travel.payments.find((p) => p.id === id) };
   await sb.from('travel_payments').delete().eq('id', id);
@@ -5161,12 +5192,97 @@ function renderTravelTab() {
             : '<span style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
               fmtA(tripSpent) +
               ' spent</span>';
-          // DT5 — fail-loud empty state per trip. If a known trip has no payments
-          // logged yet, surface that explicitly instead of an empty section.
+          // Category layer — each trip's payments group into collapsible
+          // category dropdowns (collapsed by default, so the page stays quiet).
+          // Configured categories (per trip, from travel_items.categories) show
+          // even when empty so she can tap in and log the first item. Payments
+          // with no category fall into a fail-loud "Unsorted" section.
+          const CAT_EMOJI: Record<string, string> = {
+            Food: '🍗',
+            Lodging: '🏨',
+            Transport: '🚗',
+            Gas: '⛽',
+            Souvenirs: '🎁',
+            Activities: '🎟️',
+          };
+          const jsEsc = (s: string): string =>
+            (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+          const tripItem = (items || []).find((it) => norm(it.label) === tripKey);
+          const configuredCats =
+            tripItem && Array.isArray(tripItem.categories)
+              ? (tripItem.categories as string[])
+              : [];
+          const catsInPayments = Array.from(
+            new Set(
+              ps.map((p) => (p.category as string) || '').filter((c) => c.length > 0),
+            ),
+          );
+          const catOrder: string[] = [];
+          configuredCats.forEach((c) => {
+            if (!catOrder.includes(c)) catOrder.push(c);
+          });
+          catsInPayments.forEach((c) => {
+            if (!catOrder.includes(c)) catOrder.push(c);
+          });
+          if (ps.some((p) => !p.category)) catOrder.push('__unsorted__');
           const bodyHtml =
-            ps.length === 0
-              ? '<div style="font-size:.7rem;color:var(--dim);font-style:italic;padding:.45rem .25rem;">No payments logged yet</div>'
-              : ps.map(renderPayRow).join('');
+            catOrder.length === 0
+              ? '<div style="font-size:.7rem;color:var(--dim);font-style:italic;padding:.45rem .25rem;">No categories set for this trip yet</div>'
+              : catOrder
+                  .map((cat) => {
+                    const isUnsorted = cat === '__unsorted__';
+                    const catPays = isUnsorted
+                      ? ps.filter((p) => !p.category)
+                      : ps.filter((p) => (p.category as string) === cat);
+                    const catTotal = catPays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+                    const catKey = 'sn-trvcat-' + tripKey + '-' + cat;
+                    const catOpen = localStorage.getItem(catKey) === '1';
+                    const emoji = isUnsorted ? '❓' : CAT_EMOJI[cat] || '🏷️';
+                    const catLabel = isUnsorted ? 'Unsorted' : cat;
+                    const rowsHtml = catPays.length
+                      ? catPays.map(renderPayRow).join('')
+                      : '<div style="font-size:.68rem;color:var(--dim);font-style:italic;padding:.3rem .25rem;">Nothing logged yet.</div>';
+                    const addBtn = isUnsorted
+                      ? ''
+                      : '<button onclick="addTravelPaymentCat(\'' +
+                        jsEsc(tripName) +
+                        "','" +
+                        jsEsc(cat) +
+                        '\')" style="margin-top:.25rem;background:none;border:none;color:var(--accent);font-size:.72rem;cursor:pointer;font-family:\'DM Sans\',sans-serif;padding:.15rem 0;">+ log in ' +
+                        esc(catLabel) +
+                        '</button>';
+                    const bodyInner = catOpen
+                      ? '<div style="padding:.15rem .25rem .45rem 1.1rem;">' + rowsHtml + addBtn + '</div>'
+                      : '';
+                    return (
+                      '<div style="border-bottom:1px solid var(--border);">' +
+                      '<button onclick="var k=\'' +
+                      jsEsc(catKey) +
+                      "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"width:100%;display:flex;align-items:center;gap:.4rem;background:none;border:none;cursor:pointer;padding:.38rem .25rem;text-align:left;color:var(--text);font-family:'DM Sans',sans-serif;\">" +
+                      '<span style="font-size:.68rem;color:var(--dim);width:10px;flex:none;">' +
+                      (catOpen ? '▾' : '▸') +
+                      '</span>' +
+                      '<span style="font-size:.85rem;flex:none;">' +
+                      emoji +
+                      '</span>' +
+                      '<span style="font-size:.78rem;font-weight:600;">' +
+                      esc(catLabel) +
+                      '</span>' +
+                      (catPays.length
+                        ? '<span style="font-size:.6rem;color:var(--muted);">' + catPays.length + '</span>'
+                        : '') +
+                      '<span style="flex:1;"></span>' +
+                      '<span style="font-family:\'DM Mono\',monospace;font-size:.78rem;color:' +
+                      (catTotal > 0 ? 'var(--text)' : 'var(--dim)') +
+                      ';">' +
+                      fmtA(catTotal) +
+                      '</span>' +
+                      '</button>' +
+                      bodyInner +
+                      '</div>'
+                    );
+                  })
+                  .join('');
           return (
             '<div style="margin-bottom:.7rem;">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .25rem .25rem;border-bottom:1px solid var(--accent);margin-bottom:.15rem;">' +
@@ -10264,6 +10380,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   addTransactionSidebar,
   addTravelItem,
   addTravelPayment,
+  addTravelPaymentCat,
   addTravelSub,
   ag,
   anyPanelOpen,
