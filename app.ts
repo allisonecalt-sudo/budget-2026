@@ -5204,6 +5204,7 @@ function renderTravelTab() {
             Gas: '⛽',
             Souvenirs: '🎁',
             Activities: '🎟️',
+            Misc: '📦',
           };
           const jsEsc = (s: string): string =>
             (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
