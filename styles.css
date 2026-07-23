@@ -261,6 +261,44 @@ textarea {
   font-size: 1rem;
   font-weight: 500;
 }
+/* v29 — the three decision numbers are the ribbon; Income/Budgeted/Used/Saved
+   are reference data points, shrunk into a compact side cluster. */
+.ribbon-sub {
+  font-size: 0.55rem;
+  color: var(--dim);
+  line-height: 1.2;
+  margin-top: 0.08rem;
+}
+.ribbon-datapoints {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.14rem 1.1rem;
+  padding: 0.25rem 1rem;
+  align-self: center;
+  border-right: 1px solid var(--border);
+}
+.rb-dp {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.rb-dp-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.rb-dp-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .ribbon-toggle {
   font-size: 0.65rem;
   color: var(--muted);
@@ -1997,6 +2035,31 @@ input:focus {
   .ribbon-val {
     font-size: 0.75rem !important;
   }
+  /* v29 — heroes read bigger than the data points even on the phone */
+  .ribbon-stat.rs-hero .ribbon-val {
+    font-size: 0.98rem !important;
+  }
+  /* Unallocated is her #1 number — biggest on the phone too, not tied. */
+  .ribbon-stat.rs-key .ribbon-val {
+    font-size: 1.18rem !important;
+  }
+  .ribbon-sub {
+    display: none !important; /* too small to help on a phone — tooltip covers it */
+  }
+  .ribbon-datapoints {
+    grid-column: span 3 !important;
+    grid-template-columns: repeat(4, auto) !important;
+    justify-content: space-between !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 0.28rem 0.45rem !important;
+    gap: 0.1rem 0.6rem !important;
+  }
+  .ribbon-datapoints .rb-dp {
+    flex-direction: column;
+    align-items: center;
+    gap: 0 !important;
+  }
   /* Saved stat — remove accent border on mobile, fits in grid */
   .ribbon-stat[style*='border-left:2px'] {
     border-left: none !important;
@@ -2188,10 +2251,11 @@ input:focus {
     min-width: 0 !important;
   }
   .travel-pay-row {
-    grid-template-columns: 1fr auto auto auto !important;
+    /* v29: Mo column removed app-wide — the date IS the when */
+    grid-template-columns: 1fr auto auto !important;
     grid-template-areas:
-      'what what amt del'
-      'where date mo del' !important;
+      'what amt del'
+      'where date del' !important;
     column-gap: 0.55rem !important;
     row-gap: 0.15rem !important;
     padding: 0.55rem 0.1rem !important;
@@ -2200,14 +2264,6 @@ input:focus {
   .travel-pay-header {
     /* Hide dense header on mobile — the 2-line card is self-evident */
     display: none !important;
-  }
-  .travel-pay-mo {
-    grid-area: mo;
-    text-align: right !important;
-    font-size: 0.6rem !important;
-    color: var(--dim) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   }
   .travel-pay-where {
     grid-area: where;
@@ -2259,10 +2315,11 @@ input:focus {
     min-width: 0 !important;
   }
   .charity-pay-row {
-    grid-template-columns: 1fr auto auto auto auto !important;
+    /* v29: Mo column removed app-wide — the date IS the when */
+    grid-template-columns: 1fr auto auto auto !important;
     grid-template-areas:
-      'name name name amt del'
-      'date receipt given mo del' !important;
+      'name name amt del'
+      'date receipt given del' !important;
     column-gap: 0.45rem !important;
     row-gap: 0.15rem !important;
     padding: 0.55rem 0.1rem !important;
@@ -2271,14 +2328,6 @@ input:focus {
   .charity-pay-header {
     /* Hide dense header on mobile — the 2-line card is self-evident */
     display: none !important;
-  }
-  .charity-pay-mo {
-    grid-area: mo;
-    text-align: right !important;
-    font-size: 0.6rem !important;
-    color: var(--dim) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   }
   .charity-pay-name {
     grid-area: name;
@@ -3907,4 +3956,42 @@ tr.collapsed {
 }
 .ym-row-net.net-neg .ym-val {
   color: var(--red);
+}
+
+/* ── v29 UX pass ──────────────────────────────────────────────────────── */
+/* Native checkboxes (search "All months", etc.) match the forest-green app */
+input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+@media (max-width: 600px) {
+  /* Year tab: the dense pipe-line summary duplicates the ANNUAL card right
+     below it — one home per number on the phone. */
+  .year-ribbon {
+    display: none !important;
+  }
+  /* Tap targets — 9-21px icon buttons are un-hittable on a Pixel. Grow the
+     HIT AREA (padding + min box), not the glyph. */
+  .tx-del,
+  .money-in-row .mi-del,
+  .charity-pay-x,
+  .charity-pay-receipt,
+  .charity-pay-given,
+  .travel-pay-x {
+    min-width: 40px !important;
+    min-height: 40px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  /* Sort/filter chips (Date ↑, Grouped, High…) — comfortable thumb height */
+  .tab-sort-row button {
+    min-height: 34px !important;
+    padding: 0.25rem 0.55rem !important;
+  }
+  /* Charity "Set aside by month": 3-col is crushed at 390px — go 2-col like
+     the Travel/Admin allocation grids */
+  .charity-alloc-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }

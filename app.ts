@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v28';
-const BUILD_DATE = 'Jul 23, 2026 15:35';
+const APP_VERSION = 'v29';
+const BUILD_DATE = 'Jul 23, 2026 22:45';
 
 const MONTHS = [
   'January',
@@ -339,6 +339,9 @@ interface CharityPaymentRow {
   month_num: number;
   label: string;
   amount: number;
+  is_estimate?: boolean;
+  // Optional "when did I actually pay this" date — it drives month_num.
+  payment_date?: string | null;
   [key: string]: unknown;
 }
 
@@ -1715,6 +1718,92 @@ function catBudget(catKey: string): number {
   return fromItems !== null ? fromItems : state.budgets[catKey] || 0;
 }
 
+// ── "Left to Spend" breakdown popover ──────────────────────────────────
+// Hover (desktop) or tap (phone) the Left to Spend ribbon stat → a list of
+// WHERE the money is left, category by category (groceries, eating out…).
+// Tab categories (travel/admin/charity) are excluded: their allocation counts
+// as used the moment it's set aside, so they never hold "left to spend".
+let ltsHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showLtsPop(el: HTMLElement): void {
+  if (ltsHideTimer) {
+    clearTimeout(ltsHideTimer);
+    ltsHideTimer = null;
+  }
+  if (document.getElementById('lts-pop')) return;
+  const spent = spentByCategory();
+  const rows = CATEGORIES.filter((c) => !c.hasTab)
+    .map((c) => {
+      const b = catBudget(c.key) || 0;
+      const s = spent[c.key] || 0;
+      return { c, b, s, left: ag(b - s) };
+    })
+    .filter((r) => (r.b !== 0 || r.s !== 0) && Math.round(r.left) !== 0)
+    .sort((x, y) => y.left - x.left);
+  const f = (v: number): string => '₪' + Math.round(Math.abs(v)).toLocaleString('en-IL');
+  const rowsHtml = rows
+    .map(
+      (r) =>
+        `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.2rem 0;font-size:.8rem;">
+          <span style="color:var(--text);">${r.c.emoji} ${r.c.label}</span>
+          <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${r.left >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600;">${f(r.left)} ${r.left >= 0 ? 'left' : 'over'}</span>
+        </div>`,
+    )
+    .join('');
+  const pop = document.createElement('div');
+  pop.id = 'lts-pop';
+  // On the phone the datapoints row renders BELOW the hero row — anchor the
+  // popover under the whole ribbon so it never covers Income/Budgeted/Used.
+  const anchor =
+    window.innerWidth <= 600 ? (el.closest('.ribbon') as HTMLElement | null) || el : el;
+  const r = anchor.getBoundingClientRect();
+  pop.style.cssText =
+    'position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shadow);padding:.7rem .9rem;min-width:250px;max-width:330px;max-height:60vh;overflow-y:auto;';
+  pop.style.top = r.bottom + 6 + 'px';
+  pop.style.left =
+    Math.max(8, Math.min(el.getBoundingClientRect().left, window.innerWidth - 338)) + 'px';
+  pop.innerHTML =
+    '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.35rem;">Where the money is left</div>' +
+    (rows.length
+      ? rowsHtml
+      : '<div style="font-size:.78rem;color:var(--dim);">Nothing left — every category is spent to its budget.</div>');
+  pop.onmouseenter = (): void => {
+    if (ltsHideTimer) {
+      clearTimeout(ltsHideTimer);
+      ltsHideTimer = null;
+    }
+  };
+  pop.onmouseleave = (): void => scheduleHideLtsPop();
+  document.body.appendChild(pop);
+  // Tap-away closes it (phone path).
+  const closer = (ev: MouseEvent): void => {
+    const p = document.getElementById('lts-pop');
+    if (p && !p.contains(ev.target as Node) && !el.contains(ev.target as Node)) {
+      p.remove();
+      document.removeEventListener('click', closer);
+    }
+    if (!p) document.removeEventListener('click', closer);
+  };
+  setTimeout(() => document.addEventListener('click', closer), 0);
+}
+
+function scheduleHideLtsPop(): void {
+  if (ltsHideTimer) clearTimeout(ltsHideTimer);
+  ltsHideTimer = setTimeout(() => {
+    const p = document.getElementById('lts-pop');
+    if (p) p.remove();
+  }, 200);
+}
+
+function toggleLtsPop(el: HTMLElement): void {
+  const p = document.getElementById('lts-pop');
+  if (p) {
+    p.remove();
+    return;
+  }
+  showLtsPop(el);
+}
+
 async function addTashlum() {
   const name = prompt('שם התשלום (e.g. Mattress):');
   if (!name?.trim()) return;
@@ -2557,13 +2646,13 @@ function renderApp() {
           cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
         );
         const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
-        const gr = ag(gb - gs);
+        const gr = Math.round(gb - gs);
         const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
         const catRows = cats
           .map((c) => {
             const b = catBudget(c.key) || 0;
             const s = c.hasTab ? b : spent[c.key] || 0;
-            const r = b - s;
+            const r = Math.round(b - s);
             // DC5 — gap triangles dropped from ribbon Summary too (same
             // reason as Snapshot modal). Owed-elsewhere strip carries
             // the gap signal at a higher hierarchy level.
@@ -2574,7 +2663,7 @@ function renderApp() {
           const c = cats[0]!;
           const b = catBudget(c.key) || 0;
           const s = c.hasTab ? b : spent[c.key] || 0;
-          const r = b - s;
+          const r = Math.round(b - s);
           return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
         }
         return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
@@ -2594,10 +2683,13 @@ function renderApp() {
       const leisureBudget = ag(
         leisureCats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0),
       );
+      // Round BEFORE comparing — display rounds to whole shekels, so a sub-₪1
+      // overage must not trip a red "₪0 over" on a perfectly-funded category.
+      const lsOver = Math.round(leisureSpent - leisureBudget);
       const leisureSubRibbon = `<div class="sub-ribbon">
         <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
           ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
-          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${fmt(leisureSpent)} spent${leisureBudget ? ` of ${fmt(leisureBudget)}` : ''}${leisureBudget && leisureSpent > leisureBudget ? `<span class="sn-over"> · ${fmt(ag(leisureSpent - leisureBudget))} over</span>` : ''}
+          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${fmt(leisureSpent)} spent${leisureBudget ? ` of ${fmt(leisureBudget)}` : ''}${leisureBudget && lsOver >= 1 ? `<span class="sn-over"> · ${fmt(lsOver)} over</span>` : ''}
           </span>
         </span>
         ${
@@ -2608,11 +2700,11 @@ function renderApp() {
             .map((c) => {
               const s = spent[c.key] || 0;
               const b = state.budgets[c.key] || 0;
-              const r = b - s;
+              const r = Math.round(b - s);
               return `<div class="leisure-row"><span class="lz-cat">${c.emoji} ${c.label}</span><span class="lz-nums">${fmt(s)}${b ? ` <span class="lz-of">of ${fmt(b)}</span>` : ''}</span><span class="lz-left ${r < 0 ? 'sn-over' : 'sn-ok'}">${!b || r === 0 ? '' : r < 0 ? fmt(-r) + ' over' : fmt(r) + ' left'}</span></div>`;
             })
             .join('')}
-          <div class="leisure-row lz-total"><span class="lz-cat">Total</span><span class="lz-nums">${fmt(leisureSpent)} <span class="lz-of">of ${fmt(leisureBudget)}</span></span><span class="lz-left ${leisureBudget - leisureSpent < 0 ? 'sn-over' : 'sn-ok'}">${leisureBudget - leisureSpent === 0 ? '' : leisureBudget - leisureSpent < 0 ? fmt(ag(leisureSpent - leisureBudget)) + ' over' : fmt(ag(leisureBudget - leisureSpent)) + ' left'}</span></div>
+          <div class="leisure-row lz-total"><span class="lz-cat">Total</span><span class="lz-nums">${fmt(leisureSpent)} <span class="lz-of">of ${fmt(leisureBudget)}</span></span><span class="lz-left ${lsOver >= 1 ? 'sn-over' : 'sn-ok'}">${lsOver === 0 ? '' : lsOver >= 1 ? fmt(lsOver) + ' over' : fmt(-lsOver) + ' left'}</span></div>
         </div>`
             : ''
         }
@@ -2620,13 +2712,15 @@ function renderApp() {
 
       return `<div class="ribbon-panel">
         <div class="ribbon">
-          <div class="ribbon-stat rs-input" title="Income — total money coming in this month"><div class="ribbon-label">Income${isAnyEstimated(state.currentMonthId) ? ' <span style="color:var(--est);font-size:.55rem;">~EST</span>' : ''}</div><div class="ribbon-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</div></div>
-          <div class="ribbon-stat rs-input" title="Budgeted — income you've assigned to categories (given a job)"><div class="ribbon-label">Budgeted</div><div class="ribbon-val">${fmt(totalBudgeted)}</div></div>
-          <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${Math.round(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(leftToBudget) === 0 ? 0 : leftToBudget)}</div></div>
-          <div class="ribbon-stat rs-input" title="Used — total spent so far this month"><div class="ribbon-label">Used</div><div class="ribbon-val">${fmt(totalSpent)}</div></div>
-          <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${Math.round(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(income - totalSpent) === 0 ? 0 : income - totalSpent)}</div></div>
-          <div class="ribbon-stat rs-hero" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used)"><div class="ribbon-label">Left to Spend</div><div class="ribbon-val" style="color:${Math.round(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(remainingInBudget) === 0 ? 0 : remainingInBudget)}</div></div>
-          <div class="ribbon-stat ribbon-hide-mobile" style="border-left:2px solid var(--accent);padding-left:.75rem;margin-left:.25rem;"><div class="ribbon-label" style="color:var(--accent);">🏦 Saved</div><div class="ribbon-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</div></div>
+          <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${Math.round(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(leftToBudget) === 0 ? 0 : leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
+          <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${Math.round(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(income - totalSpent) === 0 ? 0 : income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
+          <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${Math.round(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(remainingInBudget) === 0 ? 0 : remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
+          <div class="ribbon-datapoints">
+            <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
+            <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
+            <div class="rb-dp" title="Used — total spent so far this month"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
+            <div class="rb-dp" title="Saved — bank + invested savings this month"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved</span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
+          </div>
           ${(() => {
             // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
             // Always visible on Budget-tab top KPIs, glanceable on mobile too.
@@ -4391,8 +4485,8 @@ async function addCharityPayment() {
   const dateVal = byId('cp-date').value || null;
   const amount = parseFloat(byId('cp-amount').value);
   // Same rule as travel: the date she picks decides the month, not the app's
-  // current month. Charity is a yearly ledger too.
-  const monthNum = monthNumFromDate(dateVal, parseInt(byId('cp-month').value));
+  // current month. Charity is a yearly ledger too. Blank date → today's month.
+  const monthNum = monthNumFromDate(dateVal, todayMonth());
   const yr = yearFromDate(dateVal, state.currentYear);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in name and amount');
@@ -4715,8 +4809,8 @@ async function addTravelPayment() {
   // Date is OPTIONAL — blank is a valid payment, it just isn't dated yet.
   const paymentDate = byId('tp-date').value || null;
   // The DATE decides the month, not the month the app is showing. Travel is a
-  // yearly budget. Blank date → whatever the month dropdown says.
-  const monthNum = monthNumFromDate(paymentDate, parseInt(byId('tp-month').value));
+  // yearly budget. Blank date → today's month (no month picker anymore).
+  const monthNum = monthNumFromDate(paymentDate, todayMonth());
   const yr = yearFromDate(paymentDate, state.currentYear);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in what and amount');
@@ -4756,8 +4850,8 @@ async function addTravelPayment() {
 // row pre-tagged with destination + category, keeps that category open, and
 // lets her fill label + amount inline.
 async function addTravelPaymentCat(dest: string, category: string): Promise<void> {
-  const mObj = state.months.find((m) => m.id === state.currentMonthId);
-  const monthNum = mObj ? mObj.month_num : new Date().getMonth() + 1;
+  // Today's month, not the viewed month — the date she types in later moves it.
+  const monthNum = todayMonth();
   const { data, error } = await sb
     .from('travel_payments')
     .insert({
@@ -4989,7 +5083,7 @@ function renderTravelTab() {
             );
           })
           .join('');
-        const paidOver = paidTotal > Number(item.projected_amount || 0);
+        const paidOver = Math.round(paidTotal - Number(item.projected_amount || 0)) >= 1;
         const paidSummary =
           subs.length > 0
             ? '<div style="font-size:.68rem;color:' +
@@ -5091,9 +5185,15 @@ function renderTravelTab() {
       '<div style="color:var(--dim);font-size:.78rem;padding:.6rem 0;font-style:italic;">No payments logged yet — use the form above to add the first one.</div>';
   } else {
     const ps = localStorage.getItem('travelPaySort') || 'month';
+    // Date-first sort: dated payments order by their real date; undated ones
+    // fall back to their filed month (sorting after dated rows in that month).
+    const dk = (p: TravelPaymentRow): string =>
+      (p.payment_date as string) ||
+      String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99';
     const sorted = [...payments].sort((a, b) => {
-      if (ps === 'month') return a.month_num - b.month_num;
-      if (ps === 'month-desc') return b.month_num - a.month_num;
+      if (ps === 'month') return dk(a as TravelPaymentRow).localeCompare(dk(b as TravelPaymentRow));
+      if (ps === 'month-desc')
+        return dk(b as TravelPaymentRow).localeCompare(dk(a as TravelPaymentRow));
       if (ps === 'high') return Number(b.amount) - Number(a.amount);
       if (ps === 'low') return Number(a.amount) - Number(b.amount);
       return 0;
@@ -5128,12 +5228,9 @@ function renderTravelTab() {
       const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
       const estBtnWeight = p.is_estimate ? '700' : '400';
       return (
-        '<div class="travel-pay-row" style="display:grid;grid-template-columns:45px 78px 1fr 96px 78px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+        '<div class="travel-pay-row" style="display:grid;grid-template-columns:110px 1fr 112px 84px 42px 28px;gap:.3rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
         estBgP +
         '">' +
-        '<span class="travel-pay-mo" style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
-        MONTH_NAMES[p.month_num - 1] +
-        '</span>' +
         '<input class="travel-pay-where" type="text" value="' +
         destVal +
         '" placeholder="Where" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
@@ -5236,7 +5333,7 @@ function renderTravelTab() {
             0,
           );
           const tripAlloc = allocByTrip[tripKey] || 0;
-          const tripOver = tripAlloc > 0 && tripSpent > tripAlloc;
+          const tripOver = tripAlloc > 0 && Math.round(tripSpent - tripAlloc) >= 1;
           const headerNote = tripAlloc
             ? '<span style="font-size:.7rem;color:' +
               (tripOver ? 'var(--red);font-weight:700' : 'var(--green)') +
@@ -5383,16 +5480,16 @@ function renderTravelTab() {
       '</div>' +
       '<div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
       '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>' +
-      sb2('month', 'Mo ↑') +
-      sb2('month-desc', 'Mo ↓') +
+      sb2('month', 'Date ↑') +
+      sb2('month-desc', 'Date ↓') +
       sb2('high', 'Highest') +
       sb2('low', 'Lowest') +
       '</div>' +
       '<div class="travel-pay-scroll" style="overflow-x:auto;"><div class="travel-pay-inner" style="min-width:460px;">' +
       (groupByTrip
         ? groupedHtml
-        : '<div class="travel-pay-row travel-pay-header" style="display:grid;grid-template-columns:45px 78px 1fr 96px 78px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
-          '<span class="travel-pay-mo">Mo</span><span class="travel-pay-where">Where</span><span class="travel-pay-what">What</span><span class="travel-pay-date">Date</span><span class="travel-pay-amt" style="text-align:right">Amount</span><span class="travel-pay-est" style="text-align:center">~est</span><span class="travel-pay-x"></span>' +
+        : '<div class="travel-pay-row travel-pay-header" style="display:grid;grid-template-columns:110px 1fr 112px 84px 42px 28px;gap:.3rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+          '<span class="travel-pay-where">Where</span><span class="travel-pay-what">What</span><span class="travel-pay-date">Date</span><span class="travel-pay-amt" style="text-align:right">Amount</span><span class="travel-pay-est" style="text-align:center">~est</span><span class="travel-pay-x"></span>' +
           '</div>' +
           payRows) +
       '</div></div>' +
@@ -5408,7 +5505,7 @@ function renderTravelTab() {
       '<span style="font-weight:400;color:var(--dim);font-size:.72rem;margin-left:.35rem;">of ' +
       fmtA(budget) +
       ' budget' +
-      (totalSpent > budget ? ' · ' + fmtA(totalSpent - budget) + ' over' : '') +
+      (Math.round(totalSpent - budget) >= 1 ? ' · ' + fmtA(totalSpent - budget) + ' over' : '') +
       '</span>' +
       '</span>' +
       '</div>';
@@ -5452,16 +5549,6 @@ function renderTravelTab() {
   const gapColor = gap > 0 ? 'var(--red)' : 'var(--green)';
   const gapText = gap > 0 ? '(−' + fmtA(gap) + ' gap)' : '✓';
   const allocTotalColor = gap > 0 ? 'var(--red)' : 'var(--green)';
-  const monthSelectHtml = MONTH_NAMES.map(
-    (mn, i) =>
-      '<option value="' +
-      (i + 1) +
-      '"' +
-      (i + 1 === currentMonthNum ? ' selected' : '') +
-      '>' +
-      mn +
-      '</option>',
-  ).join('');
 
   const sortBtnsHtml = [
     ['created', 'Added'],
@@ -5562,14 +5649,15 @@ function renderTravelTab() {
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${allocTotalColor};">${fmtA(totalAlloc)} ${gapText}</span>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- Payment Log -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
+    <!-- Payment Log — full width so the rows can breathe -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);margin-top:1.25rem;">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
 
           <!-- Add payment form -->
-          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 1fr 104px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
-            <select id="tp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
+          <div class="pay-add-form" style="display:grid;grid-template-columns:1fr 1fr 130px 90px 32px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <input type="text" id="tp-dest" placeholder="Trip" list="tp-trip-list" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
@@ -5582,9 +5670,8 @@ function renderTravelTab() {
             <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
-            <input type="date" id="tp-date" title="Date paid — sets the month" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            <input type="date" id="tp-date" title="Date paid — sets the month; blank = today" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onchange="syncMonthPicker('tp-date','tp-month')"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
             <input type="number" id="tp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
@@ -5593,8 +5680,6 @@ function renderTravelTab() {
           </div>
 
           ${payLogHtml}
-        </div>
-      </div>
     </div>
   </div>`;
 }
@@ -5641,9 +5726,14 @@ function renderCharityTab() {
       '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet</div>';
   } else {
     const ps = localStorage.getItem('charityPaySort') || 'month';
+    // Date-first sort, same rule as travel: real date wins, undated rows fall
+    // back to their filed month.
+    const dk = (p: CharityPaymentRow): string =>
+      (p.payment_date as string) ||
+      String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99';
     const sorted = [...payments].sort((a, b) => {
-      if (ps === 'month') return a.month_num - b.month_num;
-      if (ps === 'month-desc') return b.month_num - a.month_num;
+      if (ps === 'month') return dk(a).localeCompare(dk(b));
+      if (ps === 'month-desc') return dk(b).localeCompare(dk(a));
       if (ps === 'high') return Number(b.amount) - Number(a.amount);
       if (ps === 'low') return Number(a.amount) - Number(b.amount);
       return 0;
@@ -5670,12 +5760,9 @@ function renderCharityTab() {
         const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
         const estBtnWeight = p.is_estimate ? '700' : '400';
         return (
-          '<div class="charity-pay-row" style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+          '<div class="charity-pay-row" style="display:grid;grid-template-columns:1fr 112px 84px 30px 30px 42px 28px;gap:.3rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
           estBgP +
           '">' +
-          '<span class="charity-pay-mo" style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
-          MONTH_NAMES[p.month_num - 1] +
-          '</span>' +
           '<input class="charity-pay-name" type="text" value="' +
           esc(p.label) +
           '" placeholder="Charity" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateCharityPayment(\'' +
@@ -5746,14 +5833,14 @@ function renderCharityTab() {
     payLogHtml =
       '<div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">' +
       '<span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>' +
-      sb2('month', 'Mo ↑') +
-      sb2('month-desc', 'Mo ↓') +
+      sb2('month', 'Date ↑') +
+      sb2('month-desc', 'Date ↓') +
       sb2('high', 'Highest') +
       sb2('low', 'Lowest') +
       '</div>' +
       '<div class="charity-pay-scroll" style="overflow-x:auto;"><div class="charity-pay-inner" style="min-width:400px;">' +
-      '<div class="charity-pay-header" style="display:grid;grid-template-columns:45px 1fr 90px 80px 28px 28px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
-      '<span>Mo</span><span>Charity</span><span>Date</span><span style="text-align:right">Amount</span><span style="text-align:center">🧾</span><span style="text-align:center">✓</span><span style="text-align:center">~est</span><span></span>' +
+      '<div class="charity-pay-header" style="display:grid;grid-template-columns:1fr 112px 84px 30px 30px 42px 28px;gap:.3rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+      '<span>Charity</span><span>Date</span><span style="text-align:right">Amount</span><span style="text-align:center">🧾</span><span style="text-align:center">✓</span><span style="text-align:center">~est</span><span></span>' +
       '</div>' +
       payRows +
       '</div></div>' +
@@ -5818,16 +5905,6 @@ function renderCharityTab() {
       '</div>'
     );
   }).join('');
-  const monthSelectHtml = MONTH_NAMES.map(
-    (mn, i) =>
-      '<option value="' +
-      (i + 1) +
-      '"' +
-      (i + 1 === currentMonthNum ? ' selected' : '') +
-      '>' +
-      mn +
-      '</option>',
-  ).join('');
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
@@ -5862,7 +5939,7 @@ function renderCharityTab() {
         <!-- Monthly Allocations -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Set aside by month</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
+          <div class="charity-alloc-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;">${allocGridHtml}</div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total set aside</span>
             <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:var(--green);">${fmtA(totalAlloc)}</span>
@@ -5874,14 +5951,12 @@ function renderCharityTab() {
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
 
           <!-- Add payment form -->
-          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 90px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
-            <select id="cp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
+          <div class="pay-add-form" style="display:grid;grid-template-columns:1fr 130px 90px 32px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <input type="text" id="cp-label" placeholder="Charity name" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addCharityPayment()">
-            <input type="date" id="cp-date" title="Date paid — sets the month" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
-              onchange="syncMonthPicker('cp-date','cp-month')">
+            <input type="date" id="cp-date" title="Date paid — sets the month; blank = today" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             <input type="number" id="cp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addCharityPayment()">
@@ -6432,50 +6507,53 @@ function renderAdminTab() {
           </div>
         </div>
 
-        <!-- Payment Log (auto-generated from paid sub-payments) -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);">
-          <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.2rem;">Payment Log</div>
-          <div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">Auto-generated from yearly expense payments</div>
+        ${renderMoneyInCard()}
+      </div>
+    </div>
 
-          ${(() => {
-            const paidSubs = (state.admin.subItems || []).filter((s) => s.is_paid);
-            if (paidSubs.length === 0) {
-              return '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet — mark payments paid in Yearly Expenses</div>';
-            }
-            const ps = localStorage.getItem('adminPaySort') || 'month';
-            const sorted = [...paidSubs].sort((a, b) => {
-              if (ps === 'month')
-                return (
-                  ((a as AdminSubItemRow).month_num || 0) - ((b as AdminSubItemRow).month_num || 0)
-                );
-              if (ps === 'month-desc')
-                return (
-                  ((b as AdminSubItemRow).month_num || 0) - ((a as AdminSubItemRow).month_num || 0)
-                );
-              if (ps === 'high') return Number(b.amount) - Number(a.amount);
-              if (ps === 'low') return Number(a.amount) - Number(b.amount);
-              return 0;
-            });
-            const itemMeta: Record<string, { label: string; category: string }> = {};
-            (state.admin.items || []).forEach((it) => {
-              (itemMeta as Record<string, { label: string; category: string }>)[it.id] = {
-                label: it.label || '(unnamed)',
-                category: (it.category as string) || 'Other',
-              };
-            });
-            const sb2 = (key: string, label: string): string =>
-              `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
-            const payRowHtml = (s: AdminSubItemRow): string => {
-              const parentLabel =
-                ((itemMeta as Record<string, { label: string; category: string }>)[
-                  s.item_id as string
-                ] &&
-                  (itemMeta as Record<string, { label: string; category: string }>)[
-                    s.item_id as string
-                  ].label) ||
-                '?';
-              const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
-              return `
+    <!-- Payment Log — full width so the rows can breathe (auto-generated from paid sub-payments) -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.25rem;box-shadow:var(--shadow);margin-top:1.25rem;">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.2rem;">Payment Log</div>
+      <div style="font-size:.6rem;color:var(--dim);margin-bottom:.9rem;font-style:italic;">Auto-generated from yearly expense payments</div>
+
+      ${(() => {
+        const paidSubs = (state.admin.subItems || []).filter((s) => s.is_paid);
+        if (paidSubs.length === 0) {
+          return '<div style="color:var(--dim);font-size:.78rem;padding:.3rem 0;">No payments yet — mark payments paid in Yearly Expenses</div>';
+        }
+        const ps = localStorage.getItem('adminPaySort') || 'month';
+        const sorted = [...paidSubs].sort((a, b) => {
+          if (ps === 'month')
+            return (
+              ((a as AdminSubItemRow).month_num || 0) - ((b as AdminSubItemRow).month_num || 0)
+            );
+          if (ps === 'month-desc')
+            return (
+              ((b as AdminSubItemRow).month_num || 0) - ((a as AdminSubItemRow).month_num || 0)
+            );
+          if (ps === 'high') return Number(b.amount) - Number(a.amount);
+          if (ps === 'low') return Number(a.amount) - Number(b.amount);
+          return 0;
+        });
+        const itemMeta: Record<string, { label: string; category: string }> = {};
+        (state.admin.items || []).forEach((it) => {
+          (itemMeta as Record<string, { label: string; category: string }>)[it.id] = {
+            label: it.label || '(unnamed)',
+            category: (it.category as string) || 'Other',
+          };
+        });
+        const sb2 = (key: string, label: string): string =>
+          `<button onclick="localStorage.setItem('adminPaySort','${key}');renderApp()" style="background:none;border:1px solid var(--border);border-radius:4px;font-size:.64rem;padding:.1rem .3rem;cursor:pointer;color:${ps === key ? 'var(--accent)' : 'var(--muted)'};font-family:'DM Sans',sans-serif;font-weight:${ps === key ? '600' : '400'};border-color:${ps === key ? 'var(--accent)' : 'var(--border)'};">${label}</button>`;
+        const payRowHtml = (s: AdminSubItemRow): string => {
+          const parentLabel =
+            ((itemMeta as Record<string, { label: string; category: string }>)[
+              s.item_id as string
+            ] &&
+              (itemMeta as Record<string, { label: string; category: string }>)[s.item_id as string]
+                .label) ||
+            '?';
+          const mn = s.month_num ? MONTH_NAMES[s.month_num - 1] || '—' : '—';
+          return `
             <div class="admin-pay-row" style="display:grid;grid-template-columns:40px 1fr 1fr 75px 32px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.78rem;${s.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : ''}">
               <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
               <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
@@ -6483,19 +6561,19 @@ function renderAdminTab() {
               <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
               <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
             </div>`;
-            };
-            // Group paid sub-payments by their parent item's category (ADMIN_CATEGORIES order).
-            const byCat: Record<string, AdminSubItemRow[]> = {};
-            sorted.forEach((s) => {
-              const c = ((itemMeta as Record<string, { label: string; category: string }>)[
-                s.item_id as string
-              ]?.category || 'Other') as string;
-              (byCat[c] = byCat[c] || []).push(s as AdminSubItemRow);
-            });
-            const orderedCats = ADMIN_CATEGORIES.filter((c) => byCat[c] && byCat[c].length).concat(
-              Object.keys(byCat).filter((c) => !ADMIN_CATEGORIES.includes(c)),
-            );
-            return `
+        };
+        // Group paid sub-payments by their parent item's category (ADMIN_CATEGORIES order).
+        const byCat: Record<string, AdminSubItemRow[]> = {};
+        sorted.forEach((s) => {
+          const c = ((itemMeta as Record<string, { label: string; category: string }>)[
+            s.item_id as string
+          ]?.category || 'Other') as string;
+          (byCat[c] = byCat[c] || []).push(s as AdminSubItemRow);
+        });
+        const orderedCats = ADMIN_CATEGORIES.filter((c) => byCat[c] && byCat[c].length).concat(
+          Object.keys(byCat).filter((c) => !ADMIN_CATEGORIES.includes(c)),
+        );
+        return `
             <div class="tab-sort-row" style="display:flex;align-items:center;gap:.3rem;padding-bottom:.4rem;">
               <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
               ${sb2('month', 'Mo ↑')}${sb2('month-desc', 'Mo ↓')}${sb2('high', 'Highest')}${sb2('low', 'Lowest')}
@@ -6511,22 +6589,18 @@ function renderAdminTab() {
                   0,
                 );
                 return `
-            <div class="admin-pay-cat" style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.55rem .1rem .25rem;margin-top:.2rem;border-bottom:1px solid var(--border);">
-              <span style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${(catEmoji as Record<string, string>)[c] || '📌'} ${esc(c)}</span>
+            <div class="admin-pay-cat" onclick="localStorage.setItem('apl-${esc(c)}',localStorage.getItem('apl-${esc(c)}')==='0'?'1':'0');renderApp()" style="display:flex;align-items:center;justify-content:space-between;gap:.4rem;padding:.55rem .1rem .25rem;margin-top:.2rem;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;" title="Tap to collapse/expand">
+              <span style="font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);"><span style="font-size:.6rem;color:var(--dim);">${localStorage.getItem('apl-' + c) === '0' ? '▸' : '▾'}</span> ${(catEmoji as Record<string, string>)[c] || '📌'} ${esc(c)} <span style="font-weight:400;color:var(--dim);">(${subs.length})</span></span>
               <span style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--dim);">${fmtA(catTotal)}</span>
             </div>
-            ${subs.map(payRowHtml).join('')}`;
+            ${localStorage.getItem('apl-' + c) === '0' ? '' : subs.map(payRowHtml).join('')}`;
               })
               .join('')}
             <div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
               <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total spent</span>
               <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;">${fmtA(totalSpent)}</span>
             </div>`;
-          })()}
-        </div>
-
-        ${renderMoneyInCard()}
-      </div>
+      })()}
     </div>
   </div>`;
 }
@@ -6768,7 +6842,7 @@ async function saveAdminItem(id: string, field: string, value: unknown): Promise
             item_id: id,
             label: AUTO_SUB_LABEL,
             amount: Number(item.projected_amount),
-            month_num: currentMonthNum(),
+            month_num: todayMonth(),
             is_paid: true,
           })
           .select()
@@ -7007,7 +7081,7 @@ async function deleteAdminCredit(id: string): Promise<void> {
 async function addAdminSub(itemId: string): Promise<void> {
   const { data, error } = await sb
     .from('admin_sub_items')
-    .insert({ item_id: itemId, label: '', amount: 0, month_num: currentMonthNum() })
+    .insert({ item_id: itemId, label: '', amount: 0, month_num: todayMonth() })
     .select()
     .single();
   if (error) {
@@ -8676,13 +8750,13 @@ function openSnapshot(): void {
       cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
     );
     const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
-    const gr = ag(gb - gs);
+    const gr = Math.round(gb - gs);
     const gid = 'sngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
     const catRows = cats
       .map((c) => {
         const b = catBudget(c.key) || 0;
         const s = c.hasTab ? b : spent[c.key] || 0;
-        const r = b - s;
+        const r = Math.round(b - s);
         // DC5 — gap triangles intentionally NOT rendered in Snapshot per
         // commit e19241a. Snapshot is a printable summary; the per-cell
         // amber ⚠ adds noise duplicating the Owed strip. Re-enabling on
@@ -8699,7 +8773,7 @@ function openSnapshot(): void {
       const c = cats[0];
       const b = catBudget(c.key) || 0;
       const s = c.hasTab ? b : spent[c.key] || 0;
-      const r = b - s;
+      const r = Math.round(b - s);
       return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b || s ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
@@ -9456,7 +9530,7 @@ function openSearchPanel(): void {
       <button onclick="closeAllPanels()" aria-label="Close search" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted);">\u2715</button>
     </div>
     <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <input id="search-input" type="text" placeholder="Search store or item name\u2026" style="width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--r);font-size:.9rem;background:var(--surface2);color:var(--text);outline:none;font-family:inherit;" />
+      <input id="search-input" type="text" placeholder="Search store, item, or amount (e.g. 350)\u2026" style="width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--r);font-size:.9rem;background:var(--surface2);color:var(--text);outline:none;font-family:inherit;" />
       <div style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;">
         <label style="font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:.25rem;">
           <input type="checkbox" id="search-all-months" checked /> All months
@@ -9555,11 +9629,19 @@ async function runSearch(query: string): Promise<void> {
   }
 
   const q = query.toLowerCase();
+  // Amount search — "350" (or "₪350") finds every ₪350 transaction, so she can
+  // check a charge actually went through. Whole-shekel match: 349.90 shows as
+  // ₪350 in the app, so typing 350 finds it.
+  const isAmountQuery = /^\s*₪?\s*[\d,]+(\.\d+)?\s*$/.test(query);
+  const qAmt = isAmountQuery ? parseFloat(query.replace(/[₪,\s]/g, '')) : NaN;
+  const amtHit = (v: unknown): boolean =>
+    !isNaN(qAmt) && qAmt > 0 && Math.round(Number(v) || 0) === Math.round(qAmt);
   const matches = transactions.filter(
     (t) =>
       (t.store && t.store.toLowerCase().includes(q)) ||
       (t.item && t.item.toLowerCase().includes(q)) ||
-      (t.category && t.category.toLowerCase().includes(q)),
+      (t.category && t.category.toLowerCase().includes(q)) ||
+      amtHit(t.amount),
   );
 
   if (matches.length === 0 && budgetItemMatches.length === 0) {
@@ -9823,7 +9905,7 @@ function quickAddSheetBody(kind: string): string {
     "width:100%;padding:.7rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.95rem;cursor:pointer;margin-top:.3rem;";
   // Travel / Charity / Admin are yearly ledgers. Say plainly that the date is
   // what files the payment — she should never have to guess which month it hit.
-  const qaDateHint = `<div style="font-size:.72rem;color:var(--muted);margin-top:-.25rem;">The date sets the month. Leave blank for ${MONTH_ABBR[currentMonthNum() - 1] || 'this month'}.</div>`;
+  const qaDateHint = `<div style="font-size:.72rem;color:var(--muted);margin-top:-.25rem;">The date sets the month. Leave blank for ${MONTH_ABBR[todayMonth() - 1] || 'this month'}.</div>`;
   if (kind === 'tx') {
     return `
       <select id="qa-cat" style="${inputCss}">
@@ -9875,8 +9957,9 @@ function quickAddSheetBody(kind: string): string {
 }
 
 async function submitQuickAdd(kind: string): Promise<void> {
-  // Fallback only — for the yearly ledgers below, the picked date wins.
-  const monthNum = currentMonthNum();
+  // Fallback when no date is picked: TODAY's month ("I just paid this") —
+  // never the month the app is showing. The picked date always wins.
+  const monthNum = todayMonth();
   if (kind === 'tx') {
     const cat = byId('qa-cat').value;
     const store = byId('qa-store').value.trim();
@@ -10093,6 +10176,13 @@ function monthNumFromDate(dateStr: string | null | undefined, fallback: number):
   return m >= 1 && m <= 12 ? m : fallback;
 }
 
+// Undated payment → file it under TODAY's month ("I just paid this"), never
+// under whichever month the app happens to be showing. Her words: "If I'm in
+// December and I log something, don't put it in December."
+function todayMonth(): number {
+  return new Date().getMonth() + 1;
+}
+
 function yearFromDate(dateStr: string | null | undefined, fallback: number): number {
   if (!dateStr) return fallback;
   const y = parseInt(String(dateStr).slice(0, 4), 10);
@@ -10119,15 +10209,6 @@ const MONTH_ABBR = [
 function landedToast(monthNum: number, yr: number): string {
   const mo = MONTH_ABBR[monthNum - 1] || '?';
   return yr === state.currentYear ? `Logged to ${mo} ✓` : `Logged to ${mo} ${yr} ✓`;
-}
-
-// Keep a desktop month dropdown honest when she picks a date next to it.
-function syncMonthPicker(dateInputId: string, monthSelectId: string): void {
-  const d = byId(dateInputId);
-  const sel = byId(monthSelectId);
-  if (!d || !sel || !d.value) return;
-  const m = monthNumFromDate(d.value, 0);
-  if (m) sel.value = String(m);
 }
 
 // ── M5 — Always-visible Owed widget (global, all tabs) ─────────────────
@@ -10679,12 +10760,15 @@ Object.assign(window as unknown as Record<string, unknown>, {
   switchMonth,
   switchTab,
   switchYear,
-  syncMonthPicker,
   syncQueueNow,
   // Exported for tests/quickadd-date.spec.js — pure, no Supabase writes.
   monthNumFromDate,
   yearFromDate,
   landedToast,
+  todayMonth,
+  showLtsPop,
+  scheduleHideLtsPop,
+  toggleLtsPop,
   toast,
   toastDeleted,
   today,

@@ -1,5 +1,40 @@
 const { test, expect } = require('@playwright/test');
 
+// v29: the ribbon split into hero stats (.ribbon-stat, big decision numbers)
+// and compact data points (.rb-dp — Income/Budgeted/Used/Saved). Every test
+// that reads ribbon numbers goes through this ONE reader so a future ribbon
+// redesign only needs updating here.
+async function readRibbonPairs(page) {
+  const snap = () =>
+    page.evaluate(() => {
+      const out = [];
+      // Strip ₪, commas, ~ AND the bidi marks (U+200E/U+200F) the he-IL locale
+      // inserts before a negative value's minus sign.
+      const toNum = (s) => parseFloat((s || '').replace(/[₪,~‎‏]/g, ''));
+      const push = (labelEl, valEl) => {
+        if (labelEl && valEl)
+          out.push({ label: (labelEl.textContent || '').trim(), num: toNum(valEl.textContent) });
+      };
+      document
+        .querySelectorAll('.ribbon-stat')
+        .forEach((el) => push(el.querySelector('.ribbon-label'), el.querySelector('.ribbon-val')));
+      document
+        .querySelectorAll('.rb-dp')
+        .forEach((el) => push(el.querySelector('.rb-dp-label'), el.querySelector('.rb-dp-val')));
+      return out;
+    });
+  // Stable-read: a single evaluate is fast enough to catch the ribbon mid-load
+  // right after a month switch. Read until two consecutive snapshots agree.
+  let prev = await snap();
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(400);
+    const cur = await snap();
+    if (JSON.stringify(cur) === JSON.stringify(prev)) return cur;
+    prev = cur;
+  }
+  return prev;
+}
+
 // ─── Page Load ───
 test('page loads with correct title', async ({ page }) => {
   await page.goto('/');
@@ -605,21 +640,14 @@ test('budget page totals match year view for each month', async ({ page }) => {
     // Get month name from active tab
     const monthName = (await monthTabs.nth(i).textContent()).trim();
 
-    // Read ribbon values: Budgeted and Spent
-    const ribbonStats = page.locator('.ribbon-stat');
-    const statCount = await ribbonStats.count();
+    // Read ribbon values: Budgeted and Spent (heroes + data points)
     let budgeted = null;
     let spent = null;
-    for (let s = 0; s < statCount; s++) {
-      const stat = ribbonStats.nth(s);
-      const valLoc = stat.locator('.ribbon-val');
-      if ((await valLoc.count()) === 0) continue;
-      const label = await stat.locator('.ribbon-label').textContent();
-      const val = await valLoc.first().textContent();
-      if (label.includes('Budgeted')) budgeted = val.replace(/[₪,~]/g, '').trim();
-      if (label === 'Used') spent = val.replace(/[₪,~]/g, '').trim();
+    for (const p of await readRibbonPairs(page)) {
+      if (p.label.includes('Budgeted')) budgeted = p.num;
+      if (p.label === 'Used') spent = p.num;
     }
-    budgetPageValues[monthName] = { budgeted: parseFloat(budgeted), spent: parseFloat(spent) };
+    budgetPageValues[monthName] = { budgeted, spent };
     console.log(`Budget page ${monthName}: Budgeted=${budgeted}, Spent=${spent}`);
   }
 
@@ -684,20 +712,11 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
     await page.waitForTimeout(2000);
     const monthName = (await monthTabs.nth(i).textContent()).trim();
 
-    // Read all ribbon stats
+    // Read all ribbon numbers (heroes + data points)
     const vals = {};
-    const ribbonStats = page.locator('.ribbon-stat');
-    const statCount = await ribbonStats.count();
-    for (let s = 0; s < statCount; s++) {
-      const stat = ribbonStats.nth(s);
-      const valLoc = stat.locator('.ribbon-val');
-      if ((await valLoc.count()) === 0) continue; // owed-strip has segments not val when open
-      const label = await stat.locator('.ribbon-label').textContent();
-      const raw = await valLoc.first().textContent();
-      // Strip ₪, commas, ~ AND the bidi marks (U+200E/U+200F) that the he-IL locale
-      // inserts before a NEGATIVE value's minus sign — otherwise parseFloat() returns
-      // NaN the first time a ribbon value goes negative (e.g. an over-budgeted month).
-      const num = parseFloat(raw.replace(/[₪,~‎‏]/g, ''));
+    for (const p of await readRibbonPairs(page)) {
+      const label = p.label;
+      const num = p.num;
       if (label.includes('Income')) vals.income = num;
       if (label.includes('Budgeted') && !label.includes('Left') && !label.includes('Remaining'))
         vals.budgeted = num;
@@ -805,19 +824,12 @@ test('category spent amounts sum to total spent in ribbon', async ({ page }) => 
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
-  // Get ribbon Spent
+  // Get ribbon Spent (heroes + data points)
   let ribbonSpent = null;
   let ribbonSaved = null;
-  const ribbonStats = page.locator('.ribbon-stat');
-  const statCount = await ribbonStats.count();
-  for (let s = 0; s < statCount; s++) {
-    const stat = ribbonStats.nth(s);
-    const valLoc = stat.locator('.ribbon-val');
-    if ((await valLoc.count()) === 0) continue; // owed-strip has segments not val when open
-    const label = await stat.locator('.ribbon-label').textContent();
-    const raw = await valLoc.first().textContent();
-    if (label === 'Spent') ribbonSpent = parseFloat(raw.replace(/[₪,~]/g, ''));
-    if (label.includes('Saved')) ribbonSaved = parseFloat(raw.replace(/[₪,~]/g, ''));
+  for (const p of await readRibbonPairs(page)) {
+    if (p.label === 'Spent') ribbonSpent = p.num;
+    if (p.label.includes('Saved')) ribbonSaved = p.num;
   }
 
   // Expand ribbon to get full snapshot table
@@ -1275,18 +1287,9 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
     await page.waitForTimeout(2000);
     const monthName = (await monthTabs.nth(i).textContent()).trim();
 
-    const ribbonStats = page.locator('.ribbon-stat');
-    const statCount = await ribbonStats.count();
     let leftToBudget = null;
-    for (let s = 0; s < statCount; s++) {
-      const stat = ribbonStats.nth(s);
-      const valLoc = stat.locator('.ribbon-val');
-      if ((await valLoc.count()) === 0) continue;
-      const label = await stat.locator('.ribbon-label').textContent();
-      if (label.includes('Unallocated')) {
-        const val = await valLoc.first().textContent();
-        leftToBudget = parseFloat(val.replace(/[₪,~−]/g, (m) => (m === '−' ? '-' : '')).trim());
-      }
+    for (const p of await readRibbonPairs(page)) {
+      if (p.label.includes('Unallocated')) leftToBudget = p.num;
     }
     pageValues[monthName] = leftToBudget;
     console.log(`Month page ${monthName}: Left to Budget = ${leftToBudget}`);
@@ -1353,17 +1356,12 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     const monthName = (await monthTabs.nth(i).textContent()).trim();
     console.log(`\n===== ${monthName} AUDIT =====`);
 
-    // ── 1. Read all ribbon values ──
+    // ── 1. Read all ribbon values (heroes + data points) ──
     const ribbon = {};
-    const ribbonStats = page.locator('.ribbon-stat');
-    const statCount = await ribbonStats.count();
-    for (let s = 0; s < statCount; s++) {
-      const labelEl = ribbonStats.nth(s).locator('.ribbon-label');
-      const valEl = ribbonStats.nth(s).locator('.ribbon-val');
-      if ((await labelEl.count()) === 0 || (await valEl.count()) === 0) continue;
-      const label = (await labelEl.textContent()).replace(/~EST/g, '').trim();
-      const val = parseAmount(await valEl.textContent());
-      ribbon[label] = val;
+    for (const p of await readRibbonPairs(page)) {
+      // Normalize: drop ~EST and the Left-to-Spend ▾ affordance from keys.
+      const label = p.label.replace(/~EST/g, '').replace(/▾/g, '').trim();
+      ribbon[label] = p.num;
     }
     console.log(`Ribbon: ${JSON.stringify(ribbon)}`);
 
