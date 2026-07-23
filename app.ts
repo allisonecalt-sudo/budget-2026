@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v27';
-const BUILD_DATE = 'Jul 23, 2026 11:45';
+const APP_VERSION = 'v28';
+const BUILD_DATE = 'Jul 23, 2026 15:35';
 
 const MONTHS = [
   'January',
@@ -4387,30 +4387,35 @@ async function saveCharityAllocation(monthNum: number, value: string | number): 
 }
 
 async function addCharityPayment() {
-  const monthNum = parseInt(byId('cp-month').value);
   const label = byId('cp-label').value.trim();
   const dateVal = byId('cp-date').value || null;
   const amount = parseFloat(byId('cp-amount').value);
+  // Same rule as travel: the date she picks decides the month, not the app's
+  // current month. Charity is a yearly ledger too.
+  const monthNum = monthNumFromDate(dateVal, parseInt(byId('cp-month').value));
+  const yr = yearFromDate(dateVal, state.currentYear);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in name and amount');
     return;
   }
   const { data, error } = await sb
     .from('charity_payments')
-    .insert({ year: state.currentYear, month_num: monthNum, label, amount, payment_date: dateVal })
+    .insert({ year: yr, month_num: monthNum, label, amount, payment_date: dateVal })
     .select()
     .single();
   if (error) {
     toast('Error saving');
     return;
   }
-  state.charity.payments.push(data);
-  state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+  if (yr === state.currentYear) {
+    state.charity.payments.push(data);
+    state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+  }
   byId('cp-label').value = '';
   byId('cp-date').value = '';
   byId('cp-amount').value = '';
   renderApp();
-  toast('Payment logged ✓');
+  toast(landedToast(monthNum, yr));
 }
 
 async function deleteCharityPayment(id: string): Promise<void> {
@@ -4454,12 +4459,25 @@ async function updateCharityPayment(id: string, field: string, value: unknown): 
       ? parseFloat(String(value)) || 0
       : field === 'is_estimate' || field === 'has_receipt' || field === 'is_given'
         ? Boolean(value)
-        : value;
+        : // Clearing the date picker sends '', which a Postgres `date` column
+          // rejects. Send NULL instead (same rule as travel payments).
+          field === 'payment_date'
+          ? (value as string) || null
+          : value;
   await sb
     .from('charity_payments')
     .update({ [field]: val })
     .eq('id', id);
   p[field] = val;
+  // Re-dating moves the payment to that date's month.
+  if (field === 'payment_date' && val) {
+    const newMonth = monthNumFromDate(val as string, p.month_num as number);
+    if (newMonth !== p.month_num) {
+      await sb.from('charity_payments').update({ month_num: newMonth }).eq('id', id);
+      p.month_num = newMonth;
+      state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+    }
+  }
   logChange(
     'edit',
     'charity_payment',
@@ -4691,12 +4709,15 @@ async function saveTravelAllocation(monthNum: number, value: string | number): P
 }
 
 async function addTravelPayment() {
-  const monthNum = parseInt(byId('tp-month').value);
   const label = byId('tp-label').value.trim();
   const destination = byId('tp-dest').value.trim();
   const amount = parseFloat(byId('tp-amount').value);
   // Date is OPTIONAL — blank is a valid payment, it just isn't dated yet.
   const paymentDate = byId('tp-date').value || null;
+  // The DATE decides the month, not the month the app is showing. Travel is a
+  // yearly budget. Blank date → whatever the month dropdown says.
+  const monthNum = monthNumFromDate(paymentDate, parseInt(byId('tp-month').value));
+  const yr = yearFromDate(paymentDate, state.currentYear);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in what and amount');
     return;
@@ -4704,7 +4725,7 @@ async function addTravelPayment() {
   const { data, error } = await sb
     .from('travel_payments')
     .insert({
-      year: state.currentYear,
+      year: yr,
       month_num: monthNum,
       label,
       destination,
@@ -4717,14 +4738,17 @@ async function addTravelPayment() {
     toast('Error saving');
     return;
   }
-  state.travel.payments.push(data);
-  state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+  // Only rows belonging to the year on screen live in loaded state.
+  if (yr === state.currentYear) {
+    state.travel.payments.push(data);
+    state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+  }
   byId('tp-label').value = '';
   byId('tp-dest').value = '';
   byId('tp-amount').value = '';
   byId('tp-date').value = '';
   renderApp();
-  toast('Payment logged ✓');
+  toast(landedToast(monthNum, yr));
 }
 
 // Log a payment straight into a specific trip + category (the "+ log in Food"
@@ -4809,6 +4833,16 @@ async function updateTravelPayment(id: string, field: string, value: unknown): P
     .update({ [field]: val })
     .eq('id', id);
   p[field] = val;
+  // Re-dating a payment moves it to that date's month — otherwise the row shows
+  // one month in its date and files itself under another.
+  if (field === 'payment_date' && val) {
+    const newMonth = monthNumFromDate(val as string, p.month_num as number);
+    if (newMonth !== p.month_num) {
+      await sb.from('travel_payments').update({ month_num: newMonth }).eq('id', id);
+      p.month_num = newMonth;
+      state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+    }
+  }
   logChange(
     'edit',
     'travel_payment',
@@ -5548,8 +5582,9 @@ function renderTravelTab() {
             <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
-            <input type="date" id="tp-date" title="Date paid — optional" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            <input type="date" id="tp-date" title="Date paid — sets the month" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onchange="syncMonthPicker('tp-date','tp-month')"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
             <input type="number" id="tp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
@@ -5844,8 +5879,9 @@ function renderCharityTab() {
             <input type="text" id="cp-label" placeholder="Charity name" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addCharityPayment()">
-            <input type="date" id="cp-date" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
-              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            <input type="date" id="cp-date" title="Date paid — sets the month" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onchange="syncMonthPicker('cp-date','cp-month')">
             <input type="number" id="cp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addCharityPayment()">
@@ -9785,6 +9821,9 @@ function quickAddSheetBody(kind: string): string {
     "width:100%;font-size:.95rem;padding:.55rem .65rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;box-sizing:border-box;";
   const btnCss =
     "width:100%;padding:.7rem;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:'DM Sans',sans-serif;font-weight:600;font-size:.95rem;cursor:pointer;margin-top:.3rem;";
+  // Travel / Charity / Admin are yearly ledgers. Say plainly that the date is
+  // what files the payment — she should never have to guess which month it hit.
+  const qaDateHint = `<div style="font-size:.72rem;color:var(--muted);margin-top:-.25rem;">The date sets the month. Leave blank for ${MONTH_ABBR[currentMonthNum() - 1] || 'this month'}.</div>`;
   if (kind === 'tx') {
     return `
       <select id="qa-cat" style="${inputCss}">
@@ -9809,15 +9848,17 @@ function quickAddSheetBody(kind: string): string {
         ${(state.travel?.items || []).map((i) => `<option value="${(i.label || '').replace(/"/g, '&quot;')}">`).join('')}
       </datalist>
       <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
-      <input type="date" id="qa-date" title="Date paid — optional" style="${inputCss}">
+      <input type="date" id="qa-date" title="Date paid — sets the month" style="${inputCss}">
+      ${qaDateHint}
       <button onclick="submitQuickAdd('travel')" style="${btnCss}">Log payment</button>
     `;
   }
   if (kind === 'charity') {
     return `
       <input type="text" id="qa-label" placeholder="Charity name" style="${inputCss}">
-      <input type="date" id="qa-date" style="${inputCss}">
       <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <input type="date" id="qa-date" title="Date paid — sets the month" style="${inputCss}">
+      ${qaDateHint}
       <button onclick="submitQuickAdd('charity')" style="${btnCss}">Log payment</button>
     `;
   }
@@ -9825,6 +9866,8 @@ function quickAddSheetBody(kind: string): string {
     return `
       <input type="text" id="qa-label" placeholder="What" style="${inputCss}">
       <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <input type="date" id="qa-date" title="Date paid — sets the month" style="${inputCss}">
+      ${qaDateHint}
       <button onclick="submitQuickAdd('admin')" style="${btnCss}">Log payment</button>
     `;
   }
@@ -9832,6 +9875,7 @@ function quickAddSheetBody(kind: string): string {
 }
 
 async function submitQuickAdd(kind: string): Promise<void> {
+  // Fallback only — for the yearly ledgers below, the picked date wins.
   const monthNum = currentMonthNum();
   if (kind === 'tx') {
     const cat = byId('qa-cat').value;
@@ -9890,6 +9934,10 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const destination = byId('qa-dest').value.trim();
     const amount = parseFloat(byId('qa-amount').value);
     const dateVal = byId('qa-date').value || null; // optional
+    // Travel is a YEARLY budget — the date she picks files it, not the month
+    // the app happens to be sitting on.
+    const mo = monthNumFromDate(dateVal, monthNum);
+    const yr = yearFromDate(dateVal, state.currentYear);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
@@ -9897,8 +9945,8 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const { data, error } = await sb
       .from('travel_payments')
       .insert({
-        year: state.currentYear,
-        month_num: monthNum,
+        year: yr,
+        month_num: mo,
         label,
         destination,
         amount,
@@ -9910,17 +9958,21 @@ async function submitQuickAdd(kind: string): Promise<void> {
       toast('Error saving');
       return;
     }
-    state.travel.payments.push(data);
-    state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+    if (yr === state.currentYear) {
+      state.travel.payments.push(data);
+      state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+    }
     closeAllPanels();
     renderApp();
-    toast('Payment logged ✓');
+    toast(landedToast(mo, yr));
     return;
   }
   if (kind === 'charity') {
     const label = byId('qa-label').value.trim();
     const dateVal = byId('qa-date').value || null;
     const amount = parseFloat(byId('qa-amount').value);
+    const mo = monthNumFromDate(dateVal, monthNum);
+    const yr = yearFromDate(dateVal, state.currentYear);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in name and amount');
       return;
@@ -9928,8 +9980,8 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const { data, error } = await sb
       .from('charity_payments')
       .insert({
-        year: state.currentYear,
-        month_num: monthNum,
+        year: yr,
+        month_num: mo,
         label,
         amount,
         payment_date: dateVal,
@@ -9940,18 +9992,30 @@ async function submitQuickAdd(kind: string): Promise<void> {
       toast('Error saving');
       return;
     }
-    state.charity.payments.push(data);
-    state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+    if (yr === state.currentYear) {
+      state.charity.payments.push(data);
+      state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+    }
     closeAllPanels();
     renderApp();
-    toast('Payment logged ✓');
+    toast(landedToast(mo, yr));
     return;
   }
   if (kind === 'admin') {
     const label = byId('qa-label').value.trim();
     const amount = parseFloat(byId('qa-amount').value);
+    const dateVal = byId('qa-date').value || null;
+    // Admin is a yearly ledger too — the picked date files it.
+    const mo = monthNumFromDate(dateVal, monthNum);
+    const yr = yearFromDate(dateVal, state.currentYear);
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
+      return;
+    }
+    // Admin sub-items hang off a per-year parent item, and only the year on
+    // screen is loaded. Refuse loudly rather than misfile it into this year.
+    if (yr !== state.currentYear) {
+      toast(`That date is ${yr} — switch the year first`);
       return;
     }
     // Single source of truth: quick-adds land in the sub-item ledger (the same one
@@ -9982,7 +10046,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
         item_id: parent!.id,
         label,
         amount,
-        month_num: monthNum,
+        month_num: mo,
         is_paid: true,
         is_estimate: false,
       })
@@ -10000,7 +10064,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
     parent!.projected_amount = newProj;
     closeAllPanels();
     renderApp();
-    toast('Payment logged ✓');
+    toast(landedToast(mo, yr));
     return;
   }
 }
@@ -10017,6 +10081,53 @@ function todayMonthForYear() {
 function currentMonthNum() {
   const m = state.months.find((x) => x.id === state.currentMonthId);
   return (m && m.month_num) || todayMonthForYear();
+}
+
+// ── Dated payment → which month it lands in ────────────────────────────
+// Travel / Charity / Admin are YEARLY ledgers. The month the app happens to be
+// showing must NOT decide where a payment lands — the DATE SHE PICKS does.
+// Blank date falls back (to the month dropdown on desktop, today on mobile).
+function monthNumFromDate(dateStr: string | null | undefined, fallback: number): number {
+  if (!dateStr) return fallback;
+  const m = parseInt(String(dateStr).slice(5, 7), 10);
+  return m >= 1 && m <= 12 ? m : fallback;
+}
+
+function yearFromDate(dateStr: string | null | undefined, fallback: number): number {
+  if (!dateStr) return fallback;
+  const y = parseInt(String(dateStr).slice(0, 4), 10);
+  return y >= 2000 && y <= 2100 ? y : fallback;
+}
+
+const MONTH_ABBR = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+// Say out loud where the payment landed — silence here is how a payment ends up
+// filed under the wrong month without her ever seeing it.
+function landedToast(monthNum: number, yr: number): string {
+  const mo = MONTH_ABBR[monthNum - 1] || '?';
+  return yr === state.currentYear ? `Logged to ${mo} ✓` : `Logged to ${mo} ${yr} ✓`;
+}
+
+// Keep a desktop month dropdown honest when she picks a date next to it.
+function syncMonthPicker(dateInputId: string, monthSelectId: string): void {
+  const d = byId(dateInputId);
+  const sel = byId(monthSelectId);
+  if (!d || !sel || !d.value) return;
+  const m = monthNumFromDate(d.value, 0);
+  if (m) sel.value = String(m);
 }
 
 // ── M5 — Always-visible Owed widget (global, all tabs) ─────────────────
@@ -10568,7 +10679,12 @@ Object.assign(window as unknown as Record<string, unknown>, {
   switchMonth,
   switchTab,
   switchYear,
+  syncMonthPicker,
   syncQueueNow,
+  // Exported for tests/quickadd-date.spec.js — pure, no Supabase writes.
+  monthNumFromDate,
+  yearFromDate,
+  landedToast,
   toast,
   toastDeleted,
   today,
