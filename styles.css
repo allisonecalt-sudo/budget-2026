@@ -2188,10 +2188,10 @@ input:focus {
     min-width: 0 !important;
   }
   .travel-pay-row {
-    grid-template-columns: 1fr auto auto !important;
+    grid-template-columns: 1fr auto auto auto !important;
     grid-template-areas:
-      'what amt del'
-      'where mo del' !important;
+      'what what amt del'
+      'where date mo del' !important;
     column-gap: 0.55rem !important;
     row-gap: 0.15rem !important;
     padding: 0.55rem 0.1rem !important;
@@ -2213,6 +2213,13 @@ input:focus {
     grid-area: where;
     font-size: 0.7rem !important;
     color: var(--muted) !important;
+  }
+  .travel-pay-date {
+    grid-area: date;
+    font-size: 0.68rem !important;
+    color: var(--muted) !important;
+    width: auto !important;
+    min-width: 92px;
   }
   .travel-pay-what {
     grid-area: what;

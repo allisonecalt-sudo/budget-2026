@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v26';
-const BUILD_DATE = 'Jul 21, 2026 18:10';
+const APP_VERSION = 'v27';
+const BUILD_DATE = 'Jul 23, 2026 11:45';
 
 const MONTHS = [
   'January',
@@ -310,6 +310,9 @@ interface TravelPaymentRow {
   destination: string | null;
   amount: number;
   is_estimate?: boolean;
+  // Optional "when did I actually pay this" date. month_num stays the
+  // budget-month driver — this is for tracking, and may be left blank.
+  payment_date?: string | null;
   [key: string]: unknown;
 }
 
@@ -4692,13 +4695,22 @@ async function addTravelPayment() {
   const label = byId('tp-label').value.trim();
   const destination = byId('tp-dest').value.trim();
   const amount = parseFloat(byId('tp-amount').value);
+  // Date is OPTIONAL — blank is a valid payment, it just isn't dated yet.
+  const paymentDate = byId('tp-date').value || null;
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in what and amount');
     return;
   }
   const { data, error } = await sb
     .from('travel_payments')
-    .insert({ year: state.currentYear, month_num: monthNum, label, destination, amount })
+    .insert({
+      year: state.currentYear,
+      month_num: monthNum,
+      label,
+      destination,
+      amount,
+      payment_date: paymentDate,
+    })
     .select()
     .single();
   if (error) {
@@ -4710,6 +4722,7 @@ async function addTravelPayment() {
   byId('tp-label').value = '';
   byId('tp-dest').value = '';
   byId('tp-amount').value = '';
+  byId('tp-date').value = '';
   renderApp();
   toast('Payment logged ✓');
 }
@@ -4786,7 +4799,11 @@ async function updateTravelPayment(id: string, field: string, value: unknown): P
       ? parseFloat(String(value)) || 0
       : field === 'is_estimate'
         ? Boolean(value)
-        : (value as string);
+        : // payment_date is optional — clearing the picker sends '', which a
+          // Postgres `date` column rejects. Send NULL instead.
+          field === 'payment_date'
+          ? (value as string) || null
+          : (value as string);
   await sb
     .from('travel_payments')
     .update({ [field]: val })
@@ -5077,7 +5094,7 @@ function renderTravelTab() {
       const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
       const estBtnWeight = p.is_estimate ? '700' : '400';
       return (
-        '<div class="travel-pay-row" style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
+        '<div class="travel-pay-row" style="display:grid;grid-template-columns:45px 78px 1fr 96px 78px 38px 26px;gap:.25rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
         estBgP +
         '">' +
         '<span class="travel-pay-mo" style="font-size:.7rem;color:var(--muted);font-family:\'DM Mono\',monospace;">' +
@@ -5093,6 +5110,12 @@ function renderTravelTab() {
         '" style="font-size:.8rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .15rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
         p.id +
         "','label',this.value)\">" +
+        // Optional payment date — blank until she fills it in.
+        '<input class="travel-pay-date" type="date" value="' +
+        (p.payment_date || '') +
+        '" title="When you paid (optional)" style="font-size:.72rem;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:var(--text);outline:none;font-family:\'DM Sans\',sans-serif;width:100%;" onmouseover="this.style.borderBottomColor=\'var(--border)\'" onmouseout="if(document.activeElement!==this)this.style.borderBottomColor=\'transparent\'" onfocus="this.style.borderBottomColor=\'var(--accent)\'" onblur="this.style.borderBottomColor=\'transparent\'" onchange="updateTravelPayment(\'' +
+        p.id +
+        "','payment_date',this.value)\">" +
         '<input class="travel-pay-amt" type="number" value="' +
         p.amount +
         '" min="0" step="0.01" style="font-size:.8rem;font-family:\'DM Mono\',monospace;background:transparent;border:none;border-bottom:1px solid transparent;padding:.1rem .1rem;color:' +
@@ -5331,11 +5354,11 @@ function renderTravelTab() {
       sb2('high', 'Highest') +
       sb2('low', 'Lowest') +
       '</div>' +
-      '<div class="travel-pay-scroll" style="overflow-x:auto;"><div class="travel-pay-inner" style="min-width:360px;">' +
+      '<div class="travel-pay-scroll" style="overflow-x:auto;"><div class="travel-pay-inner" style="min-width:460px;">' +
       (groupByTrip
         ? groupedHtml
-        : '<div class="travel-pay-row travel-pay-header" style="display:grid;grid-template-columns:45px 80px 1fr 80px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
-          '<span class="travel-pay-mo">Mo</span><span class="travel-pay-where">Where</span><span class="travel-pay-what">What</span><span class="travel-pay-amt" style="text-align:right">Amount</span><span class="travel-pay-est" style="text-align:center">~est</span><span class="travel-pay-x"></span>' +
+        : '<div class="travel-pay-row travel-pay-header" style="display:grid;grid-template-columns:45px 78px 1fr 96px 78px 38px 26px;gap:.25rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);padding:.1rem .1rem .35rem;border-bottom:1px solid var(--border);">' +
+          '<span class="travel-pay-mo">Mo</span><span class="travel-pay-where">Where</span><span class="travel-pay-what">What</span><span class="travel-pay-date">Date</span><span class="travel-pay-amt" style="text-align:right">Amount</span><span class="travel-pay-est" style="text-align:center">~est</span><span class="travel-pay-x"></span>' +
           '</div>' +
           payRows) +
       '</div></div>' +
@@ -5511,7 +5534,7 @@ function renderTravelTab() {
           <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.9rem;">Payment Log</div>
 
           <!-- Add payment form -->
-          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 1fr 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
+          <div class="pay-add-form" style="display:grid;grid-template-columns:70px 1fr 1fr 104px 80px 28px;gap:.35rem;align-items:end;margin-bottom:.8rem;padding-bottom:.8rem;border-bottom:1px solid var(--border);">
             <select id="tp-month" style="font-size:.74rem;padding:.3rem .3rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;">${monthSelectHtml}</select>
             <input type="text" id="tp-dest" placeholder="Trip" list="tp-trip-list" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
@@ -5523,6 +5546,9 @@ function renderTravelTab() {
                 .join('')}
             </datalist>
             <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+              onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
+              onkeydown="if(event.key==='Enter')addTravelPayment()">
+            <input type="date" id="tp-date" title="Date paid — optional" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
             <input type="number" id="tp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
@@ -9783,6 +9809,7 @@ function quickAddSheetBody(kind: string): string {
         ${(state.travel?.items || []).map((i) => `<option value="${(i.label || '').replace(/"/g, '&quot;')}">`).join('')}
       </datalist>
       <input type="number" id="qa-amount" placeholder="Amount ₪" min="0" step="0.01" inputmode="decimal" style="${inputCss}">
+      <input type="date" id="qa-date" title="Date paid — optional" style="${inputCss}">
       <button onclick="submitQuickAdd('travel')" style="${btnCss}">Log payment</button>
     `;
   }
@@ -9862,13 +9889,21 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const label = byId('qa-label').value.trim();
     const destination = byId('qa-dest').value.trim();
     const amount = parseFloat(byId('qa-amount').value);
+    const dateVal = byId('qa-date').value || null; // optional
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
     }
     const { data, error } = await sb
       .from('travel_payments')
-      .insert({ year: state.currentYear, month_num: monthNum, label, destination, amount })
+      .insert({
+        year: state.currentYear,
+        month_num: monthNum,
+        label,
+        destination,
+        amount,
+        payment_date: dateVal,
+      })
       .select()
       .single();
     if (error) {
