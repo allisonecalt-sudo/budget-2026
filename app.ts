@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v31';
-const BUILD_DATE = 'Aug 2, 2026 14:00';
+const APP_VERSION = 'v32';
+const BUILD_DATE = 'Aug 2, 2026 15:09';
 
 const MONTHS = [
   'January',
@@ -5766,24 +5766,17 @@ function renderCharityTab() {
   const totalAlloc = ag(Object.values(allocs).reduce((s, a) => s + Number(a.amount), 0));
   const totalPaid = ag(payments.reduce((s, p) => s + (p.is_given ? Number(p.amount) : 0), 0));
   const totalPledged = ag(payments.reduce((s, p) => s + (!p.is_given ? Number(p.amount) : 0), 0));
-  const totalSpent = ag(totalPaid + totalPledged);
-  const leftToGive = ag(totalAlloc - totalPaid);
-
-  // ── Two headline figures (2026-08-02) ────────────────────────────────────
-  // "This month's allocation" REUSES the existing derivation, no recompute: the
-  // current month's charity set-aside already synced into the budgets table
-  // (allocs) = income × charity_pct, computed once per render at the top of
-  // renderApp. Fall back to the live derived state.budgets['charity'] if the
-  // alloc row hasn't synced yet. "Contributed so far" = totalPaid (given, YTD).
-  const _cmn = currentMonthNum || 0;
-  const monthlyAlloc = ag(
-    _cmn && allocs[_cmn] ? Number(allocs[_cmn].amount) : Number(state.budgets['charity']) || 0,
-  );
-  const monthlyPct =
-    currentMonthObj && currentMonthObj.charity_pct != null
-      ? Number(currentMonthObj.charity_pct)
-      : 0;
-  const monthLabel = currentMonthNum ? MONTH_NAMES[currentMonthNum - 1] || '' : '';
+  // ── Yearly giving, the way Allison tracks it (2026-08-02) ─────────────────
+  // Charity is ONE yearly bucket — NO month↔gift attribution. Only two numbers
+  // matter to her: money actually gone in so far, and money still to go in this
+  // year. yearTarget = totalAlloc (sum of every month's income × %). "In so far"
+  // = totalPaid (given). "Still to go" = target − given, floored at 0 (a year of
+  // over-giving shows as target-reached + extra, never a negative "still to go").
+  const yearTarget = totalAlloc;
+  const inSoFar = totalPaid;
+  const stillToGo = ag(Math.max(0, yearTarget - inSoFar));
+  const overTarget = ag(Math.max(0, inSoFar - yearTarget));
+  const givingPct = yearTarget > 0 ? Math.min(100, Math.round((inSoFar / yearTarget) * 100)) : 0;
 
   const fmtA = (n: number): string =>
     '₪' +
@@ -5979,40 +5972,34 @@ function renderCharityTab() {
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
-    <!-- Headline pair (2026-08-02): this month's allocation vs contributed-so-far -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1rem;">
-      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1.1rem 1.2rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">This month's allocation</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.7rem;font-weight:600;color:var(--accent);line-height:1;">${fmtA(monthlyAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.35rem;">${monthLabel}${monthlyPct ? ` · income × ${monthlyPct.toFixed(1)}%` : ''}</div>
+    <!-- Yearly giving headline (2026-08-02): the ONLY two numbers Allison tracks —
+         money in so far vs money still to go, against the year target. Charity is
+         one yearly bucket; no month is tied to any gift. -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.3rem 1.4rem;box-shadow:var(--shadow);margin-bottom:1.5rem;">
+      <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:1.1rem;">Charity giving · ${state.currentYear}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1.2rem;">
+        <div>
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:.4rem;">In so far</div>
+          <div style="font-family:'DM Mono',monospace;font-size:2rem;font-weight:600;color:var(--green);line-height:1;">${fmtA(inSoFar)}</div>
+          <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">actually gone in this year</div>
+        </div>
+        <div>
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem;">Still to go</div>
+          <div style="font-family:'DM Mono',monospace;font-size:2rem;font-weight:600;color:var(--accent);line-height:1;">${fmtA(stillToGo)}</div>
+          <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">${overTarget > 0 ? `<span style="color:var(--green);font-weight:600;">target reached · +${fmtA(overTarget)} extra given</span>` : 'left to give this year'}</div>
+        </div>
       </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.1rem 1.2rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:.4rem;">Contributed so far</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.7rem;font-weight:600;color:var(--green);line-height:1;">${fmtA(totalPaid)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.35rem;">given this year${totalPledged > 0 ? ` · <span style="color:var(--amber);">${fmtA(totalPledged)} promised</span>` : ''}</div>
+      <!-- Progress: in so far, out of the year target -->
+      <div style="margin-top:1.3rem;">
+        <div style="height:10px;background:var(--surface2);border-radius:6px;overflow:hidden;">
+          <div style="height:100%;width:${givingPct}%;background:var(--green);border-radius:6px;transition:width .3s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:.45rem;font-size:.68rem;color:var(--dim);">
+          <span>${givingPct}% of your year target</span>
+          <span style="font-family:'DM Mono',monospace;">${fmtA(inSoFar)} / ${fmtA(yearTarget)}</span>
+        </div>
       </div>
-    </div>
-    <!-- Story line — the whole tab in one sentence -->
-    <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
-      ${fmtA(totalAlloc)} set aside → ${fmtA(totalPaid)} given → <strong style="color:${leftToGive < 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(leftToGive)}</strong> left${totalPledged > 0 ? ` · <span style="color:var(--amber);">${fmtA(totalPledged)} promised</span>` : ''}
-    </div>
-    <!-- Summary Bar -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1.5rem;">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Set aside</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">your monthly % · from the Budget page</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Given</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalPaid)}</div>
-        <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${totalPledged > 0 ? `+ <span style="color:var(--amber);font-weight:600;">${fmtA(totalPledged)}</span> promised, not given yet` : 'all payments ✓ given'}</div>
-      </div>
-      <div style="background:var(--surface);border:1px solid ${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Left to give</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${leftToGive < 0 ? 'var(--red)' : 'var(--accent)'};">${leftToGive < 0 ? fmtA(Math.abs(leftToGive)) : fmtA(leftToGive)}</div>
-        <div style="font-size:.68rem;color:${leftToGive < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${leftToGive < 0 ? 'given more than set aside' : totalPledged > 0 ? `set aside − given · ${fmtA(ag(totalAlloc - totalSpent))} after promises` : 'set aside − given'}</div>
-      </div>
+      ${totalPledged > 0 ? `<div style="margin-top:.8rem;padding-top:.7rem;border-top:1px solid var(--border);font-size:.68rem;color:var(--amber);">+ ${fmtA(totalPledged)} promised, not gone in yet</div>` : ''}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:1.25rem;">
