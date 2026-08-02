@@ -35,6 +35,27 @@ async function readRibbonPairs(page) {
   return prev;
 }
 
+
+// v30: the month chips became a dropdown (.month-select). ONE switcher for
+// every test that walks months — a future control change only edits here.
+// go(i) selects the i-th month and returns its 3-letter name ('Jan'), which
+// is what the old chip textContent gave the tests.
+async function monthSwitcher(page) {
+  const sel = page.locator('.hdr-months .month-select');
+  await sel.waitFor({ timeout: 10000 });
+  const opts = sel.locator('option');
+  const count = await opts.count();
+  return {
+    count,
+    async go(i) {
+      const value = await opts.nth(i).getAttribute('value');
+      const name = ((await opts.nth(i).textContent()) || '').trim();
+      await sel.selectOption(value);
+      return name.slice(0, 3);
+    },
+  };
+}
+
 // ─── Page Load ───
 test('page loads with correct title', async ({ page }) => {
   await page.goto('/');
@@ -98,18 +119,19 @@ test('clicking Budget tab returns to budget view', async ({ page }) => {
   await expect(budgetTab).toHaveClass(/active/);
 });
 
-// ─── Month Tabs ───
-test('month tabs are rendered', async ({ page }) => {
+// ─── Month Switcher (v30: dropdown between ‹ › chevrons) ───
+test('month dropdown renders with all months', async ({ page }) => {
   await page.goto('/');
-  await page.waitForSelector('.mtab', { timeout: 10000 });
-  const monthTabs = page.locator('.mtab');
-  expect(await monthTabs.count()).toBeGreaterThan(0);
+  const months = await monthSwitcher(page);
+  expect(months.count).toBeGreaterThan(0);
 });
 
-test('one month tab is active', async ({ page }) => {
+test('month dropdown shows the active month', async ({ page }) => {
   await page.goto('/');
-  await page.waitForSelector('.mtab.active', { timeout: 10000 });
-  await expect(page.locator('.mtab.active').first()).toBeVisible();
+  const sel = page.locator('.hdr-months .month-select');
+  await sel.waitFor({ timeout: 10000 });
+  await expect(sel).toBeVisible();
+  expect((await sel.inputValue()).length).toBeGreaterThan(0);
 });
 
 // ─── Undo/Redo Buttons ───
@@ -629,16 +651,13 @@ test('budget page totals match year view for each month', async ({ page }) => {
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
   // Collect budget page values for each past month (Jan-Mar at minimum)
-  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
-  const monthCount = await monthTabs.count();
+  const months = await monthSwitcher(page);
+  const monthCount = months.count;
   const budgetPageValues = {};
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
-    await monthTabs.nth(i).click();
+    const monthName = await months.go(i);
     await page.waitForTimeout(2000);
-
-    // Get month name from active tab
-    const monthName = (await monthTabs.nth(i).textContent()).trim();
 
     // Read ribbon values: Budgeted and Spent (heroes + data points)
     let budgeted = null;
@@ -704,13 +723,12 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
   await page.goto('/');
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
-  const monthCount = await monthTabs.count();
+  const months = await monthSwitcher(page);
+  const monthCount = months.count;
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
-    await monthTabs.nth(i).click();
+    const monthName = await months.go(i);
     await page.waitForTimeout(2000);
-    const monthName = (await monthTabs.nth(i).textContent()).trim();
 
     // Read all ribbon numbers (heroes + data points)
     const vals = {};
@@ -949,12 +967,11 @@ test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) 
   await page.waitForSelector('.mtab', { timeout: 10000 });
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
+  const months = await monthSwitcher(page);
 
   for (let mi = 0; mi < 2; mi++) {
-    await monthTabs.nth(mi).click();
+    const monthName = await months.go(mi);
     await page.waitForTimeout(2000);
-    const monthName = (await monthTabs.nth(mi).textContent()).trim();
 
     // Expand ribbon snapshot
     const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
@@ -1277,15 +1294,14 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
   await page.waitForSelector('.mtab', { timeout: 10000 });
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
-  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
-  const monthCount = await monthTabs.count();
+  const months = await monthSwitcher(page);
+  const monthCount = months.count;
   const pageValues = {};
 
   // Collect "Left to Budget" from each month's ribbon
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
-    await monthTabs.nth(i).click();
+    const monthName = await months.go(i);
     await page.waitForTimeout(2000);
-    const monthName = (await monthTabs.nth(i).textContent()).trim();
 
     let leftToBudget = null;
     for (const p of await readRibbonPairs(page)) {
@@ -1345,15 +1361,14 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     return isNaN(val) ? 0 : val;
   };
 
-  const monthTabs = page.locator('.hdr-months .month-tabs .mtab');
-  const monthCount = await monthTabs.count();
+  const months = await monthSwitcher(page);
+  const monthCount = months.count;
   const allMonthData = {};
   let errors = [];
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
-    await monthTabs.nth(i).click();
+    const monthName = await months.go(i);
     await page.waitForTimeout(2500);
-    const monthName = (await monthTabs.nth(i).textContent()).trim();
     console.log(`\n===== ${monthName} AUDIT =====`);
 
     // ── 1. Read all ribbon values (heroes + data points) ──

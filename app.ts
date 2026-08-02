@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v29';
-const BUILD_DATE = 'Jul 23, 2026 22:45';
+const APP_VERSION = 'v30';
+const BUILD_DATE = 'Jul 23, 2026 23:12';
 
 const MONTHS = [
   'January',
@@ -2604,16 +2604,17 @@ function renderApp() {
       </div>
       <div class="hdr-months">
         <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
-        <div class="month-tabs">
+        <!-- v30: the 12 month chips smooshed in the corner → one dropdown.
+             Her spec: "drop down but also arrow on either side easier to go
+             btw close months". Arrows hop, the dropdown jumps far. -->
+        <select class="year-select month-select" onchange="switchMonth(this.value)" aria-label="Month" title="Month">
           ${state.months
             .map(
-              (m) => `
-            <button class="mtab ${m.id === state.currentMonthId ? 'active' : ''}" onclick="switchMonth('${m.id}')" data-month-id="${m.id}">
-              ${((m as unknown as { month_name?: string }).month_name || '').slice(0, 3)}
-            </button>`,
+              (m) =>
+                `<option value="${m.id}" ${m.id === state.currentMonthId ? 'selected' : ''}>${(m as unknown as { month_name?: string }).month_name || ''}</option>`,
             )
             .join('')}
-        </div>
+        </select>
         <button class="mtab month-nav-chev" onclick="navMonth(1)" aria-label="Next month" title="Next month">›</button>
       </div>
     </div>
@@ -5324,6 +5325,21 @@ function renderTravelTab() {
         }
       });
       if (groups['(unassigned)']) orderedKeys.push('(unassigned)');
+      // ── Focus trip ─────────────────────────────────────────────────
+      // The trip she's ON right now leads as its own big card; every other
+      // trip collapses to a slim row so nothing competes for attention.
+      // 📌 on any trip header moves the focus. Default (set Jul 23 2026,
+      // her words: "right now im going to austria so make that its own
+      // card and the other 2 colapsed"): the trip named Austria.
+      const storedFocus = localStorage.getItem('travelFocusTrip');
+      const focusKey =
+        storedFocus !== null
+          ? storedFocus
+          : (orderedKeys.find((k) => String(k).includes('austria')) as string) || '';
+      if (focusKey && orderedKeys.includes(focusKey)) {
+        orderedKeys.splice(orderedKeys.indexOf(focusKey), 1);
+        orderedKeys.unshift(focusKey);
+      }
       groupedHtml = orderedKeys
         .map((tripKey) => {
           const tripName = displayNames[tripKey] || tripKey;
@@ -5439,15 +5455,54 @@ function renderTravelTab() {
                     );
                   })
                   .join('');
+          const isFocus = tripKey === focusKey;
+          // 📌 moves the focus to this trip (or unpins the focused one).
+          const pinBtn =
+            "<button onclick=\"event.stopPropagation();localStorage.setItem('travelFocusTrip','" +
+            jsEsc(isFocus ? '' : (tripKey as string)) +
+            '\');renderApp()" title="' +
+            (isFocus
+              ? 'Unpin — stop focusing this trip'
+              : 'Focus this trip — it becomes the big card') +
+            '" style="background:none;border:none;cursor:pointer;font-size:.8rem;padding:.1rem .25rem;line-height:1;opacity:' +
+            (isFocus ? '1' : '.4') +
+            ';">📌</button>';
+          if (isFocus) {
+            // Her CURRENT trip — its own card: tinted, accent-edged, expanded.
+            return (
+              '<div style="background:var(--gsoft);border:1px solid var(--accent);border-left:4px solid var(--accent);border-radius:var(--rl);padding:.65rem .8rem .5rem;margin-bottom:.8rem;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;padding-bottom:.4rem;border-bottom:1px solid var(--accent);margin-bottom:.15rem;">' +
+              '<span style="font-size:.95rem;font-weight:700;color:var(--accent);">✈️ ' +
+              esc(tripName) +
+              ' <span style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;background:var(--accent);color:white;border-radius:99px;padding:.14rem .5rem;margin-left:.25rem;vertical-align:middle;">Now</span></span>' +
+              '<span style="display:flex;align-items:center;gap:.35rem;">' +
+              headerNote +
+              pinBtn +
+              '</span>' +
+              '</div>' +
+              bodyHtml +
+              '</div>'
+            );
+          }
+          // Every other trip: a slim collapsed row — tap to peek, 📌 to focus.
+          const openKey = 'tvOpen-' + tripKey;
+          const isOpen = localStorage.getItem(openKey) === '1';
           return (
-            '<div style="margin-bottom:.7rem;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .25rem .25rem;border-bottom:1px solid var(--accent);margin-bottom:.15rem;">' +
-            '<span style="font-size:.78rem;font-weight:700;color:var(--accent);">✈️ ' +
+            '<div style="border:1px solid var(--border);border-radius:var(--rl);padding:.3rem .65rem;margin-bottom:.5rem;background:var(--surface2);">' +
+            '<div onclick="var k=\'' +
+            jsEsc(openKey) +
+            "';localStorage.setItem(k,localStorage.getItem(k)==='1'?'0':'1');renderApp()\" style=\"display:flex;justify-content:space-between;align-items:center;gap:.5rem;cursor:pointer;user-select:none;padding:.25rem 0;\">" +
+            '<span style="font-size:.8rem;font-weight:700;color:var(--muted);"><span style="font-size:.62rem;color:var(--dim);margin-right:.25rem;">' +
+            (isOpen ? '▾' : '▸') +
+            '</span>✈️ ' +
             esc(tripName) +
             '</span>' +
+            '<span style="display:flex;align-items:center;gap:.35rem;">' +
             headerNote +
+            pinBtn +
+            '</span>' +
             '</div>' +
-            bodyHtml +
+            (isOpen ? '<div style="padding:.15rem 0 .3rem;">' + bodyHtml + '</div>' : '') +
             '</div>'
           );
         })

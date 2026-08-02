@@ -149,8 +149,16 @@ textarea {
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 1 1 auto;
-  overflow-x: auto;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+}
+/* v30 — the 12 smooshed month chips became one dropdown (her ask). Bigger
+   than the year select: it's the control she touches most. */
+.month-select {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.3rem 0.5rem;
+  min-height: 34px;
 }
 .hdr-title {
   display: flex;
@@ -1956,12 +1964,15 @@ input:focus {
   .hdr-months {
     order: 4;
     width: 100%;
-    overflow-x: auto;
     padding: 0.05rem 0;
+    justify-content: center;
+    gap: 0.4rem;
   }
-  .hdr-months .month-tabs {
-    flex-wrap: nowrap;
-    width: max-content;
+  .month-select {
+    flex: 0 1 auto;
+    min-height: 44px;
+    font-size: 0.95rem;
+    padding: 0.4rem 0.8rem;
   }
   /* Bigger tap targets on mobile — 44px min height (Apple HIG / Material) */
   .ptab {
