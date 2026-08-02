@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v30';
-const BUILD_DATE = 'Jul 23, 2026 23:12';
+const APP_VERSION = 'v31';
+const BUILD_DATE = 'Aug 2, 2026 14:00';
 
 const MONTHS = [
   'January',
@@ -5769,6 +5769,22 @@ function renderCharityTab() {
   const totalSpent = ag(totalPaid + totalPledged);
   const leftToGive = ag(totalAlloc - totalPaid);
 
+  // ── Two headline figures (2026-08-02) ────────────────────────────────────
+  // "This month's allocation" REUSES the existing derivation, no recompute: the
+  // current month's charity set-aside already synced into the budgets table
+  // (allocs) = income × charity_pct, computed once per render at the top of
+  // renderApp. Fall back to the live derived state.budgets['charity'] if the
+  // alloc row hasn't synced yet. "Contributed so far" = totalPaid (given, YTD).
+  const _cmn = currentMonthNum || 0;
+  const monthlyAlloc = ag(
+    _cmn && allocs[_cmn] ? Number(allocs[_cmn].amount) : Number(state.budgets['charity']) || 0,
+  );
+  const monthlyPct =
+    currentMonthObj && currentMonthObj.charity_pct != null
+      ? Number(currentMonthObj.charity_pct)
+      : 0;
+  const monthLabel = currentMonthNum ? MONTH_NAMES[currentMonthNum - 1] || '' : '';
+
   const fmtA = (n: number): string =>
     '₪' +
     Number(n || 0).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -5963,6 +5979,19 @@ function renderCharityTab() {
 
   return `
   <div style="max-width:1100px;margin:0 auto;padding:1.5rem 1rem;">
+    <!-- Headline pair (2026-08-02): this month's allocation vs contributed-so-far -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1rem;">
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:var(--rl);padding:1.1rem 1.2rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:.4rem;">This month's allocation</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.7rem;font-weight:600;color:var(--accent);line-height:1;">${fmtA(monthlyAlloc)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.35rem;">${monthLabel}${monthlyPct ? ` · income × ${monthlyPct.toFixed(1)}%` : ''}</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1.1rem 1.2rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:.4rem;">Contributed so far</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.7rem;font-weight:600;color:var(--green);line-height:1;">${fmtA(totalPaid)}</div>
+        <div style="font-size:.68rem;color:var(--dim);margin-top:.35rem;">given this year${totalPledged > 0 ? ` · <span style="color:var(--amber);">${fmtA(totalPledged)} promised</span>` : ''}</div>
+      </div>
+    </div>
     <!-- Story line — the whole tab in one sentence -->
     <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
       ${fmtA(totalAlloc)} set aside → ${fmtA(totalPaid)} given → <strong style="color:${leftToGive < 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(leftToGive)}</strong> left${totalPledged > 0 ? ` · <span style="color:var(--amber);">${fmtA(totalPledged)} promised</span>` : ''}
