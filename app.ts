@@ -35,8 +35,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v32';
-const BUILD_DATE = 'Aug 2, 2026 15:09';
+const APP_VERSION = 'v33';
+const BUILD_DATE = 'Aug 3, 2026 23:00';
 
 const MONTHS = [
   'January',
@@ -6629,7 +6629,8 @@ function renderAdminTab() {
               <span class="admin-pay-mo" style="font-size:.68rem;color:var(--muted);font-family:'DM Mono',monospace;">${esc(mn)}</span>
               <span class="admin-pay-item" style="font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(parentLabel)}">${esc(parentLabel)}</span>
               <span class="admin-pay-what" style="font-size:.78rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(s.label)}">${esc((s.label || '—').replace('[auto] ', '').trim() || '(full payment)')}</span>
-              <span class="admin-pay-amt" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};">${fmtA(s.amount)}</span>
+              <input type="number" class="admin-pay-amt" value="${s.amount || ''}" placeholder="0" min="0" step="1" style="font-size:.78rem;font-family:'DM Mono',monospace;text-align:right;width:100%;background:transparent;border:none;border-bottom:1px solid transparent;padding:.05rem .1rem;outline:none;-moz-appearance:textfield;color:${s.is_estimate ? 'var(--amber)' : 'var(--text)'};font-weight:${s.is_estimate ? '700' : '400'};" onfocus="this.style.borderBottomColor='var(--accent)'" onblur="this.style.borderBottomColor='transparent'" onchange="updateAdminSub('${s.id}','amount',this.value)" title="Edit amount">
+
               <span class="admin-pay-est" style="text-align:center;font-size:.6rem;color:${s.is_estimate ? 'var(--amber)' : 'var(--dim)'};font-weight:${s.is_estimate ? '700' : '400'};">${s.is_estimate ? '~est' : ''}</span>
             </div>`;
         };
