@@ -4006,3 +4006,135 @@ input[type='checkbox'] {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 }
+
+/* ── Year-tab controls: readable size, thumb-sized hit areas ──────────────
+   The rest of the app got the 44px treatment; the Year tab never did. At her
+   phone width (412px) the month chips were 31px tall, the Month/Full-Year
+   toggle 30px, the View toggle 27px, and the expand/collapse chevrons rendered
+   at 9.9px — under 10px for the control that reveals every sub-category.
+   Sizing for the View/Collapse/Expand pills lives here rather than inline, so
+   there is one place to change it. */
+.yr-pillbtn {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.65rem;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.sn-chev {
+  font-size: 0.72rem;
+}
+
+@media (max-width: 600px) {
+  /* Thumb-sized: 44px is the Apple HIG / Material minimum. min-height (not
+     height) so a wrapped label still grows the control instead of clipping. */
+  .ym-chip,
+  .ym-modebtn,
+  .yr-pillbtn,
+  .year-select {
+    min-height: 44px;
+  }
+  /* The year-overview month links sat at 17px — they are inline links inside a
+     dense summary, so they get padding rather than a min-height that would
+     stretch the surrounding line. */
+  .ov-month-link {
+    display: inline-block;
+    padding: 0.75rem 0.35rem;
+    margin: -0.75rem 0;
+  }
+  .ym-chip,
+  .ym-modebtn,
+  .yr-pillbtn {
+    font-size: 0.8rem;
+  }
+  /* The chevron glyph itself stays small; the padding around it is what the
+     thumb actually lands on. */
+  .sn-chev {
+    font-size: 0.85rem;
+    padding: 0.5rem 0.4rem;
+    margin: -0.5rem -0.1rem -0.5rem -0.4rem;
+  }
+}
+
+/* ── The one next action ──────────────────────────────────────────────────
+   One quiet line under the ribbon naming the single thing worth doing now.
+   Register matters here more than the pixels: this must read as a question
+   from a colleague, not a notification badge. So — no red, no count, no
+   streak, accent used once (on the action, per the standing colour rule), and
+   an always-present "not now". The settled state is deliberately plain: a soft
+   muted line, never a congratulation. */
+.next-action {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 1.5rem 0.75rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r, 10px);
+  background: var(--surface);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+.next-action .na-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.next-action .na-text b {
+  font-weight: 600;
+  color: var(--accent);
+}
+/* Outline, not filled. The accent-fill is reserved for THE primary action on
+   screen, and on the budget tab that is already the "+" add button. A second
+   filled accent button would compete with it and make the nudge shout. */
+.next-action .na-go {
+  flex: 0 0 auto;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 99px;
+  border: 1px solid var(--accent);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.next-action .na-go:hover {
+  background: var(--gsoft, var(--surface2));
+}
+.next-action .na-x {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  background: none;
+  color: var(--dim);
+  cursor: pointer;
+}
+.next-action .na-x:hover {
+  color: var(--muted);
+}
+/* Settled: everything is allocated. One muted line, nothing to celebrate. */
+.next-action.settled {
+  border-left-color: var(--border);
+  color: var(--dim);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .next-action {
+    margin: 0 0.75rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  /* Thumb-sized, consistent with the rest of the mobile pass. */
+  .next-action .na-go,
+  .next-action .na-x {
+    min-height: 44px;
+  }
+  .next-action .na-x {
+    padding: 0 0.6rem;
+  }
+}

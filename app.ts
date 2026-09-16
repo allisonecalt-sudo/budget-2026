@@ -5,6 +5,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // Runtime import (kept in dist/lib/ by the build). The `.js` extension is
 // required so the emitted dist/app.js resolves the sibling module in the browser.
 import { fmtHistoryDate } from './lib/history-format.js';
+import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
+import { ag, pct, status, creditOccurrences } from './lib/budget-math.js';
 
 declare global {
   interface Window {
@@ -26,16 +28,6 @@ function byId(id: string): HTMLInputElement {
   return document.getElementById(id) as HTMLInputElement;
 }
 
-// Round to whole shekels for display, collapsing negative zero to 0. Math.round
-// of anything in (-0.5, 0) yields -0, which toLocaleString prints as "-0" — a
-// rounding crumb that reads as a real deficit. Every money formatter and every
-// pos/neg color decision must go through this so the number shown and the color
-// shown agree.
-function roundZ(n: number): number {
-  const r = Math.round(Number(n) || 0);
-  return r === 0 ? 0 : r;
-}
-
 const SB_URL = 'https://hpiyvnfhoqnnnotrmwaz.supabase.co';
 const SB_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaXl2bmZob3Fubm5vdHJtd2F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzIwNDEsImV4cCI6MjA4ODA0ODA0MX0.AsGhYitkSnyVMwpJII05UseS_gICaXiCy7d8iHsr6Qw';
@@ -45,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v35';
-const BUILD_DATE = 'Sep 16, 2026 10:12';
+const APP_VERSION = 'v36';
+const BUILD_DATE = 'Sep 16, 2026 10:40';
 
 const MONTHS = [
   'January',
@@ -533,8 +525,23 @@ function saveCache() {
         yearData: state.yearData,
       }),
     );
-  } catch (e) {}
+  } catch (e) {
+    // Fail loud (in the console), but never block the app. The usual cause is
+    // localStorage being full or blocked — the app still works fully online, it
+    // just loses the fast warm start and the offline read cache. Silence here
+    // meant that degradation was invisible; warn once so it's diagnosable.
+    if (!_cacheWarnShown) {
+      _cacheWarnShown = true;
+      console.warn(
+        '[budget] could not write the local cache — fast startup and offline reads are disabled for this session.',
+        e,
+      );
+    }
+  }
 }
+// One-shot guard: saveCache() runs on every mutation, so an unguarded warn
+// would flood the console with the same message.
+let _cacheWarnShown = false;
 
 function restoreCache() {
   try {
@@ -572,45 +579,68 @@ function restoreCache() {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
-// Agorot rounding — snap a money sum to 2 decimals to kill float drift
-// (e.g. 0.1 + 0.2 = 0.30000000000000004). Apply ONLY at sum/total boundaries
-// so equality and display are exact; does NOT change any real displayed value.
-function ag(n: unknown): number {
-  return Math.round((Number(n) || 0) * 100) / 100;
-}
-const fmt = (n: unknown): string =>
-  '₪' +
-  roundZ(Number(n || 0)).toLocaleString('he-IL', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  });
-const pct = (spent: number, budget: number): number =>
-  budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-const status = (spent: number, budget: number): string => {
-  if (budget === 0) return 'ok';
-  const rem = Math.round(budget - spent);
-  if (rem < 0) return 'over';
-  if (rem === 0) return 'ok';
-  const p = spent / budget;
-  if (p >= 0.85) return 'warn';
-  return 'ok';
-};
+// ag / pct / status / creditOccurrences moved to lib/budget-math.ts so the
+// money arithmetic can be unit-tested without a browser or a live database.
+const fmt = (n: unknown): string => shekels(n || 0);
 
-// ── "Money In" / credit math (pure, unit-testable — no DB, no DOM) ──────
-// How many times a credit lands. A one-off (no range, or start===end, or a
-// missing bound) counts once. A month range (start..end) counts inclusively,
-// clamped to a sane 1..12 so a fat-fingered range can't blow up a total.
-function creditOccurrences(row: {
-  month_start?: number | null;
-  month_end?: number | null;
-}): number {
-  const s = row.month_start;
-  const e = row.month_end;
-  // One-off: either bound missing, or both equal.
-  if (s == null || e == null || s === e) return 1;
-  const span = e - s + 1;
-  if (span <= 1) return 1;
-  return Math.min(12, span);
+// ── The one next action ──────────────────────────────────────────────
+// A single quiet line under the ribbon naming the ONE thing worth doing right
+// now, or nothing at all when there isn't one.
+//
+// Deliberately shaped to the anti-quit register in the app-building guide:
+//   - It ASKS ("give it a job?"), it never tells. No imperative, no "you should".
+//   - No red, no badge, no count, no streak, and nothing that can be "broken".
+//   - Dismissible per month — saying "not now" is a first-class answer.
+//   - The settled state is one muted line, not a congratulation.
+// It shows at most ONE thing on purpose: a list of things to do is the wall
+// that stalls, not the nudge that starts.
+function nextActionDismissKey(): string {
+  return `nextActionDismissed_${state.currentMonthId || 'none'}`;
+}
+
+function dismissNextAction(): void {
+  try {
+    localStorage.setItem(nextActionDismissKey(), 'true');
+  } catch {
+    // A blocked localStorage just means the chip returns next render. Harmless.
+  }
+  renderApp();
+}
+
+function renderNextAction(unallocated: number): string {
+  // Round first: an agorot crumb is not an unbudgeted shekel.
+  const left = roundZ(unallocated);
+
+  if (left === 0) {
+    return `<div class="next-action settled">Every shekel has a job.</div>`;
+  }
+
+  let dismissed = false;
+  try {
+    dismissed = localStorage.getItem(nextActionDismissKey()) === 'true';
+  } catch {
+    dismissed = false;
+  }
+  if (dismissed) return '';
+
+  // Over-budgeted (negative) and under-budgeted (positive) are different
+  // questions, so they get different words — but both stay questions.
+  const question =
+    left > 0
+      ? `${shekels(left)} isn't budgeted yet. <b>Give it a job?</b>`
+      : `You've budgeted ${shekels(Math.abs(left))} more than came in. <b>Rebalance?</b>`;
+
+  return `<div class="next-action">
+      <span class="na-text">${question}</span>
+      <button class="na-go" onclick="jumpToCategories()">Categories</button>
+      <button class="na-x" onclick="dismissNextAction()" title="Not now" aria-label="Not now">×</button>
+    </div>`;
+}
+
+// Scroll the budget grid into view — the chip's actual next step.
+function jumpToCategories(): void {
+  const target = document.querySelector('.group-block');
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Total money a credit row brings in = per-occurrence amount × occurrences.
@@ -1340,12 +1370,7 @@ function renderHousingGrid() {
         const bgColor = isCur ? 'var(--asoft)' : 'transparent';
         const txtColor = isPast ? 'var(--dim)' : 'var(--text)';
         const cellContent =
-          val != null
-            ? roundZ(Number(val)).toLocaleString('en-IL', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })
-            : '<span style="color:var(--border)">—</span>';
+          val != null ? amount(Number(val)) : '<span style="color:var(--border)">—</span>';
         return (
           '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
           txtColor +
@@ -1455,14 +1480,7 @@ function renderSpendingGrid(catKey: string): string {
     txs.forEach((tx) => {
       spentByMonth[tx.month_id] = (spentByMonth[tx.month_id] || 0) + (Number(tx.amount) || 0);
     });
-    const fmtV = (v: number): string =>
-      v > 0
-        ? '₪' +
-          roundZ(Number(v)).toLocaleString('en-IL', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })
-        : '—';
+    const fmtV = (v: number): string => (v > 0 ? shekels(v) : '—');
     const hdr =
       '<th style="text-align:left;padding:.25rem .5rem;font-size:.7rem;position:sticky;left:0;background:var(--surface2);z-index:2;"></th>' +
       existingMonths
@@ -1527,14 +1545,7 @@ function renderSpendingGrid(catKey: string): string {
     txs.forEach((tx) => {
       spentByMonth[tx.month_id] = (spentByMonth[tx.month_id] || 0) + (Number(tx.amount) || 0);
     });
-    const fmtV = (v: number): string =>
-      v > 0
-        ? '₪' +
-          roundZ(Number(v)).toLocaleString('en-IL', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })
-        : '—';
+    const fmtV = (v: number): string => (v > 0 ? shekels(v) : '—');
     const hdr =
       '<th style="text-align:left;padding:.25rem .5rem;font-size:.7rem;position:sticky;left:0;background:var(--surface2);z-index:2;"></th>' +
       existingMonths
@@ -1634,14 +1645,7 @@ function renderSpendingGrid(catKey: string): string {
         const isCur = m.month_num === today;
         const txtColor =
           val === 0 ? 'var(--border)' : m.month_num < today ? 'var(--dim)' : 'var(--text)';
-        const content =
-          val > 0
-            ? '₪' +
-              roundZ(Number(val)).toLocaleString('en-IL', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })
-            : '—';
+        const content = val > 0 ? shekels(val) : '—';
         return (
           '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
           txtColor +
@@ -1675,27 +1679,14 @@ function renderSpendingGrid(catKey: string): string {
           ';background:' +
           (isCur ? 'var(--asoft)' : 'transparent') +
           ";font-family:'DM Mono',monospace;\">" +
-          (v > 0
-            ? '₪' +
-              roundZ(Number(v)).toLocaleString('en-IL', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0,
-              })
-            : '—') +
+          (v > 0 ? shekels(v) : '—') +
           '</td>'
         );
       })
       .join('') +
     '</tr>';
 
-  const fmtV2 = (v: number): string =>
-    v > 0
-      ? '₪' +
-        roundZ(Number(v)).toLocaleString('en-IL', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
-        })
-      : '—';
+  const fmtV2 = (v: number): string => (v > 0 ? shekels(v) : '—');
   const budgetRow =
     '<tr style="border-bottom:1px solid var(--border);"><td style="padding:.25rem .5rem;font-size:.75rem;position:sticky;left:0;background:var(--surface);z-index:1;color:var(--muted);font-weight:600;">Budget</td>' +
     existingMonths
@@ -1762,7 +1753,7 @@ function showLtsPop(el: HTMLElement): void {
     })
     .filter((r) => (r.b !== 0 || r.s !== 0) && Math.round(r.left) !== 0)
     .sort((x, y) => y.left - x.left);
-  const f = (v: number): string => '₪' + Math.round(Math.abs(v)).toLocaleString('en-IL');
+  const f = (v: number): string => shekels(Math.abs(v));
   const rowsHtml = rows
     .map(
       (r) =>
@@ -2492,6 +2483,667 @@ async function createMonth(num: number): Promise<void> {
 }
 
 // ── Render ────────────────────────────────────────────────────────────
+// ── The summary ribbon (budget tab) ──────────────────────────────────
+// Lifted wholesale out of renderApp(), which was 1,094 lines and rendered
+// this entire panel inline as an IIFE. Moving it here is a MOVE, not a
+// rewrite: the body is unchanged apart from indentation and the four values
+// it used to close over now arriving as parameters.
+function renderRibbon(
+  income: number,
+  spent: Record<string, number>,
+  totalSpent: number,
+  totalBudgeted: number,
+): string {
+  if (state.activeTab !== 'budget' || state.loading) return '';
+  const ribbonHidden = localStorage.getItem('ribbonHidden') === 'true';
+  const ribbonExpanded = localStorage.getItem('ribbonExpanded') === 'true';
+  const leftToBudget = ag(income - totalBudgeted);
+  const remainingInBudget = ag(totalBudgeted - totalSpent);
+  void leftToBudget;
+  void remainingInBudget;
+  const n = (v: number | null | undefined): string => (v == null ? '' : amount(Number(v)));
+
+  if (ribbonHidden)
+    return `<div style="position:sticky;top:57px;z-index:90;text-align:right;padding:.25rem 1.5rem;background:var(--surface);border-bottom:1px solid var(--border);"><button class="ribbon-toggle" onclick="toggleRibbon()">▼ show summary</button></div>`;
+
+  // Snapshot table rows for expanded view
+  const groupRows = CATEGORY_GROUPS.map((group) => {
+    const cats = group.keys
+      .map((k) => CATEGORIES.find((c) => c.key === k))
+      .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
+    const gs = ag(
+      cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
+    );
+    const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
+    const gr = Math.round(gb - gs);
+    const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
+    const catRows = cats
+      .map((c) => {
+        const b = catBudget(c.key) || 0;
+        const s = c.hasTab ? b : spent[c.key] || 0;
+        const r = Math.round(b - s);
+        // DC5 — gap triangles dropped from ribbon Summary too (same
+        // reason as Snapshot modal). Owed-elsewhere strip carries
+        // the gap signal at a higher hierarchy level.
+        return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
+      })
+      .join('');
+    if (cats.length === 1) {
+      const c = cats[0]!;
+      const b = catBudget(c.key) || 0;
+      const s = c.hasTab ? b : spent[c.key] || 0;
+      const r = Math.round(b - s);
+      return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
+    }
+    return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
+      <td><span class="sn-chev" style="margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td></tr>${catRows}`;
+  }).join('');
+
+  // Leisure sub-ribbon
+  const leisureGroup = CATEGORY_GROUPS.find((g) => g.label === 'Leisure & Lifestyle')!;
+  const leisureCats = leisureGroup.keys
+    .map((k) => CATEGORIES.find((c) => c.key === k))
+    .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
+  const isMobile = window.innerWidth <= 600;
+  const leisureKey = isMobile ? 'leisureExpandedMobile' : 'leisureExpanded';
+  const leisureStored = localStorage.getItem(leisureKey);
+  const leisureExpanded = leisureStored !== null ? leisureStored !== 'false' : !isMobile;
+  const leisureSpent = ag(leisureCats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
+  const leisureBudget = ag(leisureCats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0));
+  // Round BEFORE comparing — display rounds to whole shekels, so a sub-₪1
+  // overage must not trip a red "₪0 over" on a perfectly-funded category.
+  const lsOver = Math.round(leisureSpent - leisureBudget);
+  const leisureSubRibbon = `<div class="sub-ribbon">
+    <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
+      ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
+      <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${fmt(leisureSpent)} spent${leisureBudget ? ` of ${fmt(leisureBudget)}` : ''}${leisureBudget && lsOver >= 1 ? `<span class="sn-over"> · ${fmt(lsOver)} over</span>` : ''}
+      </span>
+    </span>
+    ${
+      leisureExpanded
+        ? `
+    <div class="leisure-list">
+      ${leisureCats
+        .map((c) => {
+          const s = spent[c.key] || 0;
+          const b = state.budgets[c.key] || 0;
+          const r = Math.round(b - s);
+          return `<div class="leisure-row"><span class="lz-cat">${c.emoji} ${c.label}</span><span class="lz-nums">${fmt(s)}${b ? ` <span class="lz-of">of ${fmt(b)}</span>` : ''}</span><span class="lz-left ${r < 0 ? 'sn-over' : 'sn-ok'}">${!b || r === 0 ? '' : r < 0 ? fmt(-r) + ' over' : fmt(r) + ' left'}</span></div>`;
+        })
+        .join('')}
+      <div class="leisure-row lz-total"><span class="lz-cat">Total</span><span class="lz-nums">${fmt(leisureSpent)} <span class="lz-of">of ${fmt(leisureBudget)}</span></span><span class="lz-left ${lsOver >= 1 ? 'sn-over' : 'sn-ok'}">${lsOver === 0 ? '' : lsOver >= 1 ? fmt(lsOver) + ' over' : fmt(-lsOver) + ' left'}</span></div>
+    </div>`
+        : ''
+    }
+  </div>`;
+
+  return `<div class="ribbon-panel">
+    <div class="ribbon">
+      <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${Math.round(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(leftToBudget) === 0 ? 0 : leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
+      <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${Math.round(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(income - totalSpent) === 0 ? 0 : income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
+      <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${Math.round(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(remainingInBudget) === 0 ? 0 : remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
+      <div class="ribbon-datapoints">
+        <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
+        <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
+        <div class="rb-dp" title="Used — total spent so far this month"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
+        <div class="rb-dp" title="Saved — bank + invested savings this month"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved</span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
+      </div>
+      ${(() => {
+        // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
+        // Always visible on Budget-tab top KPIs, glanceable on mobile too.
+        const owedOpen = localStorage.getItem('owedStripOpen') !== 'false'; // default open
+        const tProj = (state.travel.items || []).reduce(
+          (s, i) => s + (Number(i.projected_amount) || 0),
+          0,
+        );
+        const tAlloc = Object.values(state.travel.allocations || {}).reduce(
+          (s, a) => s + (Number(a.amount) || 0),
+          0,
+        );
+        const tGap = ag(tProj - tAlloc); // signed: >0 short, <0 surplus
+        const aProj = (state.admin.items || []).reduce(
+          (s, i) => s + (Number(i.projected_amount) || 0),
+          0,
+        );
+        const aAlloc = Object.values(state.admin.allocations || {}).reduce(
+          (s, a) => s + (Number(a.amount) || 0),
+          0,
+        );
+        const aGap = ag(aProj - aAlloc - creditsTotal()); // signed: >0 short, <0 surplus
+        const totalOwed = ag(tGap + aGap);
+        const seg = (emoji: string, val: number, tab: string, label: string): string => {
+          if (val > 0)
+            // shortfall — still owe this much
+            return `<span class="owed-seg" title="${label}: short ${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">${fmt(val)}</span></span>`;
+          if (val < 0)
+            // surplus — over-funded
+            return `<span class="owed-seg owed-seg-surplus" title="${label}: surplus ${fmt(-val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">+${fmt(-val)}</span></span>`;
+          return `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
+        };
+        const chev = owedOpen ? '▾' : '▸';
+        return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
+          <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
+            <button class="owed-chev" onclick="toggleOwedStrip()" title="${owedOpen ? 'Hide' : 'Show'} owed elsewhere" aria-label="${owedOpen ? 'Hide' : 'Show'} owed">${chev}</button>
+            <span style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
+          </div>
+          <div class="owed-segments" style="display:${owedOpen ? 'flex' : 'none'};gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.15rem;">
+            ${seg('✈️', tGap, 'travel', 'Travel gap')}
+            <span class="owed-sep">·</span>
+            ${seg('📋', aGap, 'admin', 'Admin gap')}
+          </div>
+          ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
+        </div>`;
+      })()}
+      <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
+        <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
+        <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
+      </div>
+    </div>
+    ${
+      ribbonExpanded
+        ? `
+    <div class="ribbon-snapshot">
+      <div style="display:flex;gap:2rem;align-items:flex-start;">
+        <div style="flex:1;min-width:0;">
+          <table class="sn-table">
+            <thead><tr><th>Category</th><th>Budget</th><th>Used</th><th>Remaining</th></tr></thead>
+            <tbody>
+              ${(() => {
+                const bkB = state.budgets['savings_bank'] || 0,
+                  bkS = bkB;
+                const invB = state.budgets['savings_invested'] || 0,
+                  invS = invB;
+                const gb = bkB + invB,
+                  gs = bkS + invS,
+                  gr = gb - gs;
+                return `<tr class="sn-group" id="rsngrp-Savings-hdr" onclick="snToggle('rsngrp-Savings')">
+                  <td><span class="sn-chev" style="margin-right:.4rem;color:var(--muted)">▶</span>🏦 Savings</td>
+                  <td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
+                </tr>
+                <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">🏦 In Bank</td><td>${bkB ? n(bkB) : ''}</td><td>${n(bkS)}</td><td>${bkB ? n(bkB - bkS) : ''}</td></tr>
+                <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">📈 Invested</td><td>${invB ? n(invB) : ''}</td><td>${n(invS)}</td><td>${invB ? n(invB - invS) : ''}</td></tr>`;
+              })()}
+              ${groupRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`
+        : ''
+    }
+    <div class="ribbon-drag-handle" id="ribbon-drag" onmousedown="startRibbonDrag(event)"></div>
+  </div>
+  ${leisureSubRibbon}
+  ${renderNextAction(leftToBudget)}`;
+}
+
+// ── The budget category grid ─────────────────────────────────────────
+// The 474-line block that renders every category group, its rows, the
+// per-category spend bars and the inline editors. Lifted out of renderApp()
+// as a MOVE, not a rewrite: body unchanged apart from indentation, with the
+// three values it closed over now passed in.
+function renderCategoryGroups(
+  current: MonthRow,
+  income: number,
+  spent: Record<string, number>,
+): string {
+  return CATEGORY_GROUPS.map((group) => {
+    const cats = group.keys
+      .map((k) => CATEGORIES.find((c) => c.key === k))
+      .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
+    const groupSpent = ag(cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
+    const groupBudget = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
+    const groupSt = status(groupSpent, groupBudget);
+    const singleCat = cats.length === 1;
+    // B2 narrowed — Leisure-only personal-average trend marker
+    let leisureTrend = '';
+    if (group.label === 'Leisure & Lifestyle' && state.yearData) {
+      try {
+        const todayMonthNum2 = todayMonthForYear();
+        const monthsSorted2 = [...state.months].sort((a, b) => a.month_num - b.month_num);
+        const past = monthsSorted2.filter((m) => m.month_num < todayMonthNum2);
+        if (past.length > 0) {
+          const leisureCatKeys = group.keys;
+          const totalSpent = past.reduce((acc, m) => {
+            return (
+              acc +
+              (state.yearData!.txns || [])
+                .filter((t) => t.month_id === m.id && leisureCatKeys.includes(t.category))
+                .reduce((s, t) => s + (Number(t.amount) || 0), 0)
+            );
+          }, 0);
+          const avg = totalSpent / past.length;
+          if (avg > 0) {
+            const arrow = groupSpent > avg * 1.05 ? '↗' : groupSpent < avg * 0.95 ? '↘' : '→';
+            const arrowColor =
+              arrow === '↗' ? 'var(--amber)' : arrow === '↘' ? 'var(--green)' : 'var(--muted)';
+            leisureTrend = `<span style="font-size:.65rem;color:var(--muted);margin-left:.5rem;font-weight:400;" title="Personal average over last ${past.length} mo: ${fmt(avg)}. Up arrow = above avg, down = below.">avg ${fmt(avg)} <span style="color:${arrowColor};font-weight:700;">${arrow}</span></span>`;
+          }
+        }
+      } catch (e) {
+        /* trend marker is best-effort */
+      }
+    }
+    return `
+      <div class="group-block" id="group-${group.label.replace(/\s+/g, '-')}">
+        ${
+          singleCat
+            ? ''
+            : `<div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g, '-')}')">
+          <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}${leisureTrend}</span>
+          <span class="group-totals">
+            <span class="cat-spent-bold">${fmt(groupSpent)}</span>
+            ${groupBudget > 0 ? `<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>` : ''}
+            ${groupBudget > 0 ? `<span class="group-rem ${groupSt}"> · ${groupSt === 'over' ? '-' : ''}${fmt(Math.abs(groupBudget - groupSpent))} ${groupSt === 'over' ? 'over' : 'left'}</span>` : ''}
+          </span>
+        </div>`
+        }
+        <div class="group-cats">
+        ${cats
+          .map((c) => {
+            const s = spent[c.key] || 0;
+            const b = catBudget(c.key);
+            const items = state.budgetItems[c.key] || [];
+            const hasItems = items.length > 0;
+            const st = status(s, b);
+            const p = pct(s, b);
+            const txs = state.transactions.filter((tx) => tx.category === c.key);
+            if (c.hasTab) {
+              if (c.key === 'charity') {
+                // Percent comes straight from the DB row (cross-device); cash is
+                // always derived from current income so it adapts on every device.
+                const charityPct = current.charity_pct != null ? Number(current.charity_pct) : '';
+                const charityCalc = charityPct
+                  ? Math.round((income * Number(charityPct)) / 100)
+                  : state.budgets['charity'] || 0;
+                return `<div class="cat-row" id="cat-charity">
+                <div class="cat-top">
+                  <div class="cat-name"><span class="cat-emoji">💚</span>Charity</div>
+                  <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
+                    <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
+                      onclick="event.stopPropagation()"
+                      oninput="(function(el){const pct=parseFloat(el.value)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
+                      onblur="saveCharityPct(this.value)"
+                      onkeydown="if(event.key==='Enter'){this.blur()}"
+                      style="width:60px">
+                    <span style="font-size:.8rem;color:var(--muted);">%</span>
+                    ${charityCalc ? `<span class="cat-spent-bold">= ${fmt(charityCalc)}</span>` : ''}
+                  </div>
+                </div>
+              </div>`;
+              }
+              return `<div class="cat-row" id="cat-${c.key}">
+              <div class="cat-top">
+                <div class="cat-name"><span class="cat-emoji">${c.emoji}</span>${c.label}</div>
+                <div class="cat-amounts">
+                  <input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set aside" min="0" step="1"
+                    onclick="event.stopPropagation()"
+                    onchange="saveBudget('${c.key}', this.value)"
+                    onkeydown="if(event.key==='Enter'){this.blur()}"
+                    style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 95}px">${gapMarker(c.key)}
+                </div>
+              </div>
+            </div>`;
+            }
+            return `
+            <div class="cat-row${state.openCats.has(c.key) ? ' open' : ''}" id="cat-${c.key}">
+              <div class="cat-top" onclick="toggleCat('${c.key}')">
+                <div class="cat-name">
+                  <span class="cat-emoji">${c.emoji}</span>
+                  ${c.label}
+                </div>
+                <div class="cat-amounts">
+                  ${
+                    c.hasLines && hasItems
+                      ? `<span style="font-size:.65rem;color:var(--dim);margin-right:.25rem;">committed</span><span class="cat-spent-bold">${fmt(b)}</span>`
+                      : `<span class="cat-spent-bold">${fmt(s)}</span>
+                  <span style="color:var(--muted)"> / </span>
+                  ${
+                    hasItems
+                      ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
+                      : `<input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set budget" min="0" step="1"
+                        onclick="event.stopPropagation()"
+                        onchange="saveBudget('${c.key}', this.value)"
+                        onkeydown="if(event.key==='Enter'){this.blur()}"
+                        style="width:${b > 0 ? Math.max(80, String(Math.round(b)).length * 10 + 30) : 110}px">
+                      ${c.hasLines ? `<button style="background:none;border:none;font-size:.65rem;color:var(--dim);cursor:pointer;padding:0 .3rem;" onclick="event.stopPropagation();addBudgetItem('${c.key}')" title="Add line items">+ lines</button>` : ''}`
+                  }`
+                  }
+                </div>
+              </div>
+              ${
+                b > 0 && !c.hasTab
+                  ? `
+                <div class="progress-bar">
+                  <div class="progress-fill ${st}" style="width:${p}%"></div>
+                </div>
+                <div class="cat-remaining ${st}">
+                  ${(() => {
+                    const rem = Math.round(b - s);
+                    return rem < 0
+                      ? `₪${fmt(-rem).replace('₪', '')} over budget`
+                      : `₪${fmt(rem).replace('₪', '')} remaining`;
+                  })()}
+                </div>`
+                  : ''
+              }
+              <div class="tx-list">
+                ${
+                  SPENDING_GRID_CATS.includes(c.key)
+                    ? (() => {
+                        const _sgOn = state.spendingGridCats.includes(c.key);
+                        return `<div style="text-align:right;margin-bottom:.3rem;"><button onclick="event.stopPropagation();toggleSpendingGrid('${c.key}')" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:${_sgOn ? 'var(--accent)' : 'none'};color:${_sgOn ? 'white' : 'var(--muted)'};cursor:pointer;font-family:'DM Sans',sans-serif;">${_sgOn ? '✕ Hide grid' : '📊 Year grid'}</button></div>${_sgOn ? renderSpendingGrid(c.key) : ''}`;
+                      })()
+                    : ''
+                }
+                <div class="budget-items-list">
+                  ${(() => {
+                    if (!hasItems) return '';
+                    const HOUSING_SUBCATS = {
+                      rent: 'Rent',
+                      utilities: 'Utilities',
+                      bills: 'Bills',
+                      household: 'Household',
+                    };
+                    const RECURRING_SUBCATS = {
+                      tashlumim: 'תשלומים',
+                      digital: 'Digital',
+                      insurance: 'Insurance',
+                      bills: 'Bills',
+                      fitness: 'Fitness',
+                    };
+                    const subcatOpts = c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
+                    const isGridCat = c.key === 'housing' || c.key === 'recurring';
+                    const renderBudgetItemRow = (item: BudgetItemRow): string => {
+                      // Subcat picker: per-row select. On mobile the section
+                      // banner already conveys the subcategory, so hide it
+                      // there (CSS) — keeps the row scannable and prevents
+                      // the previous "tiny disc" rendering. Re-expose on
+                      // edit by tapping the row's "more" affordance.
+                      const subSel =
+                        '<select class="bi-subcat" onchange="saveBudgetItem(\'' +
+                        item.id +
+                        '\',\'subcategory\',this.value)" onclick="event.stopPropagation()" title="Move to subcategory">' +
+                        '<option value=""' +
+                        (!item.subcategory ? ' selected' : '') +
+                        '>--</option>' +
+                        Object.entries(subcatOpts)
+                          .map(
+                            ([k, v]) =>
+                              '<option value="' +
+                              k +
+                              '"' +
+                              (item.subcategory === k ? ' selected' : '') +
+                              '>' +
+                              v +
+                              '</option>',
+                          )
+                          .join('') +
+                        '</select>';
+                      const defaultCls = 'bi-default' + (item.is_default ? ' is-default' : '');
+                      return (
+                        '<div class="budget-item-row" data-budget-item-id="' +
+                        item.id +
+                        '">' +
+                        '<input type="text" class="bi-label" value="' +
+                        (item.label || '').replace(/"/g, '&quot;') +
+                        '" placeholder="Item name" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
+                        item.id +
+                        "','label',this.value)\">" +
+                        subSel +
+                        '<input type="number" class="bi-amount" value="' +
+                        (item.amount || '') +
+                        '" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
+                        item.id +
+                        "','amount',this.value)\" onkeydown=\"if(event.key==='Enter')this.blur()\">" +
+                        (isGridCat
+                          ? ''
+                          : '<button class="' +
+                            defaultCls +
+                            '" onclick="event.stopPropagation();setItemAsDefault(\'' +
+                            item.id +
+                            '\')" title="Sets default for new months only — past months stay unchanged">★</button>') +
+                        '<button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem(\'' +
+                        item.id +
+                        '\')">×</button>' +
+                        '</div>'
+                      );
+                    };
+                    const header =
+                      '<div class="budget-items-header"><span>Item</span><span>Amount</span><span style="width:48px"></span></div>';
+
+                    // Housing: grid toggle
+                    if (c.key === 'housing') {
+                      const gridBtn =
+                        '<div style="text-align:right;margin-bottom:.4rem;"><button onclick="event.stopPropagation();toggleHousingGrid()" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:' +
+                        (state.housingGridMode ? 'var(--accent)' : 'none') +
+                        ';color:' +
+                        (state.housingGridMode ? 'white' : 'var(--muted)') +
+                        ";cursor:pointer;font-family:'DM Sans',sans-serif;\">" +
+                        (state.housingGridMode ? '✕ List view' : '📊 Year grid') +
+                        '</button></div>';
+                      if (state.housingGridMode) return gridBtn + renderHousingGrid();
+                      const hGroups: Record<string, BudgetItemRow[]> = {},
+                        hNoSubcat: BudgetItemRow[] = [];
+                      items.forEach((item) => {
+                        const sc = item.subcategory || '';
+                        if (sc && Object.keys(HOUSING_SUBCATS).includes(sc)) {
+                          if (!hGroups[sc]) hGroups[sc] = [];
+                          hGroups[sc].push(item);
+                        } else hNoSubcat.push(item);
+                      });
+                      let hHtml = gridBtn + header;
+                      Object.keys(HOUSING_SUBCATS).forEach((sc) => {
+                        if (hGroups[sc] && hGroups[sc].length > 0) {
+                          hHtml +=
+                            '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
+                            (HOUSING_SUBCATS as Record<string, string>)[sc] +
+                            '</div>';
+                          hHtml += hGroups[sc].map(renderBudgetItemRow).join('');
+                        }
+                      });
+                      if (hNoSubcat.length > 0)
+                        hHtml += hNoSubcat.map(renderBudgetItemRow).join('');
+                      return hHtml;
+                    }
+
+                    if (c.key !== 'recurring') {
+                      return header + items.map(renderBudgetItemRow).join('');
+                    }
+                    // Recurring: grid toggle button
+                    const gridBtn =
+                      '<div style="text-align:right;margin-bottom:.4rem;"><button onclick="event.stopPropagation();toggleRecurringGrid()" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:' +
+                      (state.recurringGridMode ? 'var(--accent)' : 'none') +
+                      ';color:' +
+                      (state.recurringGridMode ? 'white' : 'var(--muted)') +
+                      ";cursor:pointer;font-family:'DM Sans',sans-serif;\">" +
+                      (state.recurringGridMode ? '✕ List view' : '📊 Year grid') +
+                      '</button></div>';
+                    if (state.recurringGridMode) {
+                      return gridBtn + renderRecurringGrid();
+                    }
+                    // Recurring list: group by subcategory
+                    const SUBCAT_ORDER = ['tashlumim', 'digital', 'insurance', 'bills', 'fitness'];
+                    const SUBCAT_LABELS = {
+                      tashlumim: 'תשלומים',
+                      digital: 'Digital',
+                      insurance: 'Insurance',
+                      bills: 'Bills',
+                      fitness: 'Fitness',
+                    };
+                    const groups: Record<string, BudgetItemRow[]> = {};
+                    const noSubcat: BudgetItemRow[] = [];
+                    items.forEach((item) => {
+                      const sc = item.subcategory || '';
+                      if (sc && SUBCAT_ORDER.includes(sc)) {
+                        if (!groups[sc]) groups[sc] = [];
+                        groups[sc].push(item);
+                      } else {
+                        noSubcat.push(item);
+                      }
+                    });
+                    let html = gridBtn + header;
+                    SUBCAT_ORDER.forEach((sc) => {
+                      if (groups[sc] && groups[sc].length > 0) {
+                        html +=
+                          '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
+                          SUBCAT_LABELS[sc as keyof typeof SUBCAT_LABELS] +
+                          '</div>';
+                        html += groups[sc].map(renderBudgetItemRow).join('');
+                      }
+                    });
+                    if (noSubcat.length > 0) {
+                      html += noSubcat.map(renderBudgetItemRow).join('');
+                    }
+                    return html;
+                  })()}
+                  ${
+                    !c.hasLines && state.inlineAddCat === c.key
+                      ? (() => {
+                          const _ps = [
+                            ...new Set([
+                              ...((PRESET_STORES as Record<string, string[]>)[c.key] || []),
+                              ...state.allStores
+                                .filter((tx) => tx.category === c.key && tx.store)
+                                .map((tx) => tx.store),
+                              ...state.transactions
+                                .filter((tx) => tx.category === c.key && tx.store)
+                                .map((tx) => tx.store),
+                            ]),
+                          ];
+                          const _dlId = 'inline-stores-' + c.key;
+                          return `<datalist id="${_dlId}">${_ps.map((s) => `<option value="${(s as string).replace(/"/g, '&quot;')}">`).join('')}</datalist>
+                    <div class="inline-add-form" style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
+                      <input id="inline-store-${c.key}" class="inline-add-input" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                      <input id="inline-item-${c.key}" class="inline-add-input" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                      <input id="inline-amount-${c.key}" class="inline-add-input" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
+                      <input id="inline-date-${c.key}" class="inline-add-input" type="date" onclick="event.stopPropagation()">
+                      <button onclick="event.stopPropagation();saveInlineAdd('${c.key}')" style="font-size:.7rem;padding:.25rem .4rem;background:var(--accent);color:white;border:none;border-radius:4px;cursor:pointer;font-family:'DM Sans',sans-serif;">Save</button>
+                      <button onclick="event.stopPropagation();state.inlineAddCat=null;renderApp()" style="font-size:.8rem;background:none;border:none;cursor:pointer;color:var(--dim);">×</button>
+                    </div>`;
+                        })()
+                      : ''
+                  }
+                  ${(c.key === 'housing' && state.housingGridMode) || (c.key === 'recurring' && state.recurringGridMode) || (SPENDING_GRID_CATS.includes(c.key) && state.spendingGridCats.includes(c.key)) ? '' : `<button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>`}
+                </div>
+                ${
+                  c.key === 'groceries' && txs.length > 0
+                    ? (() => {
+                        const bigTotal = txs.reduce(
+                          (sum, tx) => sum + (isBigStore(tx.store || '') ? Number(tx.amount) : 0),
+                          0,
+                        );
+                        const otherTotal = txs.reduce(
+                          (sum, tx) => sum + (!isBigStore(tx.store || '') ? Number(tx.amount) : 0),
+                          0,
+                        );
+                        const bigPct = s > 0 ? Math.round((bigTotal / s) * 100) : 0;
+                        return `<div style="display:flex;gap:.5rem;padding:.4rem .25rem .6rem;border-bottom:1px solid var(--border);margin-bottom:.3rem;">
+                    <div style="flex:1;background:var(--gsoft);border-radius:8px;padding:.4rem .6rem;">
+                      <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:.1rem;">🏪 Big stores</div>
+                      <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--accent);">${fmt(bigTotal)}</div>
+                      <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${bigPct}% of groceries</div>
+                    </div>
+                    <div style="flex:1;background:var(--ambersoft);border-radius:8px;padding:.4rem .6rem;">
+                      <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);margin-bottom:.1rem;">🛒 Other stores</div>
+                      <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--amber);">${fmt(otherTotal)}</div>
+                      <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${100 - bigPct}% of groceries</div>
+                    </div>
+                  </div>`;
+                      })()
+                    : ''
+                }
+                ${(() => {
+                  if (state.spendingGridCats.includes(c.key) && SPENDING_GRID_CATS.includes(c.key))
+                    return '';
+                  if (txs.length === 0) return '<div class="no-tx">No transactions yet</div>';
+                  const sort = state.txSort || 'newest';
+                  const sorted = [...txs].sort((a, b) => {
+                    if (sort === 'newest')
+                      return (
+                        (new Date(b.created_at) as unknown as number) -
+                        (new Date(a.created_at) as unknown as number)
+                      );
+                    if (sort === 'oldest')
+                      return (
+                        (new Date(a.created_at) as unknown as number) -
+                        (new Date(b.created_at) as unknown as number)
+                      );
+                    if (sort === 'high') return Number(b.amount) - Number(a.amount);
+                    if (sort === 'low') return Number(a.amount) - Number(b.amount);
+                    return 0;
+                  });
+                  const MONS = [
+                    'Jan',
+                    'Feb',
+                    'Mar',
+                    'Apr',
+                    'May',
+                    'Jun',
+                    'Jul',
+                    'Aug',
+                    'Sep',
+                    'Oct',
+                    'Nov',
+                    'Dec',
+                  ];
+                  const fmtDate = (d: string | null): string => {
+                    if (!d) return '—';
+                    const dt = new Date(d + 'T12:00:00');
+                    return dt.getDate() + ' ' + MONS[dt.getMonth()];
+                  };
+                  const esc = (s: string | null | undefined): string =>
+                    (s || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;');
+                  const renderTxRow = (tx: TransactionRow): string => `
+                    <div class="tx-item" data-tx-id="${tx.id}">
+                      <div class="tx-date-wrap" onclick="event.stopPropagation(); this.classList.add('editing'); this.querySelector('.tx-edit-date').focus();">
+                        <span class="tx-date-display">${fmtDate(tx.date)}</span>
+                        <input class="tx-edit-date" type="date" value="${tx.date || ''}" onfocus="this.parentElement.classList.add('editing')" onblur="this.parentElement.classList.remove('editing')" onchange="updateTx('${tx.id}','date',this.value)">
+                      </div>
+                      <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','store',this.value)">
+                      <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','item',this.value)">
+                      <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01" style="font-size:.88rem;font-weight:600;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','amount',this.value)">
+                      <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
+                    </div>`;
+                  const sectionHdr = (emoji: string, label: string, total: number): string =>
+                    `<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;display:flex;justify-content:space-between;"><span>${emoji} ${label}</span><span style="font-family:'DM Mono',monospace;">${fmt(total)}</span></div>`;
+                  let txRows = '';
+                  if (c.key === 'groceries' && sort === 'type') {
+                    const big = sorted.filter((tx) => isBigStore(tx.store || ''));
+                    const local = sorted.filter((tx) => !isBigStore(tx.store || ''));
+                    const bigAmt = big.reduce((s, tx) => s + Number(tx.amount), 0);
+                    const localAmt = local.reduce((s, tx) => s + Number(tx.amount), 0);
+                    txRows =
+                      (big.length
+                        ? sectionHdr('🏪', 'Big stores', bigAmt) + big.map(renderTxRow).join('')
+                        : '') +
+                      (local.length
+                        ? sectionHdr('🛒', 'Other stores', localAmt) +
+                          local.map(renderTxRow).join('')
+                        : '');
+                  } else {
+                    txRows = sorted.map(renderTxRow).join('');
+                  }
+                  return `<div class="tx-sort-bar">
+                    <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
+                    <button class="tx-sort-btn ${sort === 'newest' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('newest')">Newest</button>
+                    <button class="tx-sort-btn ${sort === 'oldest' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('oldest')">Oldest</button>
+                    <button class="tx-sort-btn ${sort === 'high' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('high')">Highest</button>
+                    <button class="tx-sort-btn ${sort === 'low' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('low')">Lowest</button>
+                    ${c.key === 'groceries' ? `<button class="tx-sort-btn ${sort === 'type' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('type')">By Type</button>` : ''}
+                  </div>
+                  <div class="tx-header"><span>Date</span><span>Store</span><span>Item</span><span style="text-align:right">Amount</span><span></span></div>
+                  ${txRows}`;
+                })()}
+              </div>
+            </div>`;
+          })
+          .join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function renderApp() {
   const root = byId('root');
   document.title = `Budget ${state.currentYear}`;
@@ -2641,196 +3293,7 @@ function renderApp() {
       </div>
     </div>
 
-    ${(() => {
-      if (state.activeTab !== 'budget' || state.loading) return '';
-      const ribbonHidden = localStorage.getItem('ribbonHidden') === 'true';
-      const ribbonExpanded = localStorage.getItem('ribbonExpanded') === 'true';
-      const leftToBudget = ag(income - totalBudgeted);
-      const remainingInBudget = ag(totalBudgeted - totalSpent);
-      void leftToBudget;
-      void remainingInBudget;
-      const n = (v: number | null | undefined): string =>
-        v == null
-          ? ''
-          : roundZ(Number(v)).toLocaleString('en-IL', {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            });
-
-      if (ribbonHidden)
-        return `<div style="position:sticky;top:57px;z-index:90;text-align:right;padding:.25rem 1.5rem;background:var(--surface);border-bottom:1px solid var(--border);"><button class="ribbon-toggle" onclick="toggleRibbon()">▼ show summary</button></div>`;
-
-      // Snapshot table rows for expanded view
-      const groupRows = CATEGORY_GROUPS.map((group) => {
-        const cats = group.keys
-          .map((k) => CATEGORIES.find((c) => c.key === k))
-          .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
-        const gs = ag(
-          cats.reduce((sum, c) => sum + (c.hasTab ? catBudget(c.key) || 0 : spent[c.key] || 0), 0),
-        );
-        const gb = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
-        const gr = Math.round(gb - gs);
-        const gid = 'rsngrp-' + group.label.replace(/[^a-zA-Z0-9]/g, '-');
-        const catRows = cats
-          .map((c) => {
-            const b = catBudget(c.key) || 0;
-            const s = c.hasTab ? b : spent[c.key] || 0;
-            const r = Math.round(b - s);
-            // DC5 — gap triangles dropped from ribbon Summary too (same
-            // reason as Snapshot modal). Owed-elsewhere strip carries
-            // the gap signal at a higher hierarchy level.
-            return `<tr class="sn-cat ${gid} collapsed"><td style="padding-left:1.5rem">${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
-          })
-          .join('');
-        if (cats.length === 1) {
-          const c = cats[0]!;
-          const b = catBudget(c.key) || 0;
-          const s = c.hasTab ? b : spent[c.key] || 0;
-          const r = Math.round(b - s);
-          return `<tr class="sn-cat"><td>${c.emoji} ${c.label}</td><td>${b ? n(b) : ''}</td><td>${b || s ? n(s) : ''}</td><td class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
-        }
-        return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
-          <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td><td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td></tr>${catRows}`;
-      }).join('');
-
-      // Leisure sub-ribbon
-      const leisureGroup = CATEGORY_GROUPS.find((g) => g.label === 'Leisure & Lifestyle')!;
-      const leisureCats = leisureGroup.keys
-        .map((k) => CATEGORIES.find((c) => c.key === k))
-        .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
-      const isMobile = window.innerWidth <= 600;
-      const leisureKey = isMobile ? 'leisureExpandedMobile' : 'leisureExpanded';
-      const leisureStored = localStorage.getItem(leisureKey);
-      const leisureExpanded = leisureStored !== null ? leisureStored !== 'false' : !isMobile;
-      const leisureSpent = ag(leisureCats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
-      const leisureBudget = ag(
-        leisureCats.reduce((sum, c) => sum + (state.budgets[c.key] || 0), 0),
-      );
-      // Round BEFORE comparing — display rounds to whole shekels, so a sub-₪1
-      // overage must not trip a red "₪0 over" on a perfectly-funded category.
-      const lsOver = Math.round(leisureSpent - leisureBudget);
-      const leisureSubRibbon = `<div class="sub-ribbon">
-        <span class="sub-ribbon-label" onclick="localStorage.setItem('${leisureKey}', ${!leisureExpanded});renderApp()" style="cursor:pointer;user-select:none;">
-          ${leisureExpanded ? '▼' : '▶'} 🎉 Leisure
-          <span style="font-family:'DM Mono',monospace;font-weight:400;margin-left:.4rem;">${fmt(leisureSpent)} spent${leisureBudget ? ` of ${fmt(leisureBudget)}` : ''}${leisureBudget && lsOver >= 1 ? `<span class="sn-over"> · ${fmt(lsOver)} over</span>` : ''}
-          </span>
-        </span>
-        ${
-          leisureExpanded
-            ? `
-        <div class="leisure-list">
-          ${leisureCats
-            .map((c) => {
-              const s = spent[c.key] || 0;
-              const b = state.budgets[c.key] || 0;
-              const r = Math.round(b - s);
-              return `<div class="leisure-row"><span class="lz-cat">${c.emoji} ${c.label}</span><span class="lz-nums">${fmt(s)}${b ? ` <span class="lz-of">of ${fmt(b)}</span>` : ''}</span><span class="lz-left ${r < 0 ? 'sn-over' : 'sn-ok'}">${!b || r === 0 ? '' : r < 0 ? fmt(-r) + ' over' : fmt(r) + ' left'}</span></div>`;
-            })
-            .join('')}
-          <div class="leisure-row lz-total"><span class="lz-cat">Total</span><span class="lz-nums">${fmt(leisureSpent)} <span class="lz-of">of ${fmt(leisureBudget)}</span></span><span class="lz-left ${lsOver >= 1 ? 'sn-over' : 'sn-ok'}">${lsOver === 0 ? '' : lsOver >= 1 ? fmt(lsOver) + ' over' : fmt(-lsOver) + ' left'}</span></div>
-        </div>`
-            : ''
-        }
-      </div>`;
-
-      return `<div class="ribbon-panel">
-        <div class="ribbon">
-          <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${Math.round(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(leftToBudget) === 0 ? 0 : leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
-          <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${Math.round(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(income - totalSpent) === 0 ? 0 : income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
-          <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${Math.round(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(remainingInBudget) === 0 ? 0 : remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
-          <div class="ribbon-datapoints">
-            <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
-            <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
-            <div class="rb-dp" title="Used — total spent so far this month"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
-            <div class="rb-dp" title="Saved — bank + invested savings this month"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved</span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
-          </div>
-          ${(() => {
-            // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
-            // Always visible on Budget-tab top KPIs, glanceable on mobile too.
-            const owedOpen = localStorage.getItem('owedStripOpen') !== 'false'; // default open
-            const tProj = (state.travel.items || []).reduce(
-              (s, i) => s + (Number(i.projected_amount) || 0),
-              0,
-            );
-            const tAlloc = Object.values(state.travel.allocations || {}).reduce(
-              (s, a) => s + (Number(a.amount) || 0),
-              0,
-            );
-            const tGap = ag(tProj - tAlloc); // signed: >0 short, <0 surplus
-            const aProj = (state.admin.items || []).reduce(
-              (s, i) => s + (Number(i.projected_amount) || 0),
-              0,
-            );
-            const aAlloc = Object.values(state.admin.allocations || {}).reduce(
-              (s, a) => s + (Number(a.amount) || 0),
-              0,
-            );
-            const aGap = ag(aProj - aAlloc - creditsTotal()); // signed: >0 short, <0 surplus
-            const totalOwed = ag(tGap + aGap);
-            const seg = (emoji: string, val: number, tab: string, label: string): string => {
-              if (val > 0)
-                // shortfall — still owe this much
-                return `<span class="owed-seg" title="${label}: short ${fmt(val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;">${fmt(val)}</span></span>`;
-              if (val < 0)
-                // surplus — over-funded
-                return `<span class="owed-seg owed-seg-surplus" title="${label}: surplus ${fmt(-val)}" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">+${fmt(-val)}</span></span>`;
-              return `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
-            };
-            const chev = owedOpen ? '▾' : '▸';
-            return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
-              <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
-                <button class="owed-chev" onclick="toggleOwedStrip()" title="${owedOpen ? 'Hide' : 'Show'} owed elsewhere" aria-label="${owedOpen ? 'Hide' : 'Show'} owed">${chev}</button>
-                <span style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
-              </div>
-              <div class="owed-segments" style="display:${owedOpen ? 'flex' : 'none'};gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.15rem;">
-                ${seg('✈️', tGap, 'travel', 'Travel gap')}
-                <span class="owed-sep">·</span>
-                ${seg('📋', aGap, 'admin', 'Admin gap')}
-              </div>
-              ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
-            </div>`;
-          })()}
-          <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
-            <button class="ribbon-toggle" onclick="toggleRibbonExpand()">${ribbonExpanded ? '▲ less' : '▼ full view'}</button>
-            <button class="ribbon-toggle" onclick="toggleRibbon()">✕</button>
-          </div>
-        </div>
-        ${
-          ribbonExpanded
-            ? `
-        <div class="ribbon-snapshot">
-          <div style="display:flex;gap:2rem;align-items:flex-start;">
-            <div style="flex:1;min-width:0;">
-              <table class="sn-table">
-                <thead><tr><th>Category</th><th>Budget</th><th>Used</th><th>Remaining</th></tr></thead>
-                <tbody>
-                  ${(() => {
-                    const bkB = state.budgets['savings_bank'] || 0,
-                      bkS = bkB;
-                    const invB = state.budgets['savings_invested'] || 0,
-                      invS = invB;
-                    const gb = bkB + invB,
-                      gs = bkS + invS,
-                      gr = gb - gs;
-                    return `<tr class="sn-group" id="rsngrp-Savings-hdr" onclick="snToggle('rsngrp-Savings')">
-                      <td><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>🏦 Savings</td>
-                      <td>${gb ? n(gb) : ''}</td><td>${n(gs)}</td><td class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
-                    </tr>
-                    <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">🏦 In Bank</td><td>${bkB ? n(bkB) : ''}</td><td>${n(bkS)}</td><td>${bkB ? n(bkB - bkS) : ''}</td></tr>
-                    <tr class="sn-cat rsngrp-Savings collapsed"><td style="padding-left:1.5rem">📈 Invested</td><td>${invB ? n(invB) : ''}</td><td>${n(invS)}</td><td>${invB ? n(invB - invS) : ''}</td></tr>`;
-                  })()}
-                  ${groupRows}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>`
-            : ''
-        }
-        <div class="ribbon-drag-handle" id="ribbon-drag" onmousedown="startRibbonDrag(event)"></div>
-      </div>
-      ${leisureSubRibbon}`;
-    })()}
+    ${renderRibbon(income, spent, totalSpent, totalBudgeted)}
 
     <div class="${state.activeTab === 'year' ? 'main-full' : 'main'}">
       ${
@@ -3010,480 +3473,7 @@ function renderApp() {
           </div>`;
         })()}
 
-        ${CATEGORY_GROUPS.map((group) => {
-          const cats = group.keys
-            .map((k) => CATEGORIES.find((c) => c.key === k))
-            .filter((x): x is (typeof CATEGORIES)[0] => Boolean(x));
-          const groupSpent = ag(cats.reduce((sum, c) => sum + (spent[c.key] || 0), 0));
-          const groupBudget = ag(cats.reduce((sum, c) => sum + catBudget(c.key), 0));
-          const groupSt = status(groupSpent, groupBudget);
-          const singleCat = cats.length === 1;
-          // B2 narrowed — Leisure-only personal-average trend marker
-          let leisureTrend = '';
-          if (group.label === 'Leisure & Lifestyle' && state.yearData) {
-            try {
-              const todayMonthNum2 = todayMonthForYear();
-              const monthsSorted2 = [...state.months].sort((a, b) => a.month_num - b.month_num);
-              const past = monthsSorted2.filter((m) => m.month_num < todayMonthNum2);
-              if (past.length > 0) {
-                const leisureCatKeys = group.keys;
-                const totalSpent = past.reduce((acc, m) => {
-                  return (
-                    acc +
-                    (state.yearData!.txns || [])
-                      .filter((t) => t.month_id === m.id && leisureCatKeys.includes(t.category))
-                      .reduce((s, t) => s + (Number(t.amount) || 0), 0)
-                  );
-                }, 0);
-                const avg = totalSpent / past.length;
-                if (avg > 0) {
-                  const arrow = groupSpent > avg * 1.05 ? '↗' : groupSpent < avg * 0.95 ? '↘' : '→';
-                  const arrowColor =
-                    arrow === '↗'
-                      ? 'var(--amber)'
-                      : arrow === '↘'
-                        ? 'var(--green)'
-                        : 'var(--muted)';
-                  leisureTrend = `<span style="font-size:.65rem;color:var(--muted);margin-left:.5rem;font-weight:400;" title="Personal average over last ${past.length} mo: ${fmt(avg)}. Up arrow = above avg, down = below.">avg ${fmt(avg)} <span style="color:${arrowColor};font-weight:700;">${arrow}</span></span>`;
-                }
-              }
-            } catch (e) {
-              /* trend marker is best-effort */
-            }
-          }
-          return `
-            <div class="group-block" id="group-${group.label.replace(/\s+/g, '-')}">
-              ${
-                singleCat
-                  ? ''
-                  : `<div class="group-header" onclick="toggleGroup('${group.label.replace(/\s+/g, '-')}')">
-                <span><span class="group-chevron">▼</span>${group.emoji} ${group.label}${leisureTrend}</span>
-                <span class="group-totals">
-                  <span class="cat-spent-bold">${fmt(groupSpent)}</span>
-                  ${groupBudget > 0 ? `<span style="color:var(--muted)"> / ${fmt(groupBudget)}</span>` : ''}
-                  ${groupBudget > 0 ? `<span class="group-rem ${groupSt}"> · ${groupSt === 'over' ? '-' : ''}${fmt(Math.abs(groupBudget - groupSpent))} ${groupSt === 'over' ? 'over' : 'left'}</span>` : ''}
-                </span>
-              </div>`
-              }
-              <div class="group-cats">
-              ${cats
-                .map((c) => {
-                  const s = spent[c.key] || 0;
-                  const b = catBudget(c.key);
-                  const items = state.budgetItems[c.key] || [];
-                  const hasItems = items.length > 0;
-                  const st = status(s, b);
-                  const p = pct(s, b);
-                  const txs = state.transactions.filter((tx) => tx.category === c.key);
-                  if (c.hasTab) {
-                    if (c.key === 'charity') {
-                      // Percent comes straight from the DB row (cross-device); cash is
-                      // always derived from current income so it adapts on every device.
-                      const charityPct =
-                        current.charity_pct != null ? Number(current.charity_pct) : '';
-                      const charityCalc = charityPct
-                        ? Math.round((income * Number(charityPct)) / 100)
-                        : state.budgets['charity'] || 0;
-                      return `<div class="cat-row" id="cat-charity">
-                      <div class="cat-top">
-                        <div class="cat-name"><span class="cat-emoji">💚</span>Charity</div>
-                        <div class="cat-amounts" style="display:flex;align-items:center;gap:.5rem;flex-wrap:nowrap;">
-                          <input type="number" class="budget-inline" value="${charityPct}" placeholder="%" min="0" max="100" step="0.1"
-                            onclick="event.stopPropagation()"
-                            oninput="(function(el){const pct=parseFloat(el.value)||0;const inc=totalIncome(state.months.find(m=>m.id===state.currentMonthId));const calc=Math.round(inc*pct/100);const sp=el.parentElement.querySelector('.cat-spent-bold');if(sp){sp.textContent='= '+fmt(calc);}else if(pct){const s=document.createElement('span');s.className='cat-spent-bold';s.textContent='= '+fmt(calc);el.parentElement.appendChild(s);}})(this)"
-                            onblur="saveCharityPct(this.value)"
-                            onkeydown="if(event.key==='Enter'){this.blur()}"
-                            style="width:60px">
-                          <span style="font-size:.8rem;color:var(--muted);">%</span>
-                          ${charityCalc ? `<span class="cat-spent-bold">= ${fmt(charityCalc)}</span>` : ''}
-                        </div>
-                      </div>
-                    </div>`;
-                    }
-                    return `<div class="cat-row" id="cat-${c.key}">
-                    <div class="cat-top">
-                      <div class="cat-name"><span class="cat-emoji">${c.emoji}</span>${c.label}</div>
-                      <div class="cat-amounts">
-                        <input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set aside" min="0" step="1"
-                          onclick="event.stopPropagation()"
-                          onchange="saveBudget('${c.key}', this.value)"
-                          onkeydown="if(event.key==='Enter'){this.blur()}"
-                          style="width:${b > 0 ? Math.max(60, String(Math.round(b)).length * 10 + 30) : 95}px">${gapMarker(c.key)}
-                      </div>
-                    </div>
-                  </div>`;
-                  }
-                  return `
-                  <div class="cat-row${state.openCats.has(c.key) ? ' open' : ''}" id="cat-${c.key}">
-                    <div class="cat-top" onclick="toggleCat('${c.key}')">
-                      <div class="cat-name">
-                        <span class="cat-emoji">${c.emoji}</span>
-                        ${c.label}
-                      </div>
-                      <div class="cat-amounts">
-                        ${
-                          c.hasLines && hasItems
-                            ? `<span style="font-size:.65rem;color:var(--dim);margin-right:.25rem;">committed</span><span class="cat-spent-bold">${fmt(b)}</span>`
-                            : `<span class="cat-spent-bold">${fmt(s)}</span>
-                        <span style="color:var(--muted)"> / </span>
-                        ${
-                          hasItems
-                            ? `<span class="budget-inline" style="color:var(--text);cursor:default;">${fmt(b)}</span>`
-                            : `<input type="number" class="budget-inline" value="${state.budgets[c.key] || ''}" placeholder="set budget" min="0" step="1"
-                              onclick="event.stopPropagation()"
-                              onchange="saveBudget('${c.key}', this.value)"
-                              onkeydown="if(event.key==='Enter'){this.blur()}"
-                              style="width:${b > 0 ? Math.max(80, String(Math.round(b)).length * 10 + 30) : 110}px">
-                            ${c.hasLines ? `<button style="background:none;border:none;font-size:.65rem;color:var(--dim);cursor:pointer;padding:0 .3rem;" onclick="event.stopPropagation();addBudgetItem('${c.key}')" title="Add line items">+ lines</button>` : ''}`
-                        }`
-                        }
-                      </div>
-                    </div>
-                    ${
-                      b > 0 && !c.hasTab
-                        ? `
-                      <div class="progress-bar">
-                        <div class="progress-fill ${st}" style="width:${p}%"></div>
-                      </div>
-                      <div class="cat-remaining ${st}">
-                        ${(() => {
-                          const rem = Math.round(b - s);
-                          return rem < 0
-                            ? `₪${fmt(-rem).replace('₪', '')} over budget`
-                            : `₪${fmt(rem).replace('₪', '')} remaining`;
-                        })()}
-                      </div>`
-                        : ''
-                    }
-                    <div class="tx-list">
-                      ${
-                        SPENDING_GRID_CATS.includes(c.key)
-                          ? (() => {
-                              const _sgOn = state.spendingGridCats.includes(c.key);
-                              return `<div style="text-align:right;margin-bottom:.3rem;"><button onclick="event.stopPropagation();toggleSpendingGrid('${c.key}')" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:${_sgOn ? 'var(--accent)' : 'none'};color:${_sgOn ? 'white' : 'var(--muted)'};cursor:pointer;font-family:'DM Sans',sans-serif;">${_sgOn ? '✕ Hide grid' : '📊 Year grid'}</button></div>${_sgOn ? renderSpendingGrid(c.key) : ''}`;
-                            })()
-                          : ''
-                      }
-                      <div class="budget-items-list">
-                        ${(() => {
-                          if (!hasItems) return '';
-                          const HOUSING_SUBCATS = {
-                            rent: 'Rent',
-                            utilities: 'Utilities',
-                            bills: 'Bills',
-                            household: 'Household',
-                          };
-                          const RECURRING_SUBCATS = {
-                            tashlumim: 'תשלומים',
-                            digital: 'Digital',
-                            insurance: 'Insurance',
-                            bills: 'Bills',
-                            fitness: 'Fitness',
-                          };
-                          const subcatOpts =
-                            c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
-                          const isGridCat = c.key === 'housing' || c.key === 'recurring';
-                          const renderBudgetItemRow = (item: BudgetItemRow): string => {
-                            // Subcat picker: per-row select. On mobile the section
-                            // banner already conveys the subcategory, so hide it
-                            // there (CSS) — keeps the row scannable and prevents
-                            // the previous "tiny disc" rendering. Re-expose on
-                            // edit by tapping the row's "more" affordance.
-                            const subSel =
-                              '<select class="bi-subcat" onchange="saveBudgetItem(\'' +
-                              item.id +
-                              '\',\'subcategory\',this.value)" onclick="event.stopPropagation()" title="Move to subcategory">' +
-                              '<option value=""' +
-                              (!item.subcategory ? ' selected' : '') +
-                              '>--</option>' +
-                              Object.entries(subcatOpts)
-                                .map(
-                                  ([k, v]) =>
-                                    '<option value="' +
-                                    k +
-                                    '"' +
-                                    (item.subcategory === k ? ' selected' : '') +
-                                    '>' +
-                                    v +
-                                    '</option>',
-                                )
-                                .join('') +
-                              '</select>';
-                            const defaultCls =
-                              'bi-default' + (item.is_default ? ' is-default' : '');
-                            return (
-                              '<div class="budget-item-row" data-budget-item-id="' +
-                              item.id +
-                              '">' +
-                              '<input type="text" class="bi-label" value="' +
-                              (item.label || '').replace(/"/g, '&quot;') +
-                              '" placeholder="Item name" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
-                              item.id +
-                              "','label',this.value)\">" +
-                              subSel +
-                              '<input type="number" class="bi-amount" value="' +
-                              (item.amount || '') +
-                              '" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
-                              item.id +
-                              "','amount',this.value)\" onkeydown=\"if(event.key==='Enter')this.blur()\">" +
-                              (isGridCat
-                                ? ''
-                                : '<button class="' +
-                                  defaultCls +
-                                  '" onclick="event.stopPropagation();setItemAsDefault(\'' +
-                                  item.id +
-                                  '\')" title="Sets default for new months only — past months stay unchanged">★</button>') +
-                              '<button class="bi-del" onclick="event.stopPropagation();deleteBudgetItem(\'' +
-                              item.id +
-                              '\')">×</button>' +
-                              '</div>'
-                            );
-                          };
-                          const header =
-                            '<div class="budget-items-header"><span>Item</span><span>Amount</span><span style="width:48px"></span></div>';
-
-                          // Housing: grid toggle
-                          if (c.key === 'housing') {
-                            const gridBtn =
-                              '<div style="text-align:right;margin-bottom:.4rem;"><button onclick="event.stopPropagation();toggleHousingGrid()" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:' +
-                              (state.housingGridMode ? 'var(--accent)' : 'none') +
-                              ';color:' +
-                              (state.housingGridMode ? 'white' : 'var(--muted)') +
-                              ";cursor:pointer;font-family:'DM Sans',sans-serif;\">" +
-                              (state.housingGridMode ? '✕ List view' : '📊 Year grid') +
-                              '</button></div>';
-                            if (state.housingGridMode) return gridBtn + renderHousingGrid();
-                            const hGroups: Record<string, BudgetItemRow[]> = {},
-                              hNoSubcat: BudgetItemRow[] = [];
-                            items.forEach((item) => {
-                              const sc = item.subcategory || '';
-                              if (sc && Object.keys(HOUSING_SUBCATS).includes(sc)) {
-                                if (!hGroups[sc]) hGroups[sc] = [];
-                                hGroups[sc].push(item);
-                              } else hNoSubcat.push(item);
-                            });
-                            let hHtml = gridBtn + header;
-                            Object.keys(HOUSING_SUBCATS).forEach((sc) => {
-                              if (hGroups[sc] && hGroups[sc].length > 0) {
-                                hHtml +=
-                                  '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
-                                  (HOUSING_SUBCATS as Record<string, string>)[sc] +
-                                  '</div>';
-                                hHtml += hGroups[sc].map(renderBudgetItemRow).join('');
-                              }
-                            });
-                            if (hNoSubcat.length > 0)
-                              hHtml += hNoSubcat.map(renderBudgetItemRow).join('');
-                            return hHtml;
-                          }
-
-                          if (c.key !== 'recurring') {
-                            return header + items.map(renderBudgetItemRow).join('');
-                          }
-                          // Recurring: grid toggle button
-                          const gridBtn =
-                            '<div style="text-align:right;margin-bottom:.4rem;"><button onclick="event.stopPropagation();toggleRecurringGrid()" style="font-size:.65rem;padding:.2rem .5rem;border:1px solid var(--border);border-radius:4px;background:' +
-                            (state.recurringGridMode ? 'var(--accent)' : 'none') +
-                            ';color:' +
-                            (state.recurringGridMode ? 'white' : 'var(--muted)') +
-                            ";cursor:pointer;font-family:'DM Sans',sans-serif;\">" +
-                            (state.recurringGridMode ? '✕ List view' : '📊 Year grid') +
-                            '</button></div>';
-                          if (state.recurringGridMode) {
-                            return gridBtn + renderRecurringGrid();
-                          }
-                          // Recurring list: group by subcategory
-                          const SUBCAT_ORDER = [
-                            'tashlumim',
-                            'digital',
-                            'insurance',
-                            'bills',
-                            'fitness',
-                          ];
-                          const SUBCAT_LABELS = {
-                            tashlumim: 'תשלומים',
-                            digital: 'Digital',
-                            insurance: 'Insurance',
-                            bills: 'Bills',
-                            fitness: 'Fitness',
-                          };
-                          const groups: Record<string, BudgetItemRow[]> = {};
-                          const noSubcat: BudgetItemRow[] = [];
-                          items.forEach((item) => {
-                            const sc = item.subcategory || '';
-                            if (sc && SUBCAT_ORDER.includes(sc)) {
-                              if (!groups[sc]) groups[sc] = [];
-                              groups[sc].push(item);
-                            } else {
-                              noSubcat.push(item);
-                            }
-                          });
-                          let html = gridBtn + header;
-                          SUBCAT_ORDER.forEach((sc) => {
-                            if (groups[sc] && groups[sc].length > 0) {
-                              html +=
-                                '<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;">' +
-                                SUBCAT_LABELS[sc as keyof typeof SUBCAT_LABELS] +
-                                '</div>';
-                              html += groups[sc].map(renderBudgetItemRow).join('');
-                            }
-                          });
-                          if (noSubcat.length > 0) {
-                            html += noSubcat.map(renderBudgetItemRow).join('');
-                          }
-                          return html;
-                        })()}
-                        ${
-                          !c.hasLines && state.inlineAddCat === c.key
-                            ? (() => {
-                                const _ps = [
-                                  ...new Set([
-                                    ...((PRESET_STORES as Record<string, string[]>)[c.key] || []),
-                                    ...state.allStores
-                                      .filter((tx) => tx.category === c.key && tx.store)
-                                      .map((tx) => tx.store),
-                                    ...state.transactions
-                                      .filter((tx) => tx.category === c.key && tx.store)
-                                      .map((tx) => tx.store),
-                                  ]),
-                                ];
-                                const _dlId = 'inline-stores-' + c.key;
-                                return `<datalist id="${_dlId}">${_ps.map((s) => `<option value="${(s as string).replace(/"/g, '&quot;')}">`).join('')}</datalist>
-                          <div class="inline-add-form" style="display:grid;grid-template-columns:1fr 1fr 90px 110px 60px 24px;gap:.3rem;padding:.4rem .2rem;align-items:center;border-top:1px solid var(--border);">
-                            <input id="inline-store-${c.key}" class="inline-add-input" type="text" placeholder="Store" list="${_dlId}" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
-                            <input id="inline-item-${c.key}" class="inline-add-input" type="text" placeholder="Item" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
-                            <input id="inline-amount-${c.key}" class="inline-add-input" type="number" placeholder="₪" min="0" step="0.01" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')saveInlineAdd('${c.key}')">
-                            <input id="inline-date-${c.key}" class="inline-add-input" type="date" onclick="event.stopPropagation()">
-                            <button onclick="event.stopPropagation();saveInlineAdd('${c.key}')" style="font-size:.7rem;padding:.25rem .4rem;background:var(--accent);color:white;border:none;border-radius:4px;cursor:pointer;font-family:'DM Sans',sans-serif;">Save</button>
-                            <button onclick="event.stopPropagation();state.inlineAddCat=null;renderApp()" style="font-size:.8rem;background:none;border:none;cursor:pointer;color:var(--dim);">×</button>
-                          </div>`;
-                              })()
-                            : ''
-                        }
-                        ${(c.key === 'housing' && state.housingGridMode) || (c.key === 'recurring' && state.recurringGridMode) || (SPENDING_GRID_CATS.includes(c.key) && state.spendingGridCats.includes(c.key)) ? '' : `<button class="bi-add" onclick="event.stopPropagation();${c.hasLines ? `addBudgetItem('${c.key}')` : `quickAddFor('${c.key}')`}">+ add line</button>`}
-                      </div>
-                      ${
-                        c.key === 'groceries' && txs.length > 0
-                          ? (() => {
-                              const bigTotal = txs.reduce(
-                                (sum, tx) =>
-                                  sum + (isBigStore(tx.store || '') ? Number(tx.amount) : 0),
-                                0,
-                              );
-                              const otherTotal = txs.reduce(
-                                (sum, tx) =>
-                                  sum + (!isBigStore(tx.store || '') ? Number(tx.amount) : 0),
-                                0,
-                              );
-                              const bigPct = s > 0 ? Math.round((bigTotal / s) * 100) : 0;
-                              return `<div style="display:flex;gap:.5rem;padding:.4rem .25rem .6rem;border-bottom:1px solid var(--border);margin-bottom:.3rem;">
-                          <div style="flex:1;background:var(--gsoft);border-radius:8px;padding:.4rem .6rem;">
-                            <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);margin-bottom:.1rem;">🏪 Big stores</div>
-                            <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--accent);">${fmt(bigTotal)}</div>
-                            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${bigPct}% of groceries</div>
-                          </div>
-                          <div style="flex:1;background:var(--ambersoft);border-radius:8px;padding:.4rem .6rem;">
-                            <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);margin-bottom:.1rem;">🛒 Other stores</div>
-                            <div style="font-family:'DM Mono',monospace;font-size:.9rem;font-weight:600;color:var(--amber);">${fmt(otherTotal)}</div>
-                            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem;">${100 - bigPct}% of groceries</div>
-                          </div>
-                        </div>`;
-                            })()
-                          : ''
-                      }
-                      ${(() => {
-                        if (
-                          state.spendingGridCats.includes(c.key) &&
-                          SPENDING_GRID_CATS.includes(c.key)
-                        )
-                          return '';
-                        if (txs.length === 0) return '<div class="no-tx">No transactions yet</div>';
-                        const sort = state.txSort || 'newest';
-                        const sorted = [...txs].sort((a, b) => {
-                          if (sort === 'newest')
-                            return (
-                              (new Date(b.created_at) as unknown as number) -
-                              (new Date(a.created_at) as unknown as number)
-                            );
-                          if (sort === 'oldest')
-                            return (
-                              (new Date(a.created_at) as unknown as number) -
-                              (new Date(b.created_at) as unknown as number)
-                            );
-                          if (sort === 'high') return Number(b.amount) - Number(a.amount);
-                          if (sort === 'low') return Number(a.amount) - Number(b.amount);
-                          return 0;
-                        });
-                        const MONS = [
-                          'Jan',
-                          'Feb',
-                          'Mar',
-                          'Apr',
-                          'May',
-                          'Jun',
-                          'Jul',
-                          'Aug',
-                          'Sep',
-                          'Oct',
-                          'Nov',
-                          'Dec',
-                        ];
-                        const fmtDate = (d: string | null): string => {
-                          if (!d) return '—';
-                          const dt = new Date(d + 'T12:00:00');
-                          return dt.getDate() + ' ' + MONS[dt.getMonth()];
-                        };
-                        const esc = (s: string | null | undefined): string =>
-                          (s || '').replace(/"/g, '&quot;').replace(/&/g, '&amp;');
-                        const renderTxRow = (tx: TransactionRow): string => `
-                          <div class="tx-item" data-tx-id="${tx.id}">
-                            <div class="tx-date-wrap" onclick="event.stopPropagation(); this.classList.add('editing'); this.querySelector('.tx-edit-date').focus();">
-                              <span class="tx-date-display">${fmtDate(tx.date)}</span>
-                              <input class="tx-edit-date" type="date" value="${tx.date || ''}" onfocus="this.parentElement.classList.add('editing')" onblur="this.parentElement.classList.remove('editing')" onchange="updateTx('${tx.id}','date',this.value)">
-                            </div>
-                            <input class="tx-edit" type="text" value="${esc(tx.store)}" placeholder="Store" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','store',this.value)">
-                            <input class="tx-edit" type="text" value="${esc(tx.item)}" placeholder="Item" style="font-size:.7rem;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','item',this.value)">
-                            <input class="tx-edit tx-edit-amt" type="number" value="${tx.amount}" min="0" step="0.01" style="font-size:.88rem;font-weight:600;" onclick="event.stopPropagation()" onchange="updateTx('${tx.id}','amount',this.value)">
-                            <button class="tx-del" onclick="event.stopPropagation();deleteTransaction('${tx.id}')" title="Delete">×</button>
-                          </div>`;
-                        const sectionHdr = (emoji: string, label: string, total: number): string =>
-                          `<div style="padding:.25rem .5rem .1rem;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent);border-top:1px solid var(--border);margin-top:.2rem;display:flex;justify-content:space-between;"><span>${emoji} ${label}</span><span style="font-family:'DM Mono',monospace;">${fmt(total)}</span></div>`;
-                        let txRows = '';
-                        if (c.key === 'groceries' && sort === 'type') {
-                          const big = sorted.filter((tx) => isBigStore(tx.store || ''));
-                          const local = sorted.filter((tx) => !isBigStore(tx.store || ''));
-                          const bigAmt = big.reduce((s, tx) => s + Number(tx.amount), 0);
-                          const localAmt = local.reduce((s, tx) => s + Number(tx.amount), 0);
-                          txRows =
-                            (big.length
-                              ? sectionHdr('🏪', 'Big stores', bigAmt) +
-                                big.map(renderTxRow).join('')
-                              : '') +
-                            (local.length
-                              ? sectionHdr('🛒', 'Other stores', localAmt) +
-                                local.map(renderTxRow).join('')
-                              : '');
-                        } else {
-                          txRows = sorted.map(renderTxRow).join('');
-                        }
-                        return `<div class="tx-sort-bar">
-                          <span style="font-size:.62rem;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Sort:</span>
-                          <button class="tx-sort-btn ${sort === 'newest' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('newest')">Newest</button>
-                          <button class="tx-sort-btn ${sort === 'oldest' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('oldest')">Oldest</button>
-                          <button class="tx-sort-btn ${sort === 'high' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('high')">Highest</button>
-                          <button class="tx-sort-btn ${sort === 'low' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('low')">Lowest</button>
-                          ${c.key === 'groceries' ? `<button class="tx-sort-btn ${sort === 'type' ? 'active' : ''}" onclick="event.stopPropagation();setTxSort('type')">By Type</button>` : ''}
-                        </div>
-                        <div class="tx-header"><span>Date</span><span>Store</span><span>Item</span><span style="text-align:right">Amount</span><span></span></div>
-                        ${txRows}`;
-                      })()}
-                    </div>
-                  </div>`;
-                })
-                .join('')}
-              </div>
-            </div>`;
-        }).join('')}
+        ${renderCategoryGroups(current, income, spent)}
 
         ${(() => {
           // B3 — Pending decisions surface (default-collapsed, Budget tab only)
@@ -3555,7 +3545,7 @@ function renderApp() {
         <div style="display:flex;flex-direction:column;gap:.65rem;">
           <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
           <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
-          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${roundZ(bizNetCurrent).toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
+          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${amount(bizNetCurrent)}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
           <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
           <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
         </div>
@@ -5018,12 +5008,7 @@ function renderTravelTab() {
   const totalSpent = ag(payments.reduce((s, p) => s + Number(p.amount), 0));
   const remaining = ag(budget - totalSpent);
 
-  const fmtA = (n: number): string =>
-    '₪' +
-    roundZ(Number(n || 0)).toLocaleString('he-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const fmtA = (n: number): string => shekels(n || 0);
   const esc = (s: string | null | undefined): string => (s || '').replace(/"/g, '&quot;');
 
   const tvSort = localStorage.getItem('travelItemSort') || 'created';
@@ -5803,12 +5788,7 @@ function renderCharityTab() {
   const overTarget = ag(Math.max(0, inSoFar - yearTarget));
   const givingPct = yearTarget > 0 ? Math.min(100, Math.round((inSoFar / yearTarget) * 100)) : 0;
 
-  const fmtA = (n: number): string =>
-    '₪' +
-    roundZ(Number(n || 0)).toLocaleString('he-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const fmtA = (n: number): string => shekels(n || 0);
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute payment log HTML
@@ -6110,12 +6090,7 @@ function renderAdminTab() {
   // Remaining = budget − spent. Money-in is a funding source for the Gap, not a spend offset.
   const remaining = ag(budget - totalSpent);
 
-  const fmtA = (n: number): string =>
-    '₪' +
-    roundZ(Number(n || 0)).toLocaleString('he-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const fmtA = (n: number): string => shekels(n || 0);
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   // Pre-compute sort buttons HTML
@@ -6727,12 +6702,7 @@ function renderMoneyInCard(): string {
     'Nov',
     'Dec',
   ];
-  const fmtA = (n: number): string =>
-    '₪' +
-    roundZ(Number(n || 0)).toLocaleString('he-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const fmtA = (n: number): string => shekels(n || 0);
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
 
   const credits = (state.admin.credits || []) as AdminCreditRow[];
@@ -7746,11 +7716,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
 
 function renderCashTab(): string {
   const accounts = state.cashAccounts || [];
-  const n = (v: number | null | undefined): string =>
-    roundZ(Number(v || 0)).toLocaleString('en-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const n = (v: number | null | undefined): string => amount(Number(v || 0));
 
   // Split into holdings vs owed
   const holdings = accounts.filter((a) => !a.is_owed);
@@ -8034,8 +8000,7 @@ function renderYearSnapshot(): string {
     (Number(m.income_other) || 0) +
     incItemsTotalFor(m.id);
 
-  const fmtY = (n: number): string =>
-    !n ? '\u2014' : '\u20aa' + roundZ(n).toLocaleString('en-US');
+  const fmtY = (n: number): string => shekelsOrDash(n);
   const fmtPct = (n: number): string => (n ? Math.round(n * 100) + '%' : '');
 
   // Helper: budget item total for a month (mirrors catBudget logic but for year data)
@@ -8388,7 +8353,7 @@ function renderYearSnapshot(): string {
   const adminGap = ag(totalAdminGross - totalAdminAlloc - creditsTotal());
 
   // Format: always show ₪0 instead of dashes
-  const fmtYZ = (n: number): string => '\u20aa' + roundZ(n).toLocaleString('en-US');
+  const fmtYZ = (n: number): string => shekels(n);
 
   // Summary ribbon ABOVE the table
   const summaryHtml =
@@ -8468,7 +8433,7 @@ function renderYearSnapshot(): string {
       if (row.type === 'section') {
         const collapsed = row.collapsible && startCollapsed.includes(row.collapsible);
         const chevron = row.collapsible
-          ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;cursor:pointer;">' +
+          ? '<span class="sn-chev" style="margin-right:.35rem;cursor:pointer;">' +
             (collapsed ? '▶' : '▼') +
             '</span>'
           : '';
@@ -8577,7 +8542,7 @@ function renderYearSnapshot(): string {
       const pct = showPct && totalAnnInc ? fmtPct(total / totalAnnInc) : '';
       // Expandable row: add chevron + click handler
       const labelHtml = row.expandable
-        ? '<span class="sn-chev" style="font-size:.55rem;margin-right:.35rem;color:var(--muted);cursor:pointer;">▶</span>' +
+        ? '<span class="sn-chev" style="margin-right:.35rem;color:var(--muted);cursor:pointer;">▶</span>' +
           row.label
         : row.label;
       const expandAttr = row.expandable
@@ -8614,14 +8579,14 @@ function renderYearSnapshot(): string {
   const toggleHtml =
     '<div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;">' +
     '<span style="font-size:.72rem;color:var(--dim);">View:</span>' +
-    "<button onclick=\"localStorage.setItem('yearViewMode','projected');renderApp()\" style=\"font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid " +
+    '<button class="yr-pillbtn" onclick="localStorage.setItem(\'yearViewMode\',\'projected\');renderApp()" style="border-radius:20px;border:1px solid ' +
     (showProjected ? 'var(--accent)' : 'var(--border)') +
     ';background:' +
     (showProjected ? 'var(--accent)' : 'none') +
     ';color:' +
     (showProjected ? '#fff' : 'var(--dim)') +
     ";cursor:pointer;font-family:'DM Sans',sans-serif;\">Full Year (Projected)</button>" +
-    "<button onclick=\"localStorage.setItem('yearViewMode','actual');renderApp()\" style=\"font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid " +
+    '<button class="yr-pillbtn" onclick="localStorage.setItem(\'yearViewMode\',\'actual\');renderApp()" style="border-radius:20px;border:1px solid ' +
     (!showProjected ? 'var(--accent)' : 'var(--border)') +
     ';background:' +
     (!showProjected ? 'var(--accent)' : 'none') +
@@ -8629,8 +8594,8 @@ function renderYearSnapshot(): string {
     (!showProjected ? '#fff' : 'var(--dim)') +
     ";cursor:pointer;font-family:'DM Sans',sans-serif;\">Actual Only</button>" +
     '<span style="margin-left:auto;"></span>' +
-    '<button class="yr-table-only" onclick="yrCollapseAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
-    '<button class="yr-table-only" onclick="yrExpandAll()" style="font-size:.72rem;padding:.25rem .65rem;border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
+    '<button class="yr-table-only yr-pillbtn" onclick="yrCollapseAll()" style="border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊟ Collapse All</button>' +
+    '<button class="yr-table-only yr-pillbtn" onclick="yrExpandAll()" style="border-radius:20px;border:1px solid var(--border);background:none;color:var(--dim);cursor:pointer;font-family:\'DM Sans\',sans-serif;">⊞ Expand All</button>' +
     '</div>';
   // Mobile-only Month ⇄ Full Year toggle. Lives in its own .ym-modetoggle block
   // OUTSIDE .year-mobile / .year-table-wrap so it stays visible in BOTH modes.
@@ -8857,13 +8822,7 @@ function openSnapshot(): void {
   const remainingInBudget = ag(totalBudgeted - totalSpent);
   void remainingInBudget; // used in template literal below
 
-  const n = (v: number | null | undefined): string =>
-    v == null
-      ? ''
-      : roundZ(Number(v)).toLocaleString('en-IL', {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 0,
-        });
+  const n = (v: number | null | undefined): string => (v == null ? '' : amount(Number(v)));
 
   const groupRows = CATEGORY_GROUPS.map((group) => {
     const cats = group.keys
@@ -8900,7 +8859,7 @@ function openSnapshot(): void {
       return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b || s ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
-        <td data-label="Category"><span class="sn-chev" style="font-size:.65rem;margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
+        <td data-label="Category"><span class="sn-chev" style="margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
         <td data-label="Budget">${gb ? n(gb) : ''}</td>
         <td data-label="Spent">${n(gs)}</td>
         <td data-label="Remaining" class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
@@ -9322,8 +9281,7 @@ function buildWeeklyDigest(rows: unknown[]): string {
     day: 'numeric',
     month: 'short',
   });
-  const fmtAmt = (n: number): string =>
-    '₪' + roundZ(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
+  const fmtAmt = (n: number): string => shekels(n);
   const parts = [];
   if (txAdds > 0) parts.push(`<strong>${txAdds}</strong> tx added (${fmtAmt(txAddSum)})`);
   if (txDeletes > 0) parts.push(`<strong>${txDeletes}</strong> deleted`);
@@ -9798,11 +9756,7 @@ async function runSearch(query: string): Promise<void> {
     byCat[t.category].count++;
   });
 
-  const n = (v: number): string =>
-    roundZ(Number(v)).toLocaleString('en-IL', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+  const n = (v: number): string => amount(Number(v));
 
   let html = '';
 
@@ -10738,6 +10692,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   addTravelPaymentCat,
   addTravelSub,
   ag,
+  dismissNextAction,
+  jumpToCategories,
   anyPanelOpen,
   applyNumericInputModes,
   applyRibbonHeight,
