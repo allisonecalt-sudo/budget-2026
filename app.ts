@@ -26,6 +26,16 @@ function byId(id: string): HTMLInputElement {
   return document.getElementById(id) as HTMLInputElement;
 }
 
+// Round to whole shekels for display, collapsing negative zero to 0. Math.round
+// of anything in (-0.5, 0) yields -0, which toLocaleString prints as "-0" — a
+// rounding crumb that reads as a real deficit. Every money formatter and every
+// pos/neg color decision must go through this so the number shown and the color
+// shown agree.
+function roundZ(n: number): number {
+  const r = Math.round(Number(n) || 0);
+  return r === 0 ? 0 : r;
+}
+
 const SB_URL = 'https://hpiyvnfhoqnnnotrmwaz.supabase.co';
 const SB_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwaXl2bmZob3Fubm5vdHJtd2F6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0NzIwNDEsImV4cCI6MjA4ODA0ODA0MX0.AsGhYitkSnyVMwpJII05UseS_gICaXiCy7d8iHsr6Qw';
@@ -35,8 +45,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v33';
-const BUILD_DATE = 'Aug 3, 2026 23:00';
+const APP_VERSION = 'v34';
+const BUILD_DATE = 'Sep 16, 2026 09:45';
 
 const MONTHS = [
   'January',
@@ -7998,7 +8008,7 @@ function renderYearSnapshot(): string {
     incItemsTotalFor(m.id);
 
   const fmtY = (n: number): string =>
-    !n ? '\u2014' : '\u20aa' + Math.round(n).toLocaleString('en-US');
+    !n ? '\u2014' : '\u20aa' + roundZ(n).toLocaleString('en-US');
   const fmtPct = (n: number): string => (n ? Math.round(n * 100) + '%' : '');
 
   // Helper: budget item total for a month (mirrors catBudget logic but for year data)
@@ -8351,7 +8361,7 @@ function renderYearSnapshot(): string {
   const adminGap = ag(totalAdminGross - totalAdminAlloc - creditsTotal());
 
   // Format: always show ₪0 instead of dashes
-  const fmtYZ = (n: number): string => '\u20aa' + Math.round(n || 0).toLocaleString('en-US');
+  const fmtYZ = (n: number): string => '\u20aa' + roundZ(n).toLocaleString('en-US');
 
   // Summary ribbon ABOVE the table
   const summaryHtml =
@@ -8514,13 +8524,24 @@ function renderYearSnapshot(): string {
           let cls = 'year-cell';
           if (m.month_num > todayMonth) cls += ' future';
           if (m.month_num === todayMonth) cls += ' current-col';
-          if (row.type === 'net') cls += v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '';
+          // Color off the ROUNDED value so the tint always matches the printed
+          // number — a ₪0.40 crumb shows "₪0" and must not be tinted at all.
+          if (row.type === 'net') {
+            const rv = roundZ(v);
+            cls += rv > 0 ? ' net-pos' : rv < 0 ? ' net-neg' : '';
+          }
           return '<td class="' + cls + '">' + fmtYZ(v) + '</td>';
         })
         .join('');
       const totCls =
         'year-cell-extra' +
-        (row.type === 'net' ? (total > 0 ? ' net-pos' : total < 0 ? ' net-neg' : '') : '');
+        (row.type === 'net'
+          ? roundZ(total) > 0
+            ? ' net-pos'
+            : roundZ(total) < 0
+              ? ' net-neg'
+              : ''
+          : '');
       const showPct =
         row.type !== 'section' &&
         row.label !== 'Total Income' &&
@@ -8722,7 +8743,7 @@ function renderYearSnapshot(): string {
     let cls = 'ym-row';
     if (row.type === 'sub') cls += ' ym-row-sub';
     else if (row.type === 'net') {
-      const v = item.values![selIdx];
+      const v = roundZ(item.values![selIdx]);
       cls += ' ym-row-net' + (v > 0 ? ' net-pos' : v < 0 ? ' net-neg' : '');
     } else if (row.bold) cls += ' ym-row-bold';
     mobileRows +=
@@ -9272,7 +9293,7 @@ function buildWeeklyDigest(rows: unknown[]): string {
     month: 'short',
   });
   const fmtAmt = (n: number): string =>
-    '₪' + Math.round(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
+    '₪' + roundZ(n).toLocaleString('he-IL', { maximumFractionDigits: 0 });
   const parts = [];
   if (txAdds > 0) parts.push(`<strong>${txAdds}</strong> tx added (${fmtAmt(txAddSum)})`);
   if (txDeletes > 0) parts.push(`<strong>${txDeletes}</strong> deleted`);
