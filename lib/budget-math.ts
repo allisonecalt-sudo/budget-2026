@@ -10,9 +10,9 @@
 //   - Behaviour is preserved EXACTLY as it was inline in app.ts. This extraction
 //     is a move, not a rewrite; any behaviour change here is a bug.
 //   - DOM-free and Supabase-free, so it runs under plain `node:test`.
-// What's built: ag, pct, status, creditOccurrences.
-// What's next: `creditTotal` and `creditsForCategory` still live in app.ts —
-//   creditTotal is trivially liftable, creditsForCategory reads module state.
+// What's built: ag, pct, status, creditOccurrences, creditTotal.
+// What's next: `creditsForCategory` still lives in app.ts because it reads
+//   module-level state; it would need that state passed in to move here.
 // Links: consumed by app.ts; pinned by tests/budget-math.test.mjs.
 
 /**
@@ -71,4 +71,13 @@ export function creditOccurrences(row: {
   const span = e - s + 1;
   if (span <= 1) return 1;
   return Math.min(12, span);
+}
+
+/** Total money a credit row brings in = per-occurrence amount x occurrences. */
+export function creditTotal(row: {
+  amount?: number | null;
+  month_start?: number | null;
+  month_end?: number | null;
+}): number {
+  return ag((Number(row.amount) || 0) * creditOccurrences(row));
 }

@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // required so the emitted dist/app.js resolves the sibling module in the browser.
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
-import { ag, pct, status, creditOccurrences } from './lib/budget-math.js';
+import { ag, pct, status, creditOccurrences, creditTotal } from './lib/budget-math.js';
 
 declare global {
   interface Window {
@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v36';
-const BUILD_DATE = 'Sep 16, 2026 10:40';
+const APP_VERSION = 'v37';
+const BUILD_DATE = 'Sep 16, 2026 12:30';
 
 const MONTHS = [
   'January',
@@ -644,14 +644,6 @@ function jumpToCategories(): void {
 }
 
 // Total money a credit row brings in = per-occurrence amount × occurrences.
-function creditTotal(row: {
-  amount?: number | null;
-  month_start?: number | null;
-  month_end?: number | null;
-}): number {
-  return ag((Number(row.amount) || 0) * creditOccurrences(row));
-}
-
 // Sum of credit totals for one admin category. Optional filters narrow to
 // received-only (cash actually in) or expected-only (not yet received).
 function creditsForCategory(
@@ -1501,7 +1493,7 @@ function renderSpendingGrid(catKey: string): string {
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-            (v > 0 ? 'var(--text)' : 'var(--border)') +
+            (roundZ(v) > 0 ? 'var(--text)' : 'var(--border)') +
             ';background:' +
             (isCur ? 'var(--asoft)' : 'transparent') +
             ";font-family:'DM Mono',monospace;\">" +
@@ -1519,7 +1511,7 @@ function renderSpendingGrid(catKey: string): string {
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-            (v > 0 ? 'var(--accent)' : 'var(--border)') +
+            (roundZ(v) > 0 ? 'var(--accent)' : 'var(--border)') +
             ';background:' +
             (isCur ? 'var(--asoft)' : 'transparent') +
             ";font-family:'DM Mono',monospace;\">" +
@@ -1566,7 +1558,7 @@ function renderSpendingGrid(catKey: string): string {
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-            (v > 0 ? 'var(--text)' : 'var(--border)') +
+            (roundZ(v) > 0 ? 'var(--text)' : 'var(--border)') +
             ';background:' +
             (isCur ? 'var(--asoft)' : 'transparent') +
             ";font-family:'DM Mono',monospace;\">" +
@@ -1584,7 +1576,7 @@ function renderSpendingGrid(catKey: string): string {
           const isCur = m.month_num === today;
           return (
             '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-            (v > 0 ? 'var(--accent)' : 'var(--border)') +
+            (roundZ(v) > 0 ? 'var(--accent)' : 'var(--border)') +
             ';background:' +
             (isCur ? 'var(--asoft)' : 'transparent') +
             ";font-family:'DM Mono',monospace;\">" +
@@ -1675,7 +1667,7 @@ function renderSpendingGrid(catKey: string): string {
         const isCur = m.month_num === today;
         return (
           '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-          (v > 0 ? 'var(--accent)' : 'var(--border)') +
+          (roundZ(v) > 0 ? 'var(--accent)' : 'var(--border)') +
           ';background:' +
           (isCur ? 'var(--asoft)' : 'transparent') +
           ";font-family:'DM Mono',monospace;\">" +
@@ -1695,7 +1687,7 @@ function renderSpendingGrid(catKey: string): string {
         const isCur = m.month_num === today;
         return (
           '<td style="text-align:right;padding:.25rem .4rem;font-size:.75rem;color:' +
-          (v > 0 ? 'var(--text)' : 'var(--border)') +
+          (roundZ(v) > 0 ? 'var(--text)' : 'var(--border)') +
           ';background:' +
           (isCur ? 'var(--asoft)' : 'transparent') +
           ";font-family:'DM Mono',monospace;\">" +
@@ -1759,7 +1751,7 @@ function showLtsPop(el: HTMLElement): void {
       (r) =>
         `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.2rem 0;font-size:.8rem;">
           <span style="color:var(--text);">${r.c.emoji} ${r.c.label}</span>
-          <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${r.left >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600;">${f(r.left)} ${r.left >= 0 ? 'left' : 'over'}</span>
+          <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${roundZ(r.left) >= 0 ? 'var(--green)' : 'var(--red)'};font-weight:600;">${f(r.left)} ${roundZ(r.left) >= 0 ? 'left' : 'over'}</span>
         </div>`,
     )
     .join('');
@@ -2579,9 +2571,9 @@ function renderRibbon(
 
   return `<div class="ribbon-panel">
     <div class="ribbon">
-      <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${Math.round(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(leftToBudget) === 0 ? 0 : leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
-      <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${Math.round(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(income - totalSpent) === 0 ? 0 : income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
-      <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${Math.round(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(Math.round(remainingInBudget) === 0 ? 0 : remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
+      <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${roundZ(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
+      <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${roundZ(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
+      <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${roundZ(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
       <div class="ribbon-datapoints">
         <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
         <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
@@ -2624,14 +2616,14 @@ function renderRibbon(
         return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
           <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
             <button class="owed-chev" onclick="toggleOwedStrip()" title="${owedOpen ? 'Hide' : 'Show'} owed elsewhere" aria-label="${owedOpen ? 'Hide' : 'Show'} owed">${chev}</button>
-            <span style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
+            <span style="color:${roundZ(totalOwed) > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
           </div>
           <div class="owed-segments" style="display:${owedOpen ? 'flex' : 'none'};gap:.55rem;align-items:center;flex-wrap:wrap;margin-top:.15rem;">
             ${seg('✈️', tGap, 'travel', 'Travel gap')}
             <span class="owed-sep">·</span>
             ${seg('📋', aGap, 'admin', 'Admin gap')}
           </div>
-          ${!owedOpen ? `<div class="ribbon-val" style="color:${totalOwed > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
+          ${!owedOpen ? `<div class="ribbon-val" style="color:${roundZ(totalOwed) > 0 ? 'var(--red)' : 'var(--green)'};">${totalOwed > 0 ? fmt(totalOwed) : totalOwed < 0 ? '+' + fmt(-totalOwed) : fmt(0)}</div>` : ''}
         </div>`;
       })()}
       <div style="display:flex;gap:.3rem;margin-left:.75rem;flex-shrink:0;">
@@ -2671,7 +2663,7 @@ function renderRibbon(
     </div>`
         : ''
     }
-    <div class="ribbon-drag-handle" id="ribbon-drag" onmousedown="startRibbonDrag(event)"></div>
+    <div class="ribbon-drag-handle" id="ribbon-drag" onpointerdown="startRibbonDrag(event)" ondblclick="resetRibbonHeight()" title="Drag to resize · double-tap to reset" role="separator" aria-label="Resize summary"></div>
   </div>
   ${leisureSubRibbon}
   ${renderNextAction(leftToBudget)}`;
@@ -3545,7 +3537,7 @@ function renderApp() {
         <div style="display:flex;flex-direction:column;gap:.65rem;">
           <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
           <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
-          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${bizNetCurrent < 0 ? 'var(--red)' : 'var(--text)'};">₪${amount(bizNetCurrent)}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
+          <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${roundZ(bizNetCurrent) < 0 ? 'var(--red)' : 'var(--text)'};">₪${amount(bizNetCurrent)}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
           <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
           <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
         </div>
@@ -5455,7 +5447,7 @@ function renderTravelTab() {
                         : '') +
                       '<span style="flex:1;"></span>' +
                       "<span style=\"font-family:'DM Mono',monospace;font-size:.78rem;color:" +
-                      (catTotal > 0 ? 'var(--text)' : 'var(--dim)') +
+                      (roundZ(catTotal) > 0 ? 'var(--text)' : 'var(--dim)') +
                       ';">' +
                       fmtA(catTotal) +
                       '</span>' +
@@ -5611,9 +5603,9 @@ function renderTravelTab() {
     );
   }).join('');
 
-  const gapColor = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const gapColor = roundZ(gap) > 0 ? 'var(--red)' : 'var(--green)';
   const gapText = gap > 0 ? '(−' + fmtA(gap) + ' gap)' : '✓';
-  const allocTotalColor = gap > 0 ? 'var(--red)' : 'var(--green)';
+  const allocTotalColor = roundZ(gap) > 0 ? 'var(--red)' : 'var(--green)';
 
   const sortBtnsHtml = [
     ['created', 'Added'],
@@ -5651,7 +5643,7 @@ function renderTravelTab() {
     </div>
     <!-- Story line — the whole tab in one sentence -->
     <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
-      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside → ${gap > 0 ? `<span>${fmtA(gap)} still to set aside</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
+      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside → ${roundZ(gap) > 0 ? `<span>${fmtA(gap)} still to set aside</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
     </div>
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
@@ -5675,10 +5667,10 @@ function renderTravelTab() {
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
       </div>
-      <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'left to spend'}</div>
+      <div style="background:var(--surface);border:1px solid ${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${roundZ(remaining) < 0 ? 'over budget' : 'left to spend'}</div>
       </div>
     </div>
 
@@ -5994,7 +5986,7 @@ function renderCharityTab() {
         <div>
           <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem;">Still to go</div>
           <div style="font-family:'DM Mono',monospace;font-size:2rem;font-weight:600;color:var(--accent);line-height:1;">${fmtA(stillToGo)}</div>
-          <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">${overTarget > 0 ? `<span style="color:var(--green);font-weight:600;">target reached · +${fmtA(overTarget)} extra given</span>` : 'left to give this year'}</div>
+          <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">${roundZ(overTarget) > 0 ? `<span style="color:var(--green);font-weight:600;">target reached · +${fmtA(overTarget)} extra given</span>` : 'left to give this year'}</div>
         </div>
       </div>
       <!-- Progress: in so far, out of the year target -->
@@ -6184,7 +6176,7 @@ function renderAdminTab() {
     const rowOpacity = item.is_logged ? 'opacity:.55;' : '';
     const strikeLabel = item.is_logged ? 'text-decoration:line-through;' : '';
     const amtColor =
-      paidTotal > 0 ? 'var(--muted)' : item.is_estimate ? 'var(--amber)' : 'var(--text)';
+      roundZ(paidTotal) > 0 ? 'var(--muted)' : item.is_estimate ? 'var(--amber)' : 'var(--text)';
     const estBg = item.is_estimate ? 'var(--ambersoft, #fff8e1)' : 'none';
     const estBorder = item.is_estimate ? 'var(--amber)' : 'var(--border)';
     const estColor = item.is_estimate ? 'var(--amber)' : 'var(--dim)';
@@ -6442,7 +6434,7 @@ function renderAdminTab() {
     </div>
     <!-- Story line — the whole tab in one sentence -->
     <div style="font-size:.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:.75rem;">
-      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside${creditAll > 0 ? ` + ${fmtA(creditAll)} money in` : ''} → ${kpiGap > 0 ? `<span>${fmtA(kpiGap)} still to find</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
+      ${fmtA(budget)} projected → ${fmtA(totalAlloc)} set aside${roundZ(creditAll) > 0 ? ` + ${fmtA(creditAll)} money in` : ''} → ${roundZ(kpiGap) > 0 ? `<span>${fmtA(kpiGap)} still to find</span>` : `<strong style="color:var(--green);">covered ✓</strong>`}
     </div>
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
@@ -6458,7 +6450,7 @@ function renderAdminTab() {
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(kpiGap))}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(kpiGap) > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(Math.abs(kpiGap))}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${kpiGap > 0 ? 'still need to find' : kpiGap < 0 ? 'over-covered · surplus' : 'fully covered ✓'}${creditAll > 0 ? ` · after +${fmtA(creditAll)} money in` : ''}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
@@ -6466,10 +6458,10 @@ function renderAdminTab() {
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
       </div>
-      <div style="background:var(--surface);border:1px solid ${remaining < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${remaining < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${remaining < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'not yet spent'}</div>
+      <div style="background:var(--surface);border:1px solid ${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
+        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
+        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'not yet spent'}</div>
       </div>
     </div>
 
@@ -6580,7 +6572,7 @@ function renderAdminTab() {
           </div>
           <div style="margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;">
             <span style="font-size:.72rem;font-weight:700;color:var(--muted);">Total allocated</span>
-            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${kpiGap > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + (creditAll > 0 ? ' gap after money in)' : ' gap)') : kpiGap < 0 ? '(+' + fmtA(-kpiGap) + (creditAll > 0 ? ' over after money in) ✓' : ' over) ✓') : '✓'}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:.85rem;font-weight:600;color:${roundZ(kpiGap) > 0 ? 'var(--red)' : 'var(--green)'};">${fmtA(totalAlloc)} ${kpiGap > 0 ? '(−' + fmtA(kpiGap) + (creditAll > 0 ? ' gap after money in)' : ' gap)') : kpiGap < 0 ? '(+' + fmtA(-kpiGap) + (creditAll > 0 ? ' over after money in) ✓' : ' over) ✓') : '✓'}</span>
           </div>
         </div>
 
@@ -7511,25 +7503,82 @@ window.addEventListener(
   { passive: true },
 );
 
-function startRibbonDrag(e: MouseEvent): void {
+// ── Ribbon resize ────────────────────────────────────────────────────
+// Drag the handle under the ribbon to make the summary taller or shorter.
+//
+// POINTER events, not mouse events. The original implementation listened for
+// mousedown/mousemove only, which meant the handle did nothing at all on a
+// phone — the feature existed but was unreachable on the device the app is
+// mostly used on. Pointer events cover mouse, touch and pen in one path.
+//
+// Height is capped at 80% of the viewport so the ribbon can never swallow the
+// screen and hide the thing it is summarising.
+const RIBBON_MIN_H = 40;
+function ribbonMaxH(): number {
+  return Math.round(window.innerHeight * 0.8);
+}
+
+function startRibbonDrag(e: PointerEvent): void {
   e.preventDefault();
   const panel = document.querySelector('.ribbon-panel') as HTMLElement;
   if (!panel) return;
+  const handle = e.currentTarget as HTMLElement | null;
   const startY = e.clientY;
   const startH = panel.offsetHeight;
-  const minH = 40;
-  function onMove(ev: MouseEvent): void {
-    const newH = Math.max(minH, startH + (ev.clientY - startY));
+
+  // Capture the pointer so the drag keeps tracking even when the finger slides
+  // off the 12px handle — without this a touch drag dies almost immediately.
+  try {
+    handle?.setPointerCapture(e.pointerId);
+  } catch {
+    // Older engines without pointer capture still work via the document
+    // listeners below; the drag is just slightly less forgiving.
+  }
+  handle?.classList.add('dragging');
+
+  function onMove(ev: PointerEvent): void {
+    const newH = Math.min(ribbonMaxH(), Math.max(RIBBON_MIN_H, startH + (ev.clientY - startY)));
     panel.style.maxHeight = newH + 'px';
     panel.style.overflow = 'hidden auto';
-    localStorage.setItem('ribbonHeight', newH as unknown as string);
+    try {
+      localStorage.setItem('ribbonHeight', String(newH));
+    } catch {
+      // Height just won't persist to the next load. Not worth interrupting.
+    }
   }
-  function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+  function onUp(ev: PointerEvent): void {
+    handle?.classList.remove('dragging');
+    try {
+      handle?.releasePointerCapture(ev.pointerId);
+    } catch {
+      // Nothing to release.
+    }
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
   }
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+  // A touch drag interrupted by the system (a call, a gesture) fires
+  // pointercancel rather than pointerup; without this the listeners leak.
+  document.addEventListener('pointercancel', onUp);
+}
+
+// Double-tap / double-click the handle to forget a dragged height and go back
+// to the natural size. Without an escape hatch, a ribbon dragged down to 40px
+// stays that way with no obvious way back.
+function resetRibbonHeight(): void {
+  const panel = document.querySelector('.ribbon-panel') as HTMLElement;
+  if (panel) {
+    panel.style.maxHeight = '';
+    panel.style.overflow = '';
+  }
+  try {
+    localStorage.removeItem('ribbonHeight');
+  } catch {
+    // Nothing to remove.
+  }
+  toast('Ribbon size reset');
 }
 
 function applyRibbonHeight() {
@@ -7537,7 +7586,10 @@ function applyRibbonHeight() {
   if (h) {
     const panel = document.querySelector('.ribbon-panel') as HTMLElement;
     if (panel) {
-      panel.style.maxHeight = h + 'px';
+      // Re-clamp on load: a height saved on a big screen must not swallow a
+      // small one (or a rotated phone).
+      const clamped = Math.min(ribbonMaxH(), Math.max(RIBBON_MIN_H, Number(h) || RIBBON_MIN_H));
+      panel.style.maxHeight = clamped + 'px';
       panel.style.overflow = 'hidden auto';
     }
   }
@@ -8379,7 +8431,7 @@ function renderYearSnapshot(): string {
     '<span class="yr-stat">✈️ Proj ' +
     fmtY(totalTravelProjected) +
     ' · <span style="color:' +
-    (travelGap > 0 ? 'var(--red)' : 'var(--green)') +
+    (roundZ(travelGap) > 0 ? 'var(--red)' : 'var(--green)') +
     '">' +
     fmtY(Math.abs(travelGap)) +
     ' ' +
@@ -8389,7 +8441,7 @@ function renderYearSnapshot(): string {
     '<span class="yr-stat">📋 Proj ' +
     fmtY(totalAdminProjected) +
     ' · <span style="color:' +
-    (adminGap > 0 ? 'var(--red)' : 'var(--green)') +
+    (roundZ(adminGap) > 0 ? 'var(--red)' : 'var(--green)') +
     '">' +
     fmtY(Math.abs(adminGap)) +
     ' ' +
@@ -8481,7 +8533,7 @@ function renderYearSnapshot(): string {
             if (m.month_num > todayMonth) cls += ' future';
             if (m.month_num === todayMonth) cls += ' current-col';
             const pctStr = (v * 100).toFixed(1) + '%';
-            const color = v >= 0.05 ? 'var(--green)' : v > 0 ? 'var(--accent)' : '';
+            const color = v >= 0.05 ? 'var(--green)' : roundZ(v) > 0 ? 'var(--accent)' : '';
             return (
               '<td class="' +
               cls +
@@ -8700,7 +8752,7 @@ function renderYearSnapshot(): string {
     '<div class="ym-annual-cell"><span class="ym-al">\u2708\uFE0F Travel proj / gap</span><span class="ym-av">' +
     fmtY(totalTravelProjected) +
     ' \u00B7 <span style="color:' +
-    (travelGap > 0 ? 'var(--red)' : 'var(--green)') +
+    (roundZ(travelGap) > 0 ? 'var(--red)' : 'var(--green)') +
     '">' +
     fmtY(Math.abs(travelGap)) +
     ' ' +
@@ -8709,7 +8761,7 @@ function renderYearSnapshot(): string {
     '<div class="ym-annual-cell"><span class="ym-al">\u{1F4CB} Admin proj / gap</span><span class="ym-av">' +
     fmtY(totalAdminProjected) +
     ' \u00B7 <span style="color:' +
-    (adminGap > 0 ? 'var(--red)' : 'var(--green)') +
+    (roundZ(adminGap) > 0 ? 'var(--red)' : 'var(--green)') +
     '">' +
     fmtY(Math.abs(adminGap)) +
     ' ' +
@@ -10694,6 +10746,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   ag,
   dismissNextAction,
   jumpToCategories,
+  resetRibbonHeight,
   anyPanelOpen,
   applyNumericInputModes,
   applyRibbonHeight,

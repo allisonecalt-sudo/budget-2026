@@ -197,23 +197,45 @@ textarea {
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+/* Grab handle for resizing the ribbon. `touch-action: none` is REQUIRED —
+   without it the browser claims the vertical gesture for page scrolling and the
+   drag never starts on a phone. */
 .ribbon-drag-handle {
-  height: 8px;
+  height: 12px;
   cursor: ns-resize;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .ribbon-drag-handle::after {
   content: '';
   display: block;
   width: 36px;
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
   background: var(--border);
+  transition: background 0.12s ease;
 }
-.ribbon-drag-handle:hover::after {
+.ribbon-drag-handle:hover::after,
+.ribbon-drag-handle.dragging::after {
   background: var(--muted);
+}
+.ribbon-drag-handle.dragging::after {
+  width: 52px;
+}
+@media (max-width: 600px) {
+  /* A thumb needs a real target. The bar stays visually slim; the padding
+     around it is what actually gets grabbed. */
+  .ribbon-drag-handle {
+    height: 28px;
+  }
+  .ribbon-drag-handle::after {
+    width: 44px;
+    height: 5px;
+  }
 }
 .ribbon {
   display: flex;

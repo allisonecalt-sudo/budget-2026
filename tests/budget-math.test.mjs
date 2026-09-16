@@ -8,8 +8,8 @@
 //   cheaply and exactly.
 // What's decided: runs against the COMPILED module (dist/lib/budget-math.js), so
 //   `npm run build` must run first. Uses Node's built-in `node:test` — zero deps.
-// What's next: `creditTotal` is trivially liftable into lib/ and should join
-//   these once it moves.
+// What's next: `creditsForCategory` is the last piece still in app.ts — it
+//   reads module-level state, so moving it means passing that state in.
 // Links: lib/budget-math.ts (source), app.ts (consumer), tests/money.test.mjs.
 
 import { test } from 'node:test';
@@ -26,7 +26,9 @@ assert.ok(
   'dist/lib/budget-math.js is missing — run `npm run build` before the unit tests.',
 );
 
-const { ag, pct, status, creditOccurrences } = await import(pathToFileURL(compiled).href);
+const { ag, pct, status, creditOccurrences, creditTotal } = await import(
+  pathToFileURL(compiled).href
+);
 
 // ── ag: float drift ───────────────────────────────────────────────────────
 test('ag kills binary-float drift at sum boundaries', () => {
@@ -96,4 +98,20 @@ test('creditOccurrences: a month range counts inclusively', () => {
 test('creditOccurrences: a fat-fingered range cannot blow up a total', () => {
   assert.equal(creditOccurrences({ month_start: 1, month_end: 99 }), 12, 'clamped to 12');
   assert.equal(creditOccurrences({ month_start: 9, month_end: 2 }), 1, 'end before start');
+});
+
+// ── creditTotal: amount x occurrences ─────────────────────────────────────
+test('creditTotal multiplies the per-occurrence amount by the occurrences', () => {
+  assert.equal(creditTotal({ amount: 100 }), 100, 'a one-off lands once');
+  assert.equal(creditTotal({ amount: 100, month_start: 1, month_end: 3 }), 300);
+  assert.equal(creditTotal({ amount: 250, month_start: 1, month_end: 12 }), 3000);
+  assert.equal(creditTotal({ amount: 100, month_start: 1, month_end: 99 }), 1200, 'clamped to 12');
+});
+
+test('creditTotal treats a missing amount as zero, and stays float-safe', () => {
+  assert.equal(creditTotal({}), 0);
+  assert.equal(creditTotal({ amount: null }), 0);
+  assert.equal(creditTotal({ amount: 'abc' }), 0);
+  // 0.1 * 3 is 0.30000000000000004 raw; ag() inside creditTotal snaps it.
+  assert.equal(creditTotal({ amount: 0.1, month_start: 1, month_end: 3 }), 0.3);
 });
