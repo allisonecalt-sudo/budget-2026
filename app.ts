@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v37';
-const BUILD_DATE = 'Sep 16, 2026 12:30';
+const APP_VERSION = 'v38';
+const BUILD_DATE = 'Sep 16, 2026 12:35';
 
 const MONTHS = [
   'January',
@@ -1809,6 +1809,149 @@ function toggleLtsPop(el: HTMLElement): void {
   showLtsPop(el);
 }
 
+// ── "Saved" → the year behind the month ──────────────────────────────
+// The ribbon's Saved datapoint only ever showed THIS month. Hovering (desktop)
+// or tapping (phone) it now opens the year: saved so far, projected full year,
+// and the month-by-month behind both numbers.
+//
+// The monthly figures live in the `budgets` table under savings_bank /
+// savings_invested. The Year tab loads them into state.yearData, but the Budget
+// tab may never have been there — so this fetches once and caches, rather than
+// showing a wrong number or an empty panel.
+let savedHideTimer: ReturnType<typeof setTimeout> | null = null;
+let _savedYearCache: { year: number; rows: Record<string, Record<string, number>> } | null = null;
+
+async function savedYearBudgets(): Promise<Record<string, Record<string, number>>> {
+  if (_savedYearCache && _savedYearCache.year === state.currentYear) return _savedYearCache.rows;
+  // Prefer what the Year tab already loaded — no second round trip.
+  const pre = state.yearData?.allBudgets;
+  const map: Record<string, Record<string, number>> = {};
+  const ids = state.months.map((m) => m.id);
+  let rows = pre as { month_id: string; category: string; amount: number }[] | undefined;
+  if (!rows || !rows.length) {
+    const { data } = await sb
+      .from('budgets')
+      .select('month_id,category,amount')
+      .in('month_id', ids)
+      .in('category', ['savings_bank', 'savings_invested']);
+    rows = data || [];
+  }
+  rows.forEach((b) => {
+    if (!map[b.month_id]) map[b.month_id] = {};
+    map[b.month_id][b.category] = Number(b.amount) || 0;
+  });
+  _savedYearCache = { year: state.currentYear, rows: map };
+  return map;
+}
+
+// Any savings edit must not leave the popover quoting a stale year total.
+function invalidateSavedYearCache(): void {
+  _savedYearCache = null;
+}
+
+async function showSavedPop(el: HTMLElement): Promise<void> {
+  if (savedHideTimer) {
+    clearTimeout(savedHideTimer);
+    savedHideTimer = null;
+  }
+  if (document.getElementById('saved-pop')) return;
+
+  const pop = document.createElement('div');
+  pop.id = 'saved-pop';
+  const anchor =
+    window.innerWidth <= 600 ? (el.closest('.ribbon') as HTMLElement | null) || el : el;
+  const r = anchor.getBoundingClientRect();
+  pop.style.cssText =
+    'position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shadow);padding:.7rem .9rem;min-width:250px;max-width:330px;max-height:60vh;overflow-y:auto;';
+  pop.style.top = r.bottom + 6 + 'px';
+  pop.style.left =
+    Math.max(8, Math.min(el.getBoundingClientRect().left, window.innerWidth - 338)) + 'px';
+  pop.innerHTML = '<div style="font-size:.78rem;color:var(--dim);">Loading the year…</div>';
+  pop.onmouseenter = (): void => {
+    if (savedHideTimer) {
+      clearTimeout(savedHideTimer);
+      savedHideTimer = null;
+    }
+  };
+  pop.onmouseleave = (): void => scheduleHideSavedPop();
+  document.body.appendChild(pop);
+
+  const closer = (ev: MouseEvent): void => {
+    const p = document.getElementById('saved-pop');
+    if (p && !p.contains(ev.target as Node) && !el.contains(ev.target as Node)) {
+      p.remove();
+      document.removeEventListener('click', closer);
+    }
+    if (!p) document.removeEventListener('click', closer);
+  };
+  setTimeout(() => document.addEventListener('click', closer), 0);
+
+  let map: Record<string, Record<string, number>>;
+  try {
+    map = await savedYearBudgets();
+  } catch {
+    pop.innerHTML =
+      '<div style="font-size:.78rem;color:var(--dim);">Couldn\'t load the year\'s savings.</div>';
+    return;
+  }
+  // The pointer may have left while we were fetching.
+  if (!document.getElementById('saved-pop')) return;
+
+  const savedFor = (mid: string): number =>
+    (map[mid]?.['savings_bank'] || 0) + (map[mid]?.['savings_invested'] || 0);
+  const todayMonth = new Date().getMonth() + 1;
+  const months = [...state.months].sort((a, b) => a.month_num - b.month_num);
+  const ytd = ag(
+    months.filter((m) => m.month_num <= todayMonth).reduce((s, m) => s + savedFor(m.id), 0),
+  );
+  const proj = ag(months.reduce((s, m) => s + savedFor(m.id), 0));
+
+  const rowsHtml = months
+    .filter((m) => roundZ(savedFor(m.id)) !== 0)
+    .map((m) => {
+      const future = m.month_num > todayMonth;
+      return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.18rem 0;font-size:.78rem;${future ? 'opacity:.55;' : ''}">
+          <span style="color:var(--text);">${MONTHS[m.month_num - 1].slice(0, 3)}${m.month_num === todayMonth ? ' ◉' : ''}</span>
+          <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:var(--accent);font-weight:600;">${shekels(savedFor(m.id))}</span>
+        </div>`;
+    })
+    .join('');
+
+  pop.innerHTML =
+    '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.4rem;">Saved in ' +
+    state.currentYear +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:.15rem;">' +
+    '<span style="font-size:.8rem;color:var(--text);">So far this year</span>' +
+    '<span style="font-family:\'DM Mono\',monospace;font-size:1.05rem;font-weight:600;color:var(--accent);">' +
+    shekels(ytd) +
+    '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);margin-bottom:.4rem;">' +
+    '<span style="font-size:.72rem;color:var(--dim);">Projected, full year</span>' +
+    '<span style="font-family:\'DM Mono\',monospace;font-size:.82rem;color:var(--dim);">' +
+    shekels(proj) +
+    '</span></div>' +
+    (rowsHtml ||
+      '<div style="font-size:.78rem;color:var(--dim);">No savings recorded yet this year.</div>');
+}
+
+function scheduleHideSavedPop(): void {
+  if (savedHideTimer) clearTimeout(savedHideTimer);
+  savedHideTimer = setTimeout(() => {
+    const p = document.getElementById('saved-pop');
+    if (p) p.remove();
+  }, 200);
+}
+
+function toggleSavedPop(el: HTMLElement): void {
+  const p = document.getElementById('saved-pop');
+  if (p) {
+    p.remove();
+    return;
+  }
+  void showSavedPop(el);
+}
+
 async function addTashlum() {
   const name = prompt('שם התשלום (e.g. Mattress):');
   if (!name?.trim()) return;
@@ -2578,7 +2721,7 @@ function renderRibbon(
         <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
         <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
         <div class="rb-dp" title="Used — total spent so far this month"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
-        <div class="rb-dp" title="Saved — bank + invested savings this month"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved</span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
+        <div class="rb-dp rb-dp-live" id="saved-dp" style="cursor:pointer;" title="Saved — bank + invested this month. Hover or tap for the year." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showSavedPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideSavedPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleSavedPop(this)"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved <span style="font-size:.55rem;color:var(--dim);">▾</span></span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
       </div>
       ${(() => {
         // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
@@ -3664,6 +3807,8 @@ async function saveBudget(catKey: string, amount: string | number): Promise<void
   const num = parseFloat(String(amount)) || 0;
   const old = state.budgets[catKey] || 0;
   const monthId = state.currentMonthId;
+  // Editing either savings line changes the year total the Saved popover shows.
+  if (catKey === 'savings_bank' || catKey === 'savings_invested') invalidateSavedYearCache();
   // Upsert — try update first, then insert
   const { data: existing } = await sb
     .from('budgets')
@@ -10747,6 +10892,9 @@ Object.assign(window as unknown as Record<string, unknown>, {
   dismissNextAction,
   jumpToCategories,
   resetRibbonHeight,
+  showSavedPop,
+  scheduleHideSavedPop,
+  toggleSavedPop,
   anyPanelOpen,
   applyNumericInputModes,
   applyRibbonHeight,
