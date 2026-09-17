@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v39';
-const BUILD_DATE = 'Sep 17, 2026 07:55';
+const APP_VERSION = 'v40';
+const BUILD_DATE = 'Sep 17, 2026 08:05';
 
 const MONTHS = [
   'January',
@@ -5894,7 +5894,7 @@ function renderTravelTab() {
             <input type="text" id="tp-label" placeholder="What" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
-            <input type="date" id="tp-date" title="Date paid — sets the month; blank = today" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            <input type="date" id="tp-date" title="Date paid — sets the month; leave blank for a general gift" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addTravelPayment()">
             <input type="number" id="tp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
@@ -5946,6 +5946,28 @@ function renderCharityTab() {
   const stillToGo = ag(Math.max(0, yearTarget - inSoFar));
   const overTarget = ag(Math.max(0, inSoFar - yearTarget));
   const givingPct = yearTarget > 0 ? Math.min(100, Math.round((inSoFar / yearTarget) * 100)) : 0;
+
+  // ── Due so far vs given (2026-09-17) ──────────────────────────────────
+  // The year target counts every month's income × %, INCLUDING months that
+  // haven't happened yet — so "still to go" silently mixes "I owe this now"
+  // with "this isn't due until December". Her question: what part of the year
+  // is actually due at this point, and am I ahead or behind on it?
+  //
+  // A month is "due" once it has arrived. A past year is entirely due; a
+  // future year (2027 viewed from 2026) is entirely not-yet-due.
+  const nowYear = new Date().getFullYear();
+  const dueThrough =
+    state.currentYear < nowYear ? 12 : state.currentYear > nowYear ? 0 : new Date().getMonth() + 1;
+  const dueSoFar = ag(
+    Object.entries(allocs).reduce(
+      (s, [mn, a]) => (Number(mn) <= dueThrough ? s + Number(a.amount) : s),
+      0,
+    ),
+  );
+  const notYetDue = ag(Math.max(0, yearTarget - dueSoFar));
+  // Positive = given more than is due yet (running ahead / prepaid).
+  // Negative = due money that hasn't gone out.
+  const dueGap = ag(inSoFar - dueSoFar);
 
   const fmtA = (n: number): string => shekels(n || 0);
   const esc = (s: unknown): string => String(s || '').replace(/"/g, '&quot;');
@@ -6184,6 +6206,36 @@ function renderCharityTab() {
         </div>
       </div>
       ${totalPledged > 0 ? `<div style="margin-top:.8rem;padding-top:.7rem;border-top:1px solid var(--border);font-size:.68rem;color:var(--amber);">+ ${fmtA(totalPledged)} promised, not gone in yet</div>` : ''}
+
+      <!-- Due so far vs given. Splits the year target into "already due" and
+           "not due yet", so a target that counts future months can't read as a
+           debt. Ahead is stated plainly, behind uses amber and neutral words —
+           never red, never "behind" as a verdict. -->
+      ${
+        yearTarget > 0
+          ? `<div style="margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.72rem;padding:.12rem 0;">
+          <span style="color:var(--dim);">Set aside, ${dueThrough === 0 ? 'nothing due yet' : dueThrough === 12 ? 'all year' : 'Jan–' + MONTHS[dueThrough - 1].slice(0, 3)}</span>
+          <span style="font-family:'DM Mono',monospace;color:var(--text);">${fmtA(dueSoFar)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.72rem;padding:.12rem 0;">
+          <span style="color:var(--dim);">Given</span>
+          <span style="font-family:'DM Mono',monospace;color:var(--text);">${fmtA(inSoFar)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.78rem;font-weight:600;padding:.3rem 0 .1rem;margin-top:.15rem;border-top:1px solid var(--border);">
+          <span style="color:${roundZ(dueGap) < 0 ? 'var(--amber)' : 'var(--green)'};">${
+            roundZ(dueGap) < 0 ? 'Still to go out' : roundZ(dueGap) > 0 ? 'Given ahead' : 'Level'
+          }</span>
+          <span style="font-family:'DM Mono',monospace;color:${roundZ(dueGap) < 0 ? 'var(--amber)' : 'var(--green)'};">${fmtA(Math.abs(dueGap))}</span>
+        </div>
+        ${
+          notYetDue > 0
+            ? `<div style="font-size:.66rem;color:var(--dim);margin-top:.35rem;">${fmtA(notYetDue)} more will be set aside ${dueThrough === 0 ? 'across the year' : dueThrough >= 12 ? 'later' : MONTHS[dueThrough].slice(0, 3) + '–Dec'} — not due yet.</div>`
+            : ''
+        }
+      </div>`
+          : ''
+      }
     </div>
 
     <div style="display:flex;flex-direction:column;gap:1.25rem;">
@@ -6210,7 +6262,7 @@ function renderCharityTab() {
             <input type="text" id="cp-label" placeholder="Charity name" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
               onkeydown="if(event.key==='Enter')addCharityPayment()">
-            <input type="date" id="cp-date" title="Date paid — sets the month; blank = today" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
+            <input type="date" id="cp-date" title="Date paid — sets the month; leave blank for a general gift" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;outline:none;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
             <input type="number" id="cp-amount" placeholder="₪" min="0" step="0.01" style="font-size:.74rem;padding:.3rem .4rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;outline:none;-moz-appearance:textfield;"
               onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"
