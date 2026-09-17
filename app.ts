@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v38';
-const BUILD_DATE = 'Sep 16, 2026 12:35';
+const APP_VERSION = 'v39';
+const BUILD_DATE = 'Sep 17, 2026 07:55';
 
 const MONTHS = [
   'January',
@@ -338,7 +338,12 @@ interface CharityItemRow {
 interface CharityPaymentRow {
   id: string;
   year: number;
-  month_num: number;
+  // NULL = "general" — a gift for the year that isn't tied to any month.
+  // Charity is one yearly bucket (see renderCharityTab, 2026-08-02: "NO
+  // month↔gift attribution"); the column was NOT NULL until 2026-09-17, which
+  // forced every gift into a month it didn't belong to. A payment_date still
+  // pins a gift to that date's month; no date means general.
+  month_num: number | null;
   label: string;
   amount: number;
   is_estimate?: boolean;
@@ -2295,6 +2300,18 @@ async function switchMonth(monthId: string): Promise<void> {
     renderApp();
   }
 }
+
+// Sort order for a payment's month. A "general" charity gift (month_num null)
+// belongs to the year, not to any month, so it sorts after December rather
+// than producing NaN and scrambling the whole list. Travel payments always
+// carry a month, but share the row union type, so they use this too.
+function paymentMonthOrder(p: { month_num?: number | null }): number {
+  return p.month_num == null ? 13 : p.month_num;
+}
+const byPaymentMonth = (
+  a: { month_num?: number | null },
+  b: { month_num?: number | null },
+): number => paymentMonthOrder(a) - paymentMonthOrder(b);
 
 // ── Spent per category ────────────────────────────────────────────────
 function spentByCategory(): Record<string, number> {
@@ -4634,9 +4651,12 @@ async function addCharityPayment() {
   const label = byId('cp-label').value.trim();
   const dateVal = byId('cp-date').value || null;
   const amount = parseFloat(byId('cp-amount').value);
-  // Same rule as travel: the date she picks decides the month, not the app's
-  // current month. Charity is a yearly ledger too. Blank date → today's month.
-  const monthNum = monthNumFromDate(dateVal, todayMonth());
+  // The date she picks decides the month, not the app's current month —
+  // charity is a yearly ledger. A BLANK date now files the gift as "general"
+  // (month_num null) rather than silently stamping it with today's month: a
+  // gift with no date genuinely isn't tied to a month, and pretending
+  // otherwise put gifts in months they never belonged to.
+  const monthNum = dateVal ? monthNumFromDate(dateVal, todayMonth()) : null;
   const yr = yearFromDate(dateVal, state.currentYear);
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in name and amount');
@@ -4653,7 +4673,7 @@ async function addCharityPayment() {
   }
   if (yr === state.currentYear) {
     state.charity.payments.push(data);
-    state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+    state.charity.payments.sort(byPaymentMonth);
   }
   byId('cp-label').value = '';
   byId('cp-date').value = '';
@@ -4680,7 +4700,7 @@ async function deleteCharityPayment(id: string): Promise<void> {
       const { data } = await sb.from('charity_payments').insert(snap).select().single();
       if (data) {
         state.charity.payments.push(data);
-        state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+        state.charity.payments.sort(byPaymentMonth);
       }
       renderApp();
     },
@@ -4713,13 +4733,15 @@ async function updateCharityPayment(id: string, field: string, value: unknown): 
     .update({ [field]: val })
     .eq('id', id);
   p[field] = val;
-  // Re-dating moves the payment to that date's month.
-  if (field === 'payment_date' && val) {
-    const newMonth = monthNumFromDate(val as string, p.month_num as number);
+  // The date drives the month. Setting one files the gift in that month;
+  // CLEARING one returns it to "general" rather than leaving it stranded in
+  // whatever month it used to sit in.
+  if (field === 'payment_date') {
+    const newMonth = val ? monthNumFromDate(val as string, p.month_num as number) : null;
     if (newMonth !== p.month_num) {
       await sb.from('charity_payments').update({ month_num: newMonth }).eq('id', id);
       p.month_num = newMonth;
-      state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+      state.charity.payments.sort(byPaymentMonth);
     }
   }
   logChange(
@@ -4985,7 +5007,7 @@ async function addTravelPayment() {
   // Only rows belonging to the year on screen live in loaded state.
   if (yr === state.currentYear) {
     state.travel.payments.push(data);
-    state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+    state.travel.payments.sort(byPaymentMonth);
   }
   byId('tp-label').value = '';
   byId('tp-dest').value = '';
@@ -5019,7 +5041,7 @@ async function addTravelPaymentCat(dest: string, category: string): Promise<void
     return;
   }
   state.travel.payments.push(data);
-  state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+  state.travel.payments.sort(byPaymentMonth);
   const tripKey = (dest || '').trim().toLowerCase();
   localStorage.setItem('sn-trvcat-' + tripKey + '-' + category, '1');
   renderApp();
@@ -5044,7 +5066,7 @@ async function deleteTravelPayment(id: string): Promise<void> {
       const { data } = await sb.from('travel_payments').insert(snap).select().single();
       if (data) {
         state.travel.payments.push(data);
-        state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+        state.travel.payments.sort(byPaymentMonth);
       }
       renderApp();
     },
@@ -5084,7 +5106,7 @@ async function updateTravelPayment(id: string, field: string, value: unknown): P
     if (newMonth !== p.month_num) {
       await sb.from('travel_payments').update({ month_num: newMonth }).eq('id', id);
       p.month_num = newMonth;
-      state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+      state.travel.payments.sort(byPaymentMonth);
     }
   }
   logChange(
@@ -5937,9 +5959,14 @@ function renderCharityTab() {
     const ps = localStorage.getItem('charityPaySort') || 'month';
     // Date-first sort, same rule as travel: real date wins, undated rows fall
     // back to their filed month.
+    // Date-first: a real date wins, an undated row falls back to its filed
+    // month, and a GENERAL gift (no date, no month) sorts to the very end
+    // rather than rendering as "NaN" or jumping to January.
     const dk = (p: CharityPaymentRow): string =>
       (p.payment_date as string) ||
-      String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99';
+      (p.month_num == null
+        ? String(p.year || state.currentYear) + '-99-99'
+        : String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99');
     const sorted = [...payments].sort((a, b) => {
       if (ps === 'month') return dk(a).localeCompare(dk(b));
       if (ps === 'month-desc') return dk(b).localeCompare(dk(a));
@@ -5959,8 +5986,19 @@ function renderCharityTab() {
       ';">' +
       label +
       '</button>';
+    // General gifts (no date, no month) sort to the end. Mark where they start
+    // so they read as a deliberate "for the year" group rather than as rows
+    // that lost their date.
+    let generalHeaderEmitted = false;
+    const generalHeader =
+      '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.5rem .1rem .25rem;border-top:1px solid var(--border);margin-top:.2rem;">General · not tied to a month</div>';
     const payRows = sorted
       .map((p) => {
+        let lead = '';
+        if (p.month_num == null && !p.payment_date && !generalHeaderEmitted) {
+          generalHeaderEmitted = true;
+          lead = generalHeader;
+        }
         const estBgP = p.is_estimate ? 'background:var(--ambersoft,#fffbf0);' : '';
         const amtColorP = p.is_estimate ? 'var(--amber)' : 'var(--text)';
         const amtWeightP = p.is_estimate ? '700' : '400';
@@ -5969,6 +6007,7 @@ function renderCharityTab() {
         const estBtnColor = p.is_estimate ? 'var(--amber)' : 'var(--dim)';
         const estBtnWeight = p.is_estimate ? '700' : '400';
         return (
+          lead +
           '<div class="charity-pay-row" style="display:grid;grid-template-columns:1fr 112px 84px 30px 30px 42px 28px;gap:.3rem;align-items:center;padding:.28rem .1rem;border-bottom:1px solid var(--border);font-size:.8rem;' +
           estBgP +
           '">' +
@@ -10320,7 +10359,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
     }
     if (yr === state.currentYear) {
       state.travel.payments.push(data);
-      state.travel.payments.sort((a, b) => a.month_num - b.month_num);
+      state.travel.payments.sort(byPaymentMonth);
     }
     closeAllPanels();
     renderApp();
@@ -10354,7 +10393,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
     }
     if (yr === state.currentYear) {
       state.charity.payments.push(data);
-      state.charity.payments.sort((a, b) => a.month_num - b.month_num);
+      state.charity.payments.sort(byPaymentMonth);
     }
     closeAllPanels();
     renderApp();
@@ -10483,7 +10522,11 @@ const MONTH_ABBR = [
 
 // Say out loud where the payment landed — silence here is how a payment ends up
 // filed under the wrong month without her ever seeing it.
-function landedToast(monthNum: number, yr: number): string {
+function landedToast(monthNum: number | null, yr: number): string {
+  // A general charity gift has no month — say so plainly instead of "Logged to ?".
+  if (monthNum == null) {
+    return yr === state.currentYear ? 'Logged as general ✓' : `Logged as general, ${yr} ✓`;
+  }
   const mo = MONTH_ABBR[monthNum - 1] || '?';
   return yr === state.currentYear ? `Logged to ${mo} ✓` : `Logged to ${mo} ${yr} ✓`;
 }
