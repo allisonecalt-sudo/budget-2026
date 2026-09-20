@@ -2443,13 +2443,46 @@ input:focus {
     text-align: left !important;
     font-size: 0.7rem !important;
     color: var(--dim) !important;
+    white-space: nowrap !important;
+  }
+  /* Row 2 is metadata only — keep it short so a card stays two tight lines. */
+  .cash-row {
+    row-gap: 0.1rem !important;
+    padding: 0.4rem 0.45rem !important;
+  }
+  /* Desktop gets an "As of" column. On a phone that fifth column crushed the
+     name down to "Le" / "Pa", so the date rides under the account name instead
+     (.asof-inline) and the column is hidden. */
+  .cash-cell-asof {
+    display: none !important;
+  }
+  .asof-inline {
+    display: block !important;
   }
   .cash-cell-notes {
     grid-area: notes;
     padding: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
+  /* This page is read far more than it is typed into (Claude keeps it fed), and
+     an empty <input> still reserves ~30px — which is what made every card 106px
+     tall with dead space under it. On a phone notes render as plain text, and
+     vanish entirely when empty. */
   .cash-cell-notes input {
+    display: none !important;
+  }
+  .note-inline {
+    display: block !important;
+    text-align: right !important;
+  }
+  .cash-cell-notes-unused input {
     text-align: right;
+    /* An <input> carries a default intrinsic width (~20 chars). Inside a grid
+       column that width becomes the column's floor, which crushed the 1fr name
+       column down to "Le" / "Pa". Force it to take only the space it is given. */
+    width: 100% !important;
+    min-width: 0 !important;
   }
   .cash-cell-del {
     grid-area: del;

@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v44';
-const BUILD_DATE = 'Sep 20, 2026 11:47';
+const APP_VERSION = 'v45';
+const BUILD_DATE = 'Sep 20, 2026 12:03';
 
 const MONTHS = [
   'January',
@@ -8074,22 +8074,30 @@ function renderCashTab(): string {
   const renderRow = (a: CashAccountRow): string => {
     const ilsVal = cashILS(a);
     const isUSD = a.currency === 'USD';
+    // A debt reads as a MINUS on its own row. Her words, 2026-09-20: "credit
+    // card is money i owe thats minus" / "rent is minus". A section header
+    // saying "subtracted" is not enough — the number itself has to carry the
+    // sign, or a row of positives reads as money she has.
+    const sign = a.is_debt ? '−' : '';
+    const rowColor = a.is_debt ? 'var(--amber)' : a.is_owed ? 'var(--green)' : 'var(--text)';
     return `<tr class="cash-row">
       <td class="cash-cell-name" style="padding:.5rem .75rem;">
         <input type="text" value="${a.name}" style="border:none;background:none;font-size:.85rem;font-weight:600;width:140px;font-family:inherit;" onchange="saveCashField('${a.id}','name',this.value)">
+        <span class="asof-inline" style="display:none;font-size:.62rem;color:var(--dim);line-height:1.1;">${asOf(a)}</span>
       </td>
       <td class="cash-cell-amt" style="text-align:right;padding:.5rem .75rem;">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:.3rem;">
-          ${isUSD ? '<span style="font-size:.7rem;color:var(--dim);">$</span>' : '<span style="font-size:.7rem;color:var(--dim);">₪</span>'}
-          <input type="number" value="${Number(a.amount) || 0}" style="border:1px solid var(--border);border-radius:6px;padding:.25rem .4rem;width:90px;text-align:right;font-size:.85rem;font-family:\'DM Mono\',monospace;background:var(--bg);" onchange="saveCashField('${a.id}','amount',this.value)" step="1">
+          ${isUSD ? '<span style="font-size:.7rem;color:' + rowColor + ';">' + sign + '$</span>' : '<span style="font-size:.7rem;color:' + rowColor + ';">' + sign + '₪</span>'}
+          <input type="number" value="${Number(a.amount) || 0}" style="color:${rowColor};border:1px solid var(--border);border-radius:6px;padding:.25rem .4rem;width:90px;text-align:right;font-size:.85rem;font-family:\'DM Mono\',monospace;background:var(--bg);" onchange="saveCashField('${a.id}','amount',this.value)" step="1">
         </div>
       </td>
       <td class="cash-cell-ils" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;font-size:.85rem;${isUSD ? 'color:var(--dim);' : ''}">
-        ${isUSD ? '₪' + n(ilsVal) + ' <span style="font-size:.6rem;color:var(--dim);">@ ' + (state.usdRate || 3.13).toFixed(2) + '</span>' : ''}
+        ${isUSD ? sign + '₪' + n(ilsVal) + ' <span style="font-size:.6rem;color:var(--dim);">@ ' + (state.usdRate || 3.13).toFixed(2) + '</span>' : a.is_debt ? '<span style="color:var(--amber);">−₪' + n(ilsVal) + '</span>' : ''}
       </td>
       <td class="cash-cell-asof" style="padding:.5rem .5rem;text-align:right;white-space:nowrap;font-size:.66rem;color:var(--dim);" title="When this balance was last set">${asOf(a)}</td>
       <td class="cash-cell-notes" style="padding:.5rem .75rem;">
-        <input type="text" value="${a.notes || ''}" placeholder="notes..." style="border:none;background:none;font-size:.75rem;color:var(--dim);width:100%;font-family:inherit;" onchange="saveCashField('${a.id}','notes',this.value)">
+        <span class="note-inline" style="display:none;font-size:.62rem;color:var(--dim);">${a.notes ? String(a.notes) : ''}</span>
+        <input type="text" value="${a.notes || ''}" placeholder="" style="border:none;background:none;font-size:.75rem;color:var(--dim);width:100%;font-family:inherit;" onchange="saveCashField('${a.id}','notes',this.value)">
       </td>
       <td class="cash-cell-del" style="padding:.5rem .25rem;text-align:center;">
         <button onclick="deleteCashAccount('${a.id}')" style="background:none;border:none;cursor:pointer;color:var(--dim);font-size:.85rem;padding:0;">×</button>
@@ -8112,7 +8120,7 @@ function renderCashTab(): string {
       <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
       ${
         roundZ(totalDebt) !== 0
-          ? `<div class="year-sum-card"><div class="year-sum-label">Cards to Pay</div><div class="year-sum-val" style="color:var(--amber);">−₪${n(totalDebt)}</div></div>`
+          ? `<div class="year-sum-card"><div class="year-sum-label">I Owe</div><div class="year-sum-val" style="color:var(--amber);">−₪${n(totalDebt)}</div></div>`
           : ''
       }
     </div>
@@ -8162,7 +8170,7 @@ function renderCashTab(): string {
     ${
       debts.length
         ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
-      <div style="padding:.6rem .75rem;background:var(--ambersoft,#fffbf0);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);">💳 Cards to pay &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);">— subtracted from Total Liquid</span></div>
+      <div style="padding:.6rem .75rem;background:var(--ambersoft,#fffbf0);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);">💳 What I owe &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);">— comes off the total</span></div>
       <table class="cash-table" style="width:100%;border-collapse:collapse;">
         <thead class="cash-thead"><tr style="border-bottom:1px solid var(--border);">
           <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Card</th>
@@ -8174,7 +8182,7 @@ function renderCashTab(): string {
         </tr></thead>
         <tbody>${debtRows}
           <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
-            <td style="padding:.5rem .75rem;">Total to pay</td>
+            <td style="padding:.5rem .75rem;">Total I owe</td>
             <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;color:var(--amber);">−₪${n(totalDebt)}</td>
             <td colspan="3"></td>
           </tr>
