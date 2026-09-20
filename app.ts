@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v43';
-const BUILD_DATE = 'Sep 20, 2026 11:32';
+const APP_VERSION = 'v44';
+const BUILD_DATE = 'Sep 20, 2026 11:47';
 
 const MONTHS = [
   'January',
@@ -243,6 +243,14 @@ interface CashAccountRow {
   amount: number;
   currency: string;
   sort_order: number;
+  // Money someone owes HER — adds to the total.
+  is_owed?: boolean;
+  // Money SHE owes (credit cards) — subtracts from the total. Added 2026-09-20
+  // at her instruction: "yes take off liquid". Stored positive; the sign is
+  // applied once, here in the total, so the row reads as a plain balance.
+  is_debt?: boolean;
+  notes?: string | null;
+  updated_at?: string | null;
   [key: string]: unknown;
 }
 
@@ -8037,12 +8045,31 @@ function renderCashTab(): string {
   const accounts = state.cashAccounts || [];
   const n = (v: number | null | undefined): string => amount(Number(v || 0));
 
+  // "Always say to the day" (her, 2026-09-20). A balance with no date is a
+  // number you cannot trust — Leumi sat 3 months stale and looked as current as
+  // everything else. Anything older than 30 days is dimmed AND marked, because
+  // the whole point of this page is knowing what is actually there.
+  const asOf = (a: CashAccountRow): string => {
+    const raw = a.updated_at ? String(a.updated_at) : '';
+    if (!raw) return '<span style="color:var(--amber);">never set</span>';
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return '';
+    const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    const txt = d.toLocaleDateString('en-IL', { day: 'numeric', month: 'short' });
+    if (days <= 0) return '<span style="color:var(--accent);font-weight:600;">today</span>';
+    if (days > 30) return `<span style="color:var(--amber);">${txt} · ${days}d</span>`;
+    return txt;
+  };
+
   // Split into holdings vs owed
-  const holdings = accounts.filter((a) => !a.is_owed);
-  const owed = accounts.filter((a) => a.is_owed);
+  const holdings = accounts.filter((a) => !a.is_owed && !a.is_debt);
+  const owed = accounts.filter((a) => a.is_owed && !a.is_debt);
+  const debts = accounts.filter((a) => a.is_debt);
   const totalHoldings = ag(holdings.reduce((s, a) => s + cashILS(a), 0));
   const totalOwed = ag(owed.reduce((s, a) => s + cashILS(a), 0));
-  const totalLiquid = ag(totalHoldings + totalOwed);
+  // Debts are stored POSITIVE and subtracted exactly once, here.
+  const totalDebt = ag(debts.reduce((s, a) => s + cashILS(a), 0));
+  const totalLiquid = ag(totalHoldings + totalOwed - totalDebt);
 
   const renderRow = (a: CashAccountRow): string => {
     const ilsVal = cashILS(a);
@@ -8060,6 +8087,7 @@ function renderCashTab(): string {
       <td class="cash-cell-ils" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;font-size:.85rem;${isUSD ? 'color:var(--dim);' : ''}">
         ${isUSD ? '₪' + n(ilsVal) + ' <span style="font-size:.6rem;color:var(--dim);">@ ' + (state.usdRate || 3.13).toFixed(2) + '</span>' : ''}
       </td>
+      <td class="cash-cell-asof" style="padding:.5rem .5rem;text-align:right;white-space:nowrap;font-size:.66rem;color:var(--dim);" title="When this balance was last set">${asOf(a)}</td>
       <td class="cash-cell-notes" style="padding:.5rem .75rem;">
         <input type="text" value="${a.notes || ''}" placeholder="notes..." style="border:none;background:none;font-size:.75rem;color:var(--dim);width:100%;font-family:inherit;" onchange="saveCashField('${a.id}','notes',this.value)">
       </td>
@@ -8071,12 +8099,22 @@ function renderCashTab(): string {
 
   const holdingsRows = holdings.map(renderRow).join('');
   const owedRows = owed.map(renderRow).join('');
+  const debtRows = debts.map(renderRow).join('');
 
   return `<div style="max-width:800px;margin:1.5rem auto;padding:0 1rem;">
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
-      <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div></div>
+      <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div>${
+        roundZ(totalDebt) !== 0
+          ? `<div style="font-size:.6rem;color:var(--dim);margin-top:.15rem;">after cards</div>`
+          : ''
+      }</div>
       <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
       <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
+      ${
+        roundZ(totalDebt) !== 0
+          ? `<div class="year-sum-card"><div class="year-sum-label">Cards to Pay</div><div class="year-sum-val" style="color:var(--amber);">−₪${n(totalDebt)}</div></div>`
+          : ''
+      }
     </div>
 
     ${renderReserveLadder(totalHoldings, n)}
@@ -8088,14 +8126,14 @@ function renderCashTab(): string {
           <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Account</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Amount</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">ILS</th>
-          <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Notes</th>
+          <th style="text-align:right;padding:.4rem .5rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">As of</th><th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Notes</th>
           <th style="width:30px;"></th>
         </tr></thead>
         <tbody>${holdingsRows}
           <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
             <td style="padding:.5rem .75rem;">Total Holdings</td>
             <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;">₪${n(totalHoldings)}</td>
-            <td colspan="2"></td>
+            <td colspan="3"></td>
           </tr>
         </tbody>
       </table>
@@ -8108,18 +8146,43 @@ function renderCashTab(): string {
           <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Source</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Amount</th>
           <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">ILS</th>
-          <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Notes</th>
+          <th style="text-align:right;padding:.4rem .5rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">As of</th><th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Notes</th>
           <th style="width:30px;"></th>
         </tr></thead>
         <tbody>${owedRows}
           <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
             <td style="padding:.5rem .75rem;">Total Owed</td>
             <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;">₪${n(totalOwed)}</td>
-            <td colspan="2"></td>
+            <td colspan="3"></td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    ${
+      debts.length
+        ? `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
+      <div style="padding:.6rem .75rem;background:var(--ambersoft,#fffbf0);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--amber);">💳 Cards to pay &nbsp;<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--dim);">— subtracted from Total Liquid</span></div>
+      <table class="cash-table" style="width:100%;border-collapse:collapse;">
+        <thead class="cash-thead"><tr style="border-bottom:1px solid var(--border);">
+          <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Card</th>
+          <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Amount</th>
+          <th style="text-align:right;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">ILS</th>
+          <th style="text-align:right;padding:.4rem .5rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">As of</th>
+          <th style="text-align:left;padding:.4rem .75rem;font-size:.65rem;color:var(--dim);text-transform:uppercase;">Notes</th>
+          <th style="width:30px;"></th>
+        </tr></thead>
+        <tbody>${debtRows}
+          <tr class="cash-total-row" style="border-top:2px solid var(--border);font-weight:700;">
+            <td style="padding:.5rem .75rem;">Total to pay</td>
+            <td colspan="2" style="text-align:right;padding:.5rem .75rem;font-family:'DM Mono',monospace;color:var(--amber);">−₪${n(totalDebt)}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`
+        : ''
+    }
 
     <div style="display:flex;gap:.5rem;">
       <button onclick="addCashAccount()" style="font-size:.75rem;font-weight:600;color:var(--accent);background:var(--asoft);border:none;border-radius:6px;padding:.4rem .75rem;cursor:pointer;">+ Add Account</button>
