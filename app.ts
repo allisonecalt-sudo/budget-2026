@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v42';
-const BUILD_DATE = 'Sep 20, 2026 10:45';
+const APP_VERSION = 'v43';
+const BUILD_DATE = 'Sep 20, 2026 11:32';
 
 const MONTHS = [
   'January',
@@ -4648,6 +4648,7 @@ async function saveCharityAllocation(monthNum: number, value: string | number): 
 }
 
 async function addCharityPayment() {
+  invalidateNextYearCharity();
   const label = byId('cp-label').value.trim();
   const dateVal = byId('cp-date').value || null;
   const amount = parseFloat(byId('cp-amount').value);
@@ -4684,6 +4685,7 @@ async function addCharityPayment() {
 }
 
 async function deleteCharityPayment(id: string): Promise<void> {
+  invalidateNextYearCharity();
   const snap = { ...state.charity.payments.find((p) => p.id === id) };
   await sb.from('charity_payments').delete().eq('id', id);
   state.charity.payments = state.charity.payments.filter((p) => p.id !== id);
@@ -4716,6 +4718,7 @@ async function deleteCharityPayment(id: string): Promise<void> {
 }
 
 async function updateCharityPayment(id: string, field: string, value: unknown): Promise<void> {
+  invalidateNextYearCharity();
   const p = state.charity.payments.find((p) => p.id === id);
   if (!p) return;
   const oldVal = p[field];
@@ -8122,10 +8125,99 @@ function renderCashTab(): string {
       <button onclick="addCashAccount()" style="font-size:.75rem;font-weight:600;color:var(--accent);background:var(--asoft);border:none;border-radius:6px;padding:.4rem .75rem;cursor:pointer;">+ Add Account</button>
     </div>
 
+    ${renderPrepaidTzedaka(n)}
+
     <div style="margin-top:1.5rem;font-size:.65rem;color:var(--dim);text-align:center;">
       USD rate: $1 = ₪${(state.usdRate || 3.13).toFixed(4)} (live) &nbsp;·&nbsp; Updated on load
     </div>
   </div>`;
+}
+
+// ── Money she FRONTED for next year's tzedaka ─────────────────────────
+// Money that has already left her pocket against a FUTURE year's tzedaka —
+// she fronts it on purpose (the Rayna gift went out Sep 2026 and counts against
+// 2027). Her ask, 2026-09-20: "make section here all the money i owe myself
+// from tzedaka 2027 ... it shouldnt be in total ... just good for me to know."
+// Her word for it: "fronted money ... but dont add to total i jsut wna tot see it".
+//
+// DELIBERATELY NOT counted in Total Liquid / Holdings / Owed. This money is
+// GONE — it is not a receivable and adding it would overstate what she has.
+// It is a memo: next year's giving is this much already covered.
+//
+// Only gifts marked GIVEN count here. One still pending is shown separately,
+// because it is a plan, not a payment.
+// state.charity.payments only ever holds the year on screen (loadCharityData
+// filters by currentYear), so next year's gifts must be fetched separately —
+// exactly the trap the Saved popover hit. Fetched once, cached, and the cache
+// is dropped whenever a charity payment changes so this can't go stale.
+let _nextYearCharity: { year: number; rows: CharityPaymentRow[] } | null = null;
+let _nextYearCharityInFlight = false;
+
+function invalidateNextYearCharity(): void {
+  _nextYearCharity = null;
+}
+
+async function loadNextYearCharity(year: number): Promise<void> {
+  if (_nextYearCharityInFlight) return;
+  _nextYearCharityInFlight = true;
+  try {
+    const { data } = await sb.from('charity_payments').select('*').eq('year', year);
+    _nextYearCharity = { year, rows: (data || []) as CharityPaymentRow[] };
+    renderApp();
+  } catch {
+    // Leave the section hidden rather than showing a wrong number.
+    _nextYearCharity = { year, rows: [] };
+  } finally {
+    _nextYearCharityInFlight = false;
+  }
+}
+
+function renderPrepaidTzedaka(n: (v: number | null | undefined) => string): string {
+  const nextYear = state.currentYear + 1;
+  if (!_nextYearCharity || _nextYearCharity.year !== nextYear) {
+    void loadNextYearCharity(nextYear);
+    return '';
+  }
+  const rows = _nextYearCharity.rows;
+  if (!rows.length) return '';
+
+  const given = rows.filter((p) => p.is_given);
+  const pending = rows.filter((p) => !p.is_given);
+  const givenTotal = ag(given.reduce((s, p) => s + Number(p.amount), 0));
+  const pendingTotal = ag(pending.reduce((s, p) => s + Number(p.amount), 0));
+  if (roundZ(givenTotal) === 0 && roundZ(pendingTotal) === 0) return '';
+
+  // Show the date only on gifts actually GIVEN. On a not-yet-given row a date
+  // is the date she PLANS to pay, and printing "paid <date>" under a heading
+  // that says "not fronted yet" contradicts itself on the same line.
+  const line = (p: CharityPaymentRow): string =>
+    `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.16rem 0;font-size:.78rem;">
+      <span style="color:var(--text);">${String(p.label || '—')}${
+        p.payment_date && p.is_given
+          ? ` <span style="color:var(--dim);font-size:.68rem;">paid ${String(p.payment_date)}</span>`
+          : p.payment_date
+            ? ` <span style="color:var(--dim);font-size:.68rem;">dated ${String(p.payment_date)}</span>`
+            : ''
+      }</span>
+      <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:var(--text);">₪${n(Number(p.amount))}</span>
+    </div>`;
+
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;">
+        <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">Fronted for ${nextYear} tzedaka</span>
+        <span style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:600;color:var(--accent);">₪${n(givenTotal)}</span>
+      </div>
+      <div style="font-size:.66rem;color:var(--dim);margin-top:.15rem;margin-bottom:.5rem;">money you fronted — deliberately NOT in your totals, it is already gone</div>
+      ${given.map(line).join('')}
+      ${
+        roundZ(pendingTotal) !== 0
+          ? `<div style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border);">
+        <div style="font-size:.66rem;color:var(--amber);margin-bottom:.15rem;">promised for ${nextYear}, not fronted yet — ₪${n(pendingTotal)}</div>
+        ${pending.map(line).join('')}
+      </div>`
+          : ''
+      }
+    </div>`;
 }
 
 // Q2 — yearly funding gap for Travel/Admin/Charity. Returns positive number
