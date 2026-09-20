@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v46';
-const BUILD_DATE = 'Sep 20, 2026 14:12';
+const APP_VERSION = 'v47';
+const BUILD_DATE = 'Sep 20, 2026 14:40';
 
 const MONTHS = [
   'January',
@@ -602,6 +602,121 @@ function restoreCache() {
 // ag / pct / status / creditOccurrences moved to lib/budget-math.ts so the
 // money arithmetic can be unit-tested without a browser or a live database.
 const fmt = (n: unknown): string => shekels(n || 0);
+
+// ── Room to move ─────────────────────────────────────────────────────
+// Her question, 2026-09-20, and the main thing she actually DOES in this app:
+// "where can I take ₪200 from?" Her change_log for 2026 carries 405 edits to
+// budget amounts — moving money between envelopes IS the work, and until now
+// nothing told her where the slack was. She went and found it by eye.
+//
+// This is NOT the same question as the Left-to-Spend popover above. That one
+// asks "what is still unspent in this envelope"; this one asks "what could I
+// reduce". Those differ for the set-aside pots: travel/admin/charity never hold
+// "left to spend" (setting the money aside IS the spend, her words: "travel i
+// just put in amt and thea ti sbudget and spend nom atter wha") — but the
+// set-aside AMOUNT is still a dial she turns: "and i cna move it around based
+// on eneed".
+//
+// Three tiers, deliberately separated rather than summed into one tempting
+// number:
+//   FREE      — unallocated income; nothing has a claim on it yet
+//   SLACK     — envelope budget not yet spent; reducing it costs nothing today
+//   POTS      — this month's set-aside (travel/admin/charity/savings). Real
+//               money, but taking it back has consequences elsewhere, so it is
+//               listed apart and never folded into the headline.
+// Charity sits in POTS and is listed LAST with no nudge attached. Tzedaka is
+// not takeout money and the system does not get to suggest raiding it.
+function roomToMove(income: number, totalBudgeted: number) {
+  const spent = spentByCategory();
+  const free = ag(income - totalBudgeted);
+
+  const slack = CATEGORIES.filter((c) => !c.hasTab && !c.hasLines)
+    .map((c) => ({ c, room: ag((catBudget(c.key) || 0) - (spent[c.key] || 0)) }))
+    .filter((r) => roundZ(r.room) > 0)
+    .sort((a, b) => b.room - a.room);
+
+  const over = CATEGORIES.filter((c) => !c.hasTab)
+    .map((c) => ({ c, room: ag((catBudget(c.key) || 0) - (spent[c.key] || 0)) }))
+    .filter((r) => roundZ(r.room) < 0)
+    .sort((a, b) => a.room - b.room);
+
+  const potKeys = ['travel', 'admin', 'charity'];
+  const pots = potKeys
+    .map((k) => ({
+      c: CATEGORIES.find((x) => x.key === k)!,
+      room: ag(state.budgets[k] || 0),
+    }))
+    .filter((r) => roundZ(r.room) > 0);
+  const savings = ag(
+    (state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0),
+  );
+  if (roundZ(savings) > 0) {
+    pots.unshift({ c: { key: 'savings', label: 'Savings', emoji: '🏦' } as never, room: savings });
+  }
+
+  const slackTotal = ag(slack.reduce((s, r) => s + r.room, 0));
+  return { free, slack, slackTotal, over, pots };
+}
+
+function toggleRoomToMove(): void {
+  try {
+    localStorage.setItem(
+      'roomToMoveOpen',
+      localStorage.getItem('roomToMoveOpen') === '1' ? '0' : '1',
+    );
+  } catch {
+    // A blocked localStorage just means it won't remember; harmless.
+  }
+  renderApp();
+}
+
+function renderRoomToMove(income: number, totalBudgeted: number): string {
+  const _rtmOpen = localStorage.getItem('roomToMoveOpen') === '1';
+  const r = roomToMove(income, totalBudgeted);
+  const headline = ag(Math.max(0, r.free) + r.slackTotal);
+  if (roundZ(headline) === 0 && !r.over.length && !r.pots.length) return '';
+
+  const line = (emoji: string, label: string, val: number, colour: string, note = ''): string =>
+    `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.16rem 0;font-size:.78rem;">
+      <span style="color:var(--text);">${emoji} ${label}${note ? ` <span style="color:var(--dim);font-size:.66rem;">${note}</span>` : ''}</span>
+      <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${colour};font-weight:600;">${shekels(Math.abs(val))}</span>
+    </div>`;
+
+  const sect = (title: string, body: string, sub = ''): string =>
+    !body
+      ? ''
+      : `<div style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border);">
+          <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${title}</div>
+          ${sub ? `<div style="font-size:.63rem;color:var(--dim);margin-bottom:.15rem;">${sub}</div>` : ''}
+          ${body}
+        </div>`;
+
+  return `<div class="room-to-move${_rtmOpen ? ' open' : ''}" id="room-to-move" onclick="toggleRoomToMove()" title="Tap for where the money could come from">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;">
+        <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">Room to move</span>
+        <span style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:600;color:var(--accent);">${shekels(headline)}</span>
+      </div>
+      <div style="font-size:.64rem;color:var(--dim);margin-top:.1rem;">free money plus envelope slack — before touching any pot</div>
+      ${
+        roundZ(r.free) > 0
+          ? sect('Free', line('💰', 'Not yet budgeted', r.free, 'var(--green)'))
+          : ''
+      }
+      ${sect(
+        'Envelope slack',
+        r.slack.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--green)')).join(''),
+      )}
+      ${sect(
+        'Needs money',
+        r.over.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--red)', 'over')).join(''),
+      )}
+      ${sect(
+        'Pots — moving these has consequences',
+        r.pots.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--muted)', 'set aside')).join(''),
+        'already set aside this month; taking it back opens a gap in the year',
+      )}
+    </div>`;
+}
 
 // ── The one next action ──────────────────────────────────────────────
 // A single quiet line under the ribbon naming the ONE thing worth doing right
@@ -2841,7 +2956,8 @@ function renderRibbon(
     <div class="ribbon-drag-handle" id="ribbon-drag" onpointerdown="startRibbonDrag(event)" ondblclick="resetRibbonHeight()" title="Drag to resize · double-tap to reset" role="separator" aria-label="Resize summary"></div>
   </div>
   ${leisureSubRibbon}
-  ${renderNextAction(leftToBudget)}`;
+  ${renderNextAction(leftToBudget)}
+      ${renderRoomToMove(income, totalBudgeted)}`;
 }
 
 // ── The budget category grid ─────────────────────────────────────────
@@ -11205,6 +11321,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   dismissNextAction,
   jumpToCategories,
   resetRibbonHeight,
+  toggleRoomToMove,
   showSavedPop,
   scheduleHideSavedPop,
   toggleSavedPop,

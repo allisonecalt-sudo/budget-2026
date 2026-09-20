@@ -4193,3 +4193,29 @@ input[type='checkbox'] {
     padding: 0 0.6rem;
   }
 }
+
+/* ── Room to move ─────────────────────────────────────────────────────────
+   Answers "where can I take ₪200 from" — the thing she does most. It sits
+   BELOW the ribbon, not in it: she asked explicitly to keep the ribbon
+   uncrowded, and this is a panel you consult, not a number you glance at.
+   Collapsed to its headline by default; the breakdown is one tap away. */
+.room-to-move {
+  margin: 0 1.5rem 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r, 10px);
+  background: var(--surface);
+  max-height: 2.9rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: max-height 0.18s ease;
+}
+.room-to-move.open {
+  max-height: 40rem;
+  overflow-y: auto;
+}
+@media (max-width: 600px) {
+  .room-to-move {
+    margin: 0 0.75rem 0.6rem;
+  }
+}
