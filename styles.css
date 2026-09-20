@@ -4219,3 +4219,70 @@ input[type='checkbox'] {
     margin: 0 0.75rem 0.6rem;
   }
 }
+
+/* ── Savings shape (Year page hero) ───────────────────────────────────────
+   The Year page had 37 rows of numbers and no chart; "Total Savings" carried
+   the same visual weight as "Household Items" despite being the one number she
+   calls the score. This gives the year its shape and sits above the table.
+   Text wears text tokens — only the bars carry the accent. */
+.savings-shape {
+  margin: 0 0 0.9rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--rl, 12px);
+  background: var(--surface);
+}
+.savings-shape .ss-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.savings-shape .ss-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.savings-shape .ss-hero {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.savings-shape .ss-sub {
+  font-size: 0.7rem;
+  color: var(--dim);
+  margin-top: 0.1rem;
+}
+.savings-shape .ss-chart {
+  flex: 0 0 auto;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.savings-shape .ss-foot {
+  font-size: 0.62rem;
+  color: var(--dim);
+  margin-top: 0.5rem;
+}
+@media (max-width: 600px) {
+  .savings-shape {
+    margin: 0 0.75rem 0.75rem;
+    padding: 0.7rem 0.85rem;
+  }
+  .savings-shape .ss-head {
+    gap: 0.6rem;
+  }
+  .savings-shape .ss-hero {
+    font-size: 1.6rem;
+  }
+  /* The 12 bars must fit a 412px phone without a sideways scroll. */
+  .savings-shape .ss-chart {
+    width: 100%;
+  }
+}

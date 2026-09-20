@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v48';
-const BUILD_DATE = 'Sep 20, 2026 14:45';
+const APP_VERSION = 'v49';
+const BUILD_DATE = 'Sep 20, 2026 15:05';
 
 const MONTHS = [
   'January',
@@ -8534,6 +8534,78 @@ async function loadYearData() {
   };
 }
 
+// ── The savings year, as a shape ─────────────────────────────────────
+// The Year page was 37 rows x 12 months of pure numbers and no chart at all.
+// "Total Savings" rendered at the same weight as "Household Items" — font 400,
+// 14px, row 11 — even though savings is the one number she calls the score:
+// "that's all that's actually the important number."
+//
+// A year view owes her the SHAPE. The table already does detail well, so this
+// answers the other question — where is this heading — and sits above it.
+//
+// Form: magnitude over time with a destination, so bars + a hero number (not a
+// line: she reads month-to-month contribution, and the running total is the
+// headline). ONE series, so no legend — the title names it. Past vs future is
+// carried by FILL vs OUTLINE, never by colour alone, so it survives CVD,
+// greyscale and forced-colors.
+function renderSavingsShape(
+  months: MonthRow[],
+  savedFor: (m: MonthRow) => number,
+  todayMonth: number,
+  ytdSavings: number,
+  projSavings: number,
+): string {
+  const pts = months
+    .slice()
+    .sort((a, b) => a.month_num - b.month_num)
+    .map((m) => ({ mn: m.month_num, v: ag(savedFor(m)), future: m.month_num > todayMonth }));
+  const max = Math.max(...pts.map((p) => p.v), 1);
+  if (roundZ(max) === 0) return '';
+
+  const W = 12 * 26,
+    H = 54;
+  const bars = pts
+    .map((p, i) => {
+      const h = Math.max(2, Math.round((p.v / max) * H));
+      const x = i * 26 + 4;
+      const y = H - h;
+      // 4px rounded data-end, anchored to the baseline; 2px gap between bars.
+      return `<rect x="${x}" y="${y}" width="18" height="${h}" rx="4" ry="4"
+          fill="${p.future ? 'none' : 'var(--accent)'}"
+          stroke="${p.future ? 'var(--accent)' : 'none'}"
+          stroke-width="${p.future ? 1.5 : 0}"
+          stroke-dasharray="${p.future ? '3 2' : '0'}"
+          opacity="${p.future ? 0.55 : 1}"
+        ><title>${MONTHS[p.mn - 1]}: ${shekels(p.v)}${p.future ? ' (projected)' : ''}</title></rect>`;
+    })
+    .join('');
+  const labels = pts
+    .map(
+      (p, i) =>
+        `<text x="${i * 26 + 13}" y="${H + 11}" text-anchor="middle" font-size="7.5"
+          fill="${p.mn === todayMonth ? 'var(--accent)' : 'var(--dim)'}"
+          font-weight="${p.mn === todayMonth ? 700 : 400}">${MONTHS[p.mn - 1].slice(0, 1)}</text>`,
+    )
+    .join('');
+
+  const pct = projSavings > 0 ? Math.round((ytdSavings / projSavings) * 100) : 0;
+  return `<div class="savings-shape">
+      <div class="ss-head">
+        <div>
+          <div class="ss-label">Saved this year</div>
+          <div class="ss-hero">${shekels(ytdSavings)}</div>
+          <div class="ss-sub">on track for ${shekels(projSavings)} · ${pct}% there</div>
+        </div>
+        <svg class="ss-chart" viewBox="0 -2 ${W} ${H + 16}" width="${W}" height="${H + 16}"
+             role="img" aria-label="Savings by month. Solid bars are months already saved; dashed outlines are projected.">
+          <line x1="0" y1="${H}" x2="${W}" y2="${H}" stroke="var(--border)" stroke-width="1"/>
+          ${bars}${labels}
+        </svg>
+      </div>
+      <div class="ss-foot">solid = saved · dashed = still to come</div>
+    </div>`;
+}
+
 function renderYearSnapshot(): string {
   if (!state.yearData)
     return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
@@ -8968,7 +9040,10 @@ function renderYearSnapshot(): string {
   const fmtYZ = (n: number): string => shekels(n);
 
   // Summary ribbon ABOVE the table
+  const savedForMonth = (m: MonthRow): number =>
+    (budgetMap[m.id]?.['savings_bank'] || 0) + (budgetMap[m.id]?.['savings_invested'] || 0);
   const summaryHtml =
+    renderSavingsShape(months, savedForMonth, todayMonth, ytdSavings, projSavings) +
     '<div class="year-ribbon">' +
     '<span class="yr-stat">Income YTD <strong>' +
     fmtY(ytdIncome) +
