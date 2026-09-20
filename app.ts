@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v45';
-const BUILD_DATE = 'Sep 20, 2026 12:03';
+const APP_VERSION = 'v46';
+const BUILD_DATE = 'Sep 20, 2026 14:12';
 
 const MONTHS = [
   'January',
@@ -73,10 +73,17 @@ const CATEGORIES = [
   { key: 'holiday', label: 'Holiday', emoji: '🎉', hasStore: false },
 ];
 
+// The weekly-shop chains. Everything NOT on this list counts as a makolet —
+// her rule, given store by store on 2026-09-20: "Osher Ad, Yochananof,
+// Carrefour are supermarket, everything else makolet" (including the petrol
+// station, the Wolt order and the pizza place she bought a water bottle at).
+// Carrefour was missing until then, so ~591 of supermarket shopping across 2
+// trips had been counted on the makolet side.
 const BIG_STORES = [
   'yochananof',
   'shufersal',
   'osher ad',
+  'carrefour',
   'rami levy',
   'רמי לוי',
   'שופרסל',
@@ -3565,7 +3572,7 @@ function renderApp() {
           <div class="income-row"><span class="income-source">Petachya</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['petachya'] ? 'est' : 'act'}" onclick="toggleIncomeEst('petachya')" title="Toggle estimated/actual">${_est['petachya'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['petachya'] ? ' is-est' : ''}" type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0" onchange="saveIncomeField('income_petachya', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Clalit</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['clalit'] ? 'est' : 'act'}" onclick="toggleIncomeEst('clalit')" title="Toggle estimated/actual">${_est['clalit'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['clalit'] ? ' is-est' : ''}" type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0" onchange="saveIncomeField('income_clalit', this.value)" min="0" step="1"></div></div>
           <div class="income-row"><span class="income-source">Private (Vivi)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['private'] ? 'est' : 'act'}" onclick="toggleIncomeEst('private')" title="Toggle estimated/actual">${_est['private'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['private'] ? ' is-est' : ''}" type="number" id="inc-private" value="${current.income_private || ''}" placeholder="0" onchange="saveIncomeField('income_private', this.value)" min="0" step="1"></div></div>
-          ${(Number(current.income_other) || 0) !== 0 || state.incomeItems.length === 0 ? `<div class="income-row"><span class="income-source">Other (parents, Marom…)</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other'] ? 'est' : 'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['other'] ? ' is-est' : ''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>` : '<input type="hidden" id="inc-other" value="0">'}
+          ${(Number(current.income_other) || 0) !== 0 || state.incomeItems.length === 0 ? `<div class="income-row"><span class="income-source">Other</span><div style="display:flex;align-items:center;gap:.3rem;"><button class="est-pill ${_est['other'] ? 'est' : 'act'}" onclick="toggleIncomeEst('other')" title="Toggle estimated/actual">${_est['other'] ? 'EST' : 'ACT'}</button><input class="income-input${_est['other'] ? ' is-est' : ''}" type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0" onchange="saveIncomeField('income_other', this.value)" min="0" step="1"></div></div>` : '<input type="hidden" id="inc-other" value="0">'}
           `;
           })()}
           ${state.incomeItems
@@ -3706,7 +3713,7 @@ function renderApp() {
           <div class="fg"><label>Petachya</label><input type="number" id="inc-petachya" value="${current.income_petachya || ''}" placeholder="0"></div>
           <div class="fg"><label>Clalit</label><input type="number" id="inc-clalit" value="${current.income_clalit || ''}" placeholder="0"></div>
           <div class="fg"><label>Private (Vivi)</label><div style="display:flex;align-items:center;gap:.5rem;padding:.4rem .55rem;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);"><span style="font-family:'DM Mono',monospace;color:${roundZ(bizNetCurrent) < 0 ? 'var(--red)' : 'var(--text)'};">₪${amount(bizNetCurrent)}</span><span style="font-size:.65rem;color:var(--dim);margin-left:auto;">edit in Biz tab →</span></div></div>
-          <div class="fg"><label>Other (parents, Marom, etc.)</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
+          <div class="fg"><label>Other</label><input type="number" id="inc-other" value="${current.income_other || ''}" placeholder="0"></div>
           <div class="fg"><label>Savings to Bank</label><input type="number" id="inc-savings" value="${current.savings_bank || ''}" placeholder="0"></div>
         </div>
         <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.25rem;">
