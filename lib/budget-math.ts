@@ -81,3 +81,35 @@ export function creditTotal(row: {
 }): number {
   return ag((Number(row.amount) || 0) * creditOccurrences(row));
 }
+
+/**
+ * Which budget YEAR a payment is attributed to, and which month inside it.
+ *
+ * The year being VIEWED wins. That is the budget the money is being attributed
+ * to, and it is a different question from when the money left the account:
+ * gifts get pre-paid on purpose (paid Sep 2026, counted against 2027).
+ *
+ * The old rule derived the year from the payment date, so logging a 2026-dated
+ * gift while viewing 2027 filed it to 2026 — and it then vanished from the
+ * screen, because only the viewed year's rows are held in memory. It looked
+ * exactly like a failed save, and was reported as one (2026-09-20).
+ *
+ * Inside the counting year the date still picks the month, but only when the
+ * date actually falls in that year. A date from another year cannot name a
+ * month of this one, so it files as "general" (null) where the table allows a
+ * null month, and otherwise falls back to the caller's month.
+ */
+export function fileToYear(
+  dateStr: string | null | undefined,
+  viewedYear: number,
+  fallbackMonth: number,
+  opts?: { allowGeneral?: boolean },
+): { yr: number; mo: number | null } {
+  const general = opts?.allowGeneral ? null : fallbackMonth;
+  if (!dateStr) return { yr: viewedYear, mo: general };
+  const y = parseInt(String(dateStr).slice(0, 4), 10);
+  const dateYear = y >= 2000 && y <= 2100 ? y : viewedYear;
+  if (dateYear !== viewedYear) return { yr: viewedYear, mo: general };
+  const m = parseInt(String(dateStr).slice(5, 7), 10);
+  return { yr: viewedYear, mo: m >= 1 && m <= 12 ? m : fallbackMonth };
+}

@@ -26,7 +26,7 @@ assert.ok(
   'dist/lib/budget-math.js is missing — run `npm run build` before the unit tests.',
 );
 
-const { ag, pct, status, creditOccurrences, creditTotal } = await import(
+const { ag, pct, status, creditOccurrences, creditTotal, fileToYear } = await import(
   pathToFileURL(compiled).href
 );
 
@@ -114,4 +114,35 @@ test('creditTotal treats a missing amount as zero, and stays float-safe', () => 
   assert.equal(creditTotal({ amount: 'abc' }), 0);
   // 0.1 * 3 is 0.30000000000000004 raw; ag() inside creditTotal snaps it.
   assert.equal(creditTotal({ amount: 0.1, month_start: 1, month_end: 3 }), 0.3);
+});
+
+// ── fileToYear: which budget year the money counts against ────────────────
+// THE regression lock for the 2026-09-20 report: a 318 gift logged while
+// viewing 2027, dated 2026-09-18, filed itself to 2026/Sep and then vanished
+// from the screen. It read as a failed save.
+test('a pre-payment counts against the year being VIEWED, not the year on the date', () => {
+  const r = fileToYear('2026-09-18', 2027, 9, { allowGeneral: true });
+  assert.equal(r.yr, 2027, 'must file to the viewed year, not the date year');
+  assert.equal(r.mo, null, 'a date from another year cannot name a month of this one');
+});
+
+test('a date inside the viewed year still picks its month', () => {
+  assert.deepEqual(fileToYear('2027-03-04', 2027, 9, { allowGeneral: true }), { yr: 2027, mo: 3 });
+  assert.deepEqual(fileToYear('2026-01-31', 2026, 9, { allowGeneral: true }), { yr: 2026, mo: 1 });
+  assert.deepEqual(fileToYear('2026-12-01', 2026, 9, { allowGeneral: true }), { yr: 2026, mo: 12 });
+});
+
+test('no date means general where the table allows it, else the fallback month', () => {
+  assert.deepEqual(fileToYear(null, 2027, 9, { allowGeneral: true }), { yr: 2027, mo: null });
+  assert.deepEqual(fileToYear('', 2027, 9, { allowGeneral: true }), { yr: 2027, mo: null });
+  // travel_payments.month_num is NOT NULL — those callers get a real month.
+  assert.deepEqual(fileToYear(null, 2027, 9), { yr: 2027, mo: 9 });
+  assert.deepEqual(fileToYear('2026-09-18', 2027, 9), { yr: 2027, mo: 9 });
+});
+
+test('the viewed year ALWAYS wins, in both directions', () => {
+  // back-dated into a later view, and forward-dated into an earlier view
+  assert.equal(fileToYear('2026-09-18', 2027, 9).yr, 2027);
+  assert.equal(fileToYear('2027-01-05', 2026, 9).yr, 2026);
+  assert.equal(fileToYear('garbage', 2026, 9).yr, 2026, 'junk date must not move the year');
 });

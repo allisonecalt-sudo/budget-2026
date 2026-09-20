@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // required so the emitted dist/app.js resolves the sibling module in the browser.
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
-import { ag, pct, status, creditOccurrences, creditTotal } from './lib/budget-math.js';
+import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
 
 declare global {
   interface Window {
@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v40';
-const BUILD_DATE = 'Sep 17, 2026 08:05';
+const APP_VERSION = 'v41';
+const BUILD_DATE = 'Sep 20, 2026 10:30';
 
 const MONTHS = [
   'January',
@@ -4656,8 +4656,9 @@ async function addCharityPayment() {
   // (month_num null) rather than silently stamping it with today's month: a
   // gift with no date genuinely isn't tied to a month, and pretending
   // otherwise put gifts in months they never belonged to.
-  const monthNum = dateVal ? monthNumFromDate(dateVal, todayMonth()) : null;
-  const yr = yearFromDate(dateVal, state.currentYear);
+  const filed = fileToBudgetYear(dateVal, todayMonth(), { allowGeneral: true });
+  const monthNum = filed.mo;
+  const yr = filed.yr;
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in name and amount');
     return;
@@ -4679,7 +4680,7 @@ async function addCharityPayment() {
   byId('cp-date').value = '';
   byId('cp-amount').value = '';
   renderApp();
-  toast(landedToast(monthNum, yr));
+  toast(landedToast(monthNum, yr, dateVal));
 }
 
 async function deleteCharityPayment(id: string): Promise<void> {
@@ -4733,11 +4734,16 @@ async function updateCharityPayment(id: string, field: string, value: unknown): 
     .update({ [field]: val })
     .eq('id', id);
   p[field] = val;
-  // The date drives the month. Setting one files the gift in that month;
-  // CLEARING one returns it to "general" rather than leaving it stranded in
-  // whatever month it used to sit in.
+  // The date drives the MONTH, never the year — editing a date must not move a
+  // gift out of the budget year she filed it against. A date inside that year
+  // picks its month; a date from another year (a pre-payment) or no date at all
+  // leaves it general, rather than stranding it in a month it never belonged to.
   if (field === 'payment_date') {
-    const newMonth = val ? monthNumFromDate(val as string, p.month_num as number) : null;
+    const rowYear = Number(p.year) || state.currentYear;
+    const newMonth =
+      val && yearFromDate(val as string, rowYear) === rowYear
+        ? monthNumFromDate(val as string, p.month_num as number)
+        : null;
     if (newMonth !== p.month_num) {
       await sb.from('charity_payments').update({ month_num: newMonth }).eq('id', id);
       p.month_num = newMonth;
@@ -4982,8 +4988,9 @@ async function addTravelPayment() {
   const paymentDate = byId('tp-date').value || null;
   // The DATE decides the month, not the month the app is showing. Travel is a
   // yearly budget. Blank date → today's month (no month picker anymore).
-  const monthNum = monthNumFromDate(paymentDate, todayMonth());
-  const yr = yearFromDate(paymentDate, state.currentYear);
+  const filedT = fileToBudgetYear(paymentDate, todayMonth());
+  const monthNum = filedT.mo as number;
+  const yr = filedT.yr;
   if (!label || !amount || isNaN(amount)) {
     toast('Fill in what and amount');
     return;
@@ -5014,7 +5021,7 @@ async function addTravelPayment() {
   byId('tp-amount').value = '';
   byId('tp-date').value = '';
   renderApp();
-  toast(landedToast(monthNum, yr));
+  toast(landedToast(monthNum, yr, paymentDate));
 }
 
 // Log a payment straight into a specific trip + category (the "+ log in Food"
@@ -5984,11 +5991,16 @@ function renderCharityTab() {
     // Date-first: a real date wins, an undated row falls back to its filed
     // month, and a GENERAL gift (no date, no month) sorts to the very end
     // rather than rendering as "NaN" or jumping to January.
+    // "General" means month_num == null, full stop — including a PRE-PAYMENT
+    // that has a date (money that left in another year but counts against this
+    // one). Those group together at the end under the General divider and order
+    // by date among themselves; a gift belonging to a month of THIS year sorts
+    // by its date as usual.
     const dk = (p: CharityPaymentRow): string =>
-      (p.payment_date as string) ||
-      (p.month_num == null
-        ? String(p.year || state.currentYear) + '-99-99'
-        : String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99');
+      p.month_num == null
+        ? String(p.year || state.currentYear) + '-99-99-' + ((p.payment_date as string) || '')
+        : (p.payment_date as string) ||
+          String(p.year || state.currentYear) + '-' + String(p.month_num).padStart(2, '0') + '-99';
     const sorted = [...payments].sort((a, b) => {
       if (ps === 'month') return dk(a).localeCompare(dk(b));
       if (ps === 'month-desc') return dk(b).localeCompare(dk(a));
@@ -6017,7 +6029,7 @@ function renderCharityTab() {
     const payRows = sorted
       .map((p) => {
         let lead = '';
-        if (p.month_num == null && !p.payment_date && !generalHeaderEmitted) {
+        if (p.month_num == null && !generalHeaderEmitted) {
           generalHeaderEmitted = true;
           lead = generalHeader;
         }
@@ -10387,8 +10399,9 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const dateVal = byId('qa-date').value || null; // optional
     // Travel is a YEARLY budget — the date she picks files it, not the month
     // the app happens to be sitting on.
-    const mo = monthNumFromDate(dateVal, monthNum);
-    const yr = yearFromDate(dateVal, state.currentYear);
+    const filedQT = fileToBudgetYear(dateVal, monthNum);
+    const mo = filedQT.mo as number;
+    const yr = filedQT.yr;
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
@@ -10415,15 +10428,16 @@ async function submitQuickAdd(kind: string): Promise<void> {
     }
     closeAllPanels();
     renderApp();
-    toast(landedToast(mo, yr));
+    toast(landedToast(mo, yr, dateVal));
     return;
   }
   if (kind === 'charity') {
     const label = byId('qa-label').value.trim();
     const dateVal = byId('qa-date').value || null;
     const amount = parseFloat(byId('qa-amount').value);
-    const mo = monthNumFromDate(dateVal, monthNum);
-    const yr = yearFromDate(dateVal, state.currentYear);
+    const filedQC = fileToBudgetYear(dateVal, monthNum, { allowGeneral: true });
+    const mo = filedQC.mo;
+    const yr = filedQC.yr;
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in name and amount');
       return;
@@ -10449,7 +10463,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
     }
     closeAllPanels();
     renderApp();
-    toast(landedToast(mo, yr));
+    toast(landedToast(mo, yr, dateVal));
     return;
   }
   if (kind === 'admin') {
@@ -10457,8 +10471,9 @@ async function submitQuickAdd(kind: string): Promise<void> {
     const amount = parseFloat(byId('qa-amount').value);
     const dateVal = byId('qa-date').value || null;
     // Admin is a yearly ledger too — the picked date files it.
-    const mo = monthNumFromDate(dateVal, monthNum);
-    const yr = yearFromDate(dateVal, state.currentYear);
+    const filedQA = fileToBudgetYear(dateVal, monthNum, { allowGeneral: true });
+    const mo = filedQA.mo;
+    const yr = filedQA.yr;
     if (!label || !amount || isNaN(amount)) {
       toast('Fill in what and amount');
       return;
@@ -10515,7 +10530,7 @@ async function submitQuickAdd(kind: string): Promise<void> {
     parent!.projected_amount = newProj;
     closeAllPanels();
     renderApp();
-    toast(landedToast(mo, yr));
+    toast(landedToast(mo, yr, dateVal));
     return;
   }
 }
@@ -10557,6 +10572,17 @@ function yearFromDate(dateStr: string | null | undefined, fallback: number): num
   return y >= 2000 && y <= 2100 ? y : fallback;
 }
 
+// Which budget year a payment is attributed to. Thin wrapper over the pure
+// rule in lib/budget-math.ts — it only supplies the year she is currently
+// viewing, which is the thing that decides attribution.
+function fileToBudgetYear(
+  dateStr: string | null | undefined,
+  fallbackMonth: number,
+  opts?: { allowGeneral?: boolean },
+): { yr: number; mo: number | null } {
+  return fileToYear(dateStr, state.currentYear, fallbackMonth, opts);
+}
+
 const MONTH_ABBR = [
   'Jan',
   'Feb',
@@ -10574,13 +10600,19 @@ const MONTH_ABBR = [
 
 // Say out loud where the payment landed — silence here is how a payment ends up
 // filed under the wrong month without her ever seeing it.
-function landedToast(monthNum: number | null, yr: number): string {
+function landedToast(monthNum: number | null, yr: number, paidDate?: string | null): string {
+  // A pre-payment — money that left in one year but counts against another — is
+  // the case that used to look like a failed save. Name both halves out loud.
+  const paidYear = paidDate ? yearFromDate(paidDate, yr) : yr;
+  const prepaid = paidYear !== yr ? ` (paid ${paidYear})` : '';
   // A general charity gift has no month — say so plainly instead of "Logged to ?".
   if (monthNum == null) {
-    return yr === state.currentYear ? 'Logged as general ✓' : `Logged as general, ${yr} ✓`;
+    return `Logged to ${yr}, general${prepaid} ✓`;
   }
   const mo = MONTH_ABBR[monthNum - 1] || '?';
-  return yr === state.currentYear ? `Logged to ${mo} ✓` : `Logged to ${mo} ${yr} ✓`;
+  return yr === state.currentYear
+    ? `Logged to ${mo}${prepaid} ✓`
+    : `Logged to ${mo} ${yr}${prepaid} ✓`;
 }
 
 // ── M5 — Always-visible Owed widget (global, all tabs) ─────────────────
