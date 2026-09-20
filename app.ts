@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v47';
-const BUILD_DATE = 'Sep 20, 2026 14:40';
+const APP_VERSION = 'v48';
+const BUILD_DATE = 'Sep 20, 2026 14:45';
 
 const MONTHS = [
   'January',
@@ -682,16 +682,16 @@ function renderRoomToMove(income: number, totalBudgeted: number): string {
       <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:${colour};font-weight:600;">${shekels(Math.abs(val))}</span>
     </div>`;
 
-  const sect = (title: string, body: string, sub = ''): string =>
+  const sect = (title: string, body: string, sub = '', tip = ''): string =>
     !body
       ? ''
-      : `<div style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border);">
+      : `<div style="margin-top:.5rem;padding-top:.45rem;border-top:1px solid var(--border);"${tip ? ` title="${tip}"` : ''}>
           <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">${title}</div>
           ${sub ? `<div style="font-size:.63rem;color:var(--dim);margin-bottom:.15rem;">${sub}</div>` : ''}
           ${body}
         </div>`;
 
-  return `<div class="room-to-move${_rtmOpen ? ' open' : ''}" id="room-to-move" onclick="toggleRoomToMove()" title="Tap for where the money could come from">
+  return `<div class="room-to-move${_rtmOpen ? ' open' : ''}" id="room-to-move" onclick="toggleRoomToMove()" title="Room to move — if you need money, where it could come from. Free money plus envelope slack; the pots are listed separately because taking from them opens a gap in the year.">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;">
         <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">Room to move</span>
         <span style="font-family:'DM Mono',monospace;font-size:1rem;font-weight:600;color:var(--accent);">${shekels(headline)}</span>
@@ -699,21 +699,31 @@ function renderRoomToMove(income: number, totalBudgeted: number): string {
       <div style="font-size:.64rem;color:var(--dim);margin-top:.1rem;">free money plus envelope slack — before touching any pot</div>
       ${
         roundZ(r.free) > 0
-          ? sect('Free', line('💰', 'Not yet budgeted', r.free, 'var(--green)'))
+          ? sect(
+              'Free',
+              line('💰', 'Not yet budgeted', r.free, 'var(--green)'),
+              '',
+              "Free — income you haven't given a job yet. Costs nothing to use.",
+            )
           : ''
       }
       ${sect(
         'Envelope slack',
         r.slack.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--green)')).join(''),
+        '',
+        'Envelope slack — budgeted but not yet spent. Reducing these costs nothing today.',
       )}
       ${sect(
         'Needs money',
         r.over.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--red)', 'over')).join(''),
+        '',
+        'Needs money — envelopes already past their budget this month.',
       )}
       ${sect(
         'Pots — moving these has consequences',
         r.pots.map((x) => line(x.c.emoji, x.c.label, x.room, 'var(--muted)', 'set aside')).join(''),
         'already set aside this month; taking it back opens a gap in the year',
+        'Pots — money already set aside for Savings, Travel, Admin and Charity. You CAN take it back, but it opens a gap in the year.',
       )}
     </div>`;
 }
@@ -2861,13 +2871,13 @@ function renderRibbon(
 
   return `<div class="ribbon-panel">
     <div class="ribbon">
-      <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income not yet given a job (Income minus Budgeted). Goal is 0."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${roundZ(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
-      <div class="ribbon-stat rs-hero" title="Remaining — all unspent income (Income minus Used)"><div class="ribbon-label">Remaining</div><div class="ribbon-val" style="color:${roundZ(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
-      <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — budgeted money not yet spent (Budgeted minus Used). Hover or tap to see where it's left." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${roundZ(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
+      <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income that hasn't been given a job yet (Income minus Budgeted). You're aiming for 0: every shekel assigned."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${roundZ(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
+      <div class="ribbon-stat rs-hero" title="Remaining — income minus everything already locked (Income minus Used). What the month still has left in it."><div class="ribbon-label" title="Remaining — projected cost minus what has been paid. NOTE: this is a different sum from Remaining on the Budget tab.">Remaining</div><div class="ribbon-val" style="color:${roundZ(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
+      <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — envelope money not yet used up (Budgeted minus Used). Hover or tap to see which envelopes still hold it." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${roundZ(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
       <div class="ribbon-datapoints">
         <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
         <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
-        <div class="rb-dp" title="Used — total spent so far this month"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
+        <div class="rb-dp" title="Used — money you can no longer move: what you've actually spent, PLUS fixed bills that are locked in even if they haven't left yet (e.g. rent counts from day 1)"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
         <div class="rb-dp rb-dp-live" id="saved-dp" style="cursor:pointer;" title="Saved — bank + invested this month. Hover or tap for the year." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showSavedPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideSavedPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleSavedPop(this)"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved <span style="font-size:.55rem;color:var(--dim);">▾</span></span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
       </div>
       ${(() => {
@@ -2903,7 +2913,7 @@ function renderRibbon(
           return `<span class="owed-seg owed-seg-zero" title="${label}: funded" onclick="switchTab('${tab}')">${emoji} <span style="font-family:'DM Mono',monospace;color:var(--green);">0</span></span>`;
         };
         const chev = owedOpen ? '▾' : '▸';
-        return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;">
+        return `<div class="ribbon-stat owed-strip" id="owed-strip" style="cursor:default;" title="Owed elsewhere — yearly pots (Travel, Admin) that are short of what they need. A gap here is money the year still has to find.">
           <div class="ribbon-label" style="display:flex;align-items:center;gap:.3rem;">
             <button class="owed-chev" onclick="toggleOwedStrip()" title="${owedOpen ? 'Hide' : 'Show'} owed elsewhere" aria-label="${owedOpen ? 'Hide' : 'Show'} owed">${chev}</button>
             <span style="color:${roundZ(totalOwed) > 0 ? 'var(--red)' : 'var(--muted)'};">Owed elsewhere</span>
@@ -5956,22 +5966,22 @@ function renderTravelTab() {
     <!-- Summary Bar -->
     <div class="tab-kpi-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Budget</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;" title="Budget — the whole year's projected cost for this tab.">Budget</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(budget)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">projected for the year</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Set aside</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;" title="Set aside — what has been allocated across the months so far.">Set aside</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalAlloc)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">all months</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Gap</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;" title="Gap — projected cost minus set aside (minus any money in). What the year still has to find.">Gap</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${gapColor};">${fmtA(Math.abs(gap))}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">${gap > 0 ? 'still need to find' : 'fully covered ✓'}</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
-        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;">Spent</div>
+        <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem;" title="Spent — cash actually paid out against these items.">Spent</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;">${fmtA(totalSpent)}</div>
         <div style="font-size:.68rem;color:var(--dim);margin-top:.2rem;">paid so far</div>
       </div>
@@ -6331,12 +6341,12 @@ function renderCharityTab() {
       <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:1.1rem;">Charity giving · ${state.currentYear}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1.2rem;">
         <div>
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:.4rem;">In so far</div>
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:.4rem;" title="In so far — tzedaka that has actually gone out this year.">In so far</div>
           <div style="font-family:'DM Mono',monospace;font-size:2rem;font-weight:600;color:var(--green);line-height:1;">${fmtA(inSoFar)}</div>
           <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">actually gone in this year</div>
         </div>
         <div>
-          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem;">Still to go</div>
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem;" title="Still to go — this year's target minus what has gone out. Floors at zero: over-giving shows as target reached, never as a negative.">Still to go</div>
           <div style="font-family:'DM Mono',monospace;font-size:2rem;font-weight:600;color:var(--accent);line-height:1;">${fmtA(stillToGo)}</div>
           <div style="font-size:.68rem;color:var(--dim);margin-top:.4rem;">${roundZ(overTarget) > 0 ? `<span style="color:var(--green);font-weight:600;">target reached · +${fmtA(overTarget)} extra given</span>` : 'left to give this year'}</div>
         </div>
@@ -8234,16 +8244,16 @@ function renderCashTab(): string {
 
   return `<div style="max-width:800px;margin:1.5rem auto;padding:0 1rem;">
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem;">
-      <div class="year-sum-card"><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div>${
+      <div class="year-sum-card" title="Total Liquid — what is actually yours right now: holdings, plus what people owe you, minus what you owe."><div class="year-sum-label">Total Liquid</div><div class="year-sum-val">₪${n(totalLiquid)}</div>${
         roundZ(totalDebt) !== 0
           ? `<div style="font-size:.6rem;color:var(--dim);margin-top:.15rem;">after cards</div>`
           : ''
       }</div>
-      <div class="year-sum-card"><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
-      <div class="year-sum-card"><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
+      <div class="year-sum-card" title="Holdings — money you are actually holding, across every account."><div class="year-sum-label">Holdings</div><div class="year-sum-val">₪${n(totalHoldings)}</div></div>
+      <div class="year-sum-card" title="Owed to You — money other people owe you (Splitwise). Adds to the total."><div class="year-sum-label">Owed to You</div><div class="year-sum-val">₪${n(totalOwed)}</div></div>
       ${
         roundZ(totalDebt) !== 0
-          ? `<div class="year-sum-card"><div class="year-sum-label">I Owe</div><div class="year-sum-val" style="color:var(--amber);">−₪${n(totalDebt)}</div></div>`
+          ? `<div class="year-sum-card" title="I Owe — credit cards and anything else going out. Subtracted from Total Liquid."><div class="year-sum-label">I Owe</div><div class="year-sum-val" style="color:var(--amber);">−₪${n(totalDebt)}</div></div>`
           : ''
       }
     </div>
