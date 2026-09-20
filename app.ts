@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v41';
-const BUILD_DATE = 'Sep 20, 2026 10:30';
+const APP_VERSION = 'v42';
+const BUILD_DATE = 'Sep 20, 2026 10:45';
 
 const MONTHS = [
   'January',
@@ -6360,8 +6360,18 @@ function renderAdminTab() {
     })
     .join('');
 
-  // Pre-compute items HTML — separate active from done, group by category
-  const ADMIN_CATEGORIES = [
+  // Pre-compute items HTML — separate active from done, group by category.
+  //
+  // These seven are the KNOWN categories, and they define the display ORDER —
+  // they are NOT a whitelist. Any other category she has actually used gets
+  // appended after them. The grouped view used to render only this fixed list,
+  // so an item in any other category vanished from Yearly Expenses while still
+  // counting in Budget / Gap / All-items. "Carmei Gat Apt" is her single most
+  // used admin category (11 items, ~₪13,170) and is not on this list, so the
+  // trap was live on the category she uses most. (Found in audit 2026-09-20;
+  // the Payment Log below already derived its groups from the data, which is
+  // why the same money showed up correctly there.)
+  const ADMIN_KNOWN_CATEGORIES = [
     'Apartment',
     'Car',
     'Furniture',
@@ -6369,6 +6379,12 @@ function renderAdminTab() {
     'Professional',
     'Admin',
     'Other',
+  ];
+  const ADMIN_CATEGORIES: string[] = [
+    ...ADMIN_KNOWN_CATEGORIES,
+    ...[...new Set(items.map((i) => String(i.category || 'Other')))]
+      .filter((c) => !ADMIN_KNOWN_CATEGORIES.includes(c))
+      .sort(),
   ];
   const sortFn = (a: CharityItemRow, b: CharityItemRow): number => {
     if (aiSort === 'alpha') return (a.label || '').localeCompare(b.label || '');
