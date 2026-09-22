@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v51';
-const BUILD_DATE = 'Sep 22, 2026 09:45';
+const APP_VERSION = 'v52';
+const BUILD_DATE = 'Sep 22, 2026 10:12';
 
 const MONTHS = [
   'January',
@@ -2898,12 +2898,11 @@ function renderRibbon(
   return `<div class="ribbon-panel">
     <div class="ribbon">
       <div class="ribbon-stat rs-hero rs-key" title="Unallocated — income that hasn't been given a job yet (Income minus Budgeted). You're aiming for 0: every shekel assigned."><div class="ribbon-label">Unallocated</div><div class="ribbon-val" style="color:${roundZ(leftToBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(leftToBudget)}</div><div class="ribbon-sub">income not yet budgeted</div></div>
-      <div class="ribbon-stat rs-hero" title="Remaining — income minus everything already locked (Income minus Used). What the month still has left in it."><div class="ribbon-label" title="Remaining — projected cost minus what has been paid. NOTE: this is a different sum from Remaining on the Budget tab.">Remaining</div><div class="ribbon-val" style="color:${roundZ(income - totalSpent) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(income - totalSpent)}</div><div class="ribbon-sub">of income, unspent</div></div>
       <div class="ribbon-stat rs-hero" id="lts-stat" style="cursor:pointer;" title="Left to Spend — envelope money not yet used up (Budgeted minus Used). Hover or tap to see which envelopes still hold it." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showLtsPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideLtsPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleLtsPop(this)"><div class="ribbon-label">Left to Spend <span style="font-size:.55rem;color:var(--dim);">▾</span></div><div class="ribbon-val" style="color:${roundZ(remainingInBudget) >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(remainingInBudget)}</div><div class="ribbon-sub">of budget, unspent — tap for where</div></div>
       <div class="ribbon-datapoints">
         <div class="rb-dp" title="Income — total money coming in this month"><span class="rb-dp-label">Income</span><span class="rb-dp-val" style="${isAnyEstimated(state.currentMonthId) ? 'color:var(--est-val);' : ''}">${isAnyEstimated(state.currentMonthId) ? '~' : ''}${fmt(income)}</span></div>
         <div class="rb-dp" title="Budgeted — income you've assigned to categories (given a job)"><span class="rb-dp-label">Budgeted</span><span class="rb-dp-val">${fmt(totalBudgeted)}</span></div>
-        <div class="rb-dp" title="Used — money you can no longer move: what you've actually spent, PLUS fixed bills that are locked in even if they haven't left yet (e.g. rent counts from day 1)"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
+        <div class="rb-dp" title="Used — money you can no longer move: what you've actually spent, PLUS fixed bills locked in before they leave, money set aside into Travel/Admin/Charity, and savings"><span class="rb-dp-label">Used</span><span class="rb-dp-val">${fmt(totalSpent)}</span></div>
         <div class="rb-dp rb-dp-live" id="saved-dp" style="cursor:pointer;" title="Saved — bank + invested this month. Hover or tap for the year." onmouseenter="if(window.matchMedia('(hover:hover)').matches)showSavedPop(this)" onmouseleave="if(window.matchMedia('(hover:hover)').matches)scheduleHideSavedPop()" onclick="if(!window.matchMedia('(hover:hover)').matches)toggleSavedPop(this)"><span class="rb-dp-label" style="color:var(--accent);">🏦 Saved <span style="font-size:.55rem;color:var(--dim);">▾</span></span><span class="rb-dp-val" style="color:var(--accent);">${fmt((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</span></div>
       </div>
       ${(() => {
@@ -3141,7 +3140,7 @@ function renderCategoryGroups(
                     const rem = Math.round(b - s);
                     return rem < 0
                       ? `₪${fmt(-rem).replace('₪', '')} over budget`
-                      : `₪${fmt(rem).replace('₪', '')} remaining`;
+                      : `₪${fmt(rem).replace('₪', '')} left`;
                   })()}
                 </div>`
                   : ''
@@ -6014,7 +6013,7 @@ function renderTravelTab() {
       <div style="background:var(--surface);border:1px solid ${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${roundZ(remaining) < 0 ? 'over budget' : 'left to spend'}</div>
+        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${roundZ(remaining) < 0 ? 'over budget' : 'not yet paid'}</div>
       </div>
     </div>
 
@@ -6406,7 +6405,7 @@ function renderCharityTab() {
         </div>
         <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.78rem;font-weight:600;padding:.3rem 0 .1rem;margin-top:.15rem;border-top:1px solid var(--border);">
           <span style="color:${roundZ(dueGap) < 0 ? 'var(--amber)' : 'var(--green)'};">${
-            roundZ(dueGap) < 0 ? 'Still to go out' : roundZ(dueGap) > 0 ? 'Given ahead' : 'Level'
+            roundZ(dueGap) < 0 ? 'Not given yet' : roundZ(dueGap) > 0 ? 'Given ahead' : 'Level'
           }</span>
           <span style="font-family:'DM Mono',monospace;color:${roundZ(dueGap) < 0 ? 'var(--amber)' : 'var(--green)'};">${fmtA(Math.abs(dueGap))}</span>
         </div>
@@ -6895,7 +6894,7 @@ function renderAdminTab() {
       <div style="background:var(--surface);border:1px solid ${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
         <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
-        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${remaining < 0 ? 'over budget' : 'not yet spent'}</div>
+        <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${roundZ(remaining) < 0 ? 'over budget' : 'not yet paid'}</div>
       </div>
     </div>
 
@@ -7784,17 +7783,17 @@ function renderAccountantTracker(current: MonthRow): string {
     })
     .reduce((sum, b) => sum + (b.accountant_fee || 0), 0);
   const shouldBe = upToMonth * 200;
-  const diffColor = paidUpTo >= shouldBe ? 'var(--green)' : 'var(--red)';
+  const diffColor = paidUpTo >= shouldBe ? 'var(--green)' : 'var(--amber)';
 
   return `
     <div class="biz-card">
       <div class="biz-section-title">Accountant Fee Tracker — ₪200/month</div>
       <div class="biz-row">
-        <span class="biz-label">Should have paid until ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
+        <span class="biz-label">Due by ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
         <span class="biz-val">${fmt(shouldBe)}</span>
       </div>
       <div class="biz-row">
-        <span class="biz-label">Actually paid until ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
+        <span class="biz-label">Paid so far</span>
         <span class="biz-val" style="color:${diffColor}">${fmt(paidUpTo)}</span>
       </div>
     </div>
@@ -8849,19 +8848,19 @@ function renderYearSnapshot(): string {
     {
       type: 'row',
       bold: true,
-      label: 'Total Spent',
+      label: 'Total Used',
       valFn: (m: MonthRow, f: boolean) => totalSpentFor(m, f),
       sectionGroup: 'overview',
     },
     {
       type: 'net',
-      label: '\u{1F4B0} Unbudgeted',
+      label: '\u{1F4B0} Unallocated',
       valFn: (m: MonthRow) => incFor(m) - totalBudgetedFor(m as MonthRow),
       sectionGroup: 'overview',
     },
     {
       type: 'net',
-      label: '\u2705 Remaining',
+      label: '\u2705 Unspent',
       valFn: (m: MonthRow, f: boolean) => incFor(m) - totalSpentFor(m, f),
       sectionGroup: 'overview',
     },
@@ -9559,7 +9558,7 @@ function openSnapshot(): void {
         return `<tr class="sn-cat ${gid} collapsed">
         <td data-label="Category" style="padding-left:1.5rem">${c.emoji} ${c.label}</td>
         <td data-label="Budget">${b ? n(b) : ''}</td>
-        <td data-label="Spent">${b || s ? n(s) : ''}</td>
+        <td data-label="Used">${b || s ? n(s) : ''}</td>
         <td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td>
       </tr>`;
       })
@@ -9569,12 +9568,12 @@ function openSnapshot(): void {
       const b = catBudget(c.key) || 0;
       const s = c.hasTab ? b : spent[c.key] || 0;
       const r = Math.round(b - s);
-      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Spent">${b || s ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
+      return `<tr class="sn-cat"><td data-label="Category">${c.emoji} ${c.label}</td><td data-label="Budget">${b ? n(b) : ''}</td><td data-label="Used">${b || s ? n(s) : ''}</td><td data-label="Remaining" class="${r < 0 ? 'sn-over' : r > 0 ? 'sn-ok' : ''}">${b || s ? n(r) : ''}</td></tr>`;
     }
     return `<tr class="sn-group" id="${gid}-hdr" onclick="snToggle('${gid}')">
         <td data-label="Category"><span class="sn-chev" style="margin-right:.4rem;color:var(--muted)">▶</span>${group.emoji} ${group.label}</td>
         <td data-label="Budget">${gb ? n(gb) : ''}</td>
-        <td data-label="Spent">${n(gs)}</td>
+        <td data-label="Used">${n(gs)}</td>
         <td data-label="Remaining" class="${gr < 0 ? 'sn-over' : gr > 0 ? 'sn-ok' : ''}">${gb ? n(gr) : ''}</td>
       </tr>${catRows}`;
   }).join('');
@@ -9585,12 +9584,12 @@ function openSnapshot(): void {
       <thead><tr><th>Category</th><th>Budget ₪</th><th>Used ₪</th><th>Remaining ₪</th></tr></thead>
       <tbody>
         <tr class="sn-section"><td colspan="4">📊 Summary — ${current.month_name}</td></tr>
-        <tr class="sn-cat"><td data-label="Category">Income</td><td data-label="Budget"></td><td data-label="Spent">${n(income)}</td><td data-label="Remaining"></td></tr>
-        <tr class="sn-cat"><td data-label="Category">Used</td><td data-label="Budget"></td><td data-label="Spent">${n(totalSpent)}</td><td data-label="Remaining"></td></tr>
-        <tr class="sn-cat"><td data-label="Category">Remaining</td><td data-label="Budget"></td><td data-label="Spent"></td><td data-label="Remaining" class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
-        <tr class="sn-group"><td data-label="Category">🏦 Savings</td><td data-label="Budget">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Spent">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Remaining">0</td></tr>
-        <tr class="sn-cat"><td data-label="Category">🏦 In Bank</td><td data-label="Budget">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Spent">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Remaining">0</td></tr>
-        <tr class="sn-cat"><td data-label="Category">📈 Invested</td><td data-label="Budget">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Spent">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Remaining">0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">Income</td><td data-label="Budget"></td><td data-label="Amount">${n(income)}</td><td data-label="Remaining"></td></tr>
+        <tr class="sn-cat"><td data-label="Category">Used</td><td data-label="Budget"></td><td data-label="Amount">${n(totalSpent)}</td><td data-label="Remaining"></td></tr>
+        <tr class="sn-cat"><td data-label="Category">Unspent</td><td data-label="Budget"></td><td data-label="Used"></td><td data-label="Remaining" class="${income - totalSpent >= 0 ? 'sn-ok' : 'sn-over'}">${n(income - totalSpent)}</td></tr>
+        <tr class="sn-group"><td data-label="Category">🏦 Savings</td><td data-label="Budget">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Used">${n((state.budgets['savings_bank'] || 0) + (state.budgets['savings_invested'] || 0))}</td><td data-label="Remaining">0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">🏦 In Bank</td><td data-label="Budget">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Used">${n(state.budgets['savings_bank'] || 0)}</td><td data-label="Remaining">0</td></tr>
+        <tr class="sn-cat"><td data-label="Category">📈 Invested</td><td data-label="Budget">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Used">${n(state.budgets['savings_invested'] || 0)}</td><td data-label="Remaining">0</td></tr>
         ${groupRows}
       </tbody>
     </table>`;
