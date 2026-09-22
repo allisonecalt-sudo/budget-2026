@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v50';
-const BUILD_DATE = 'Sep 22, 2026 09:40';
+const APP_VERSION = 'v51';
+const BUILD_DATE = 'Sep 22, 2026 09:45';
 
 const MONTHS = [
   'January',
@@ -2045,22 +2045,40 @@ async function showSavedPop(el: HTMLElement): Promise<void> {
   // The pointer may have left while we were fetching.
   if (!document.getElementById('saved-pop')) return;
 
-  const savedFor = (mid: string): number =>
-    (map[mid]?.['savings_bank'] || 0) + (map[mid]?.['savings_invested'] || 0);
+  // Her ask, 2026-09-22: "in saved dropdown also show investee vs saved".
+  // The two are different money — bank is reachable, invested is not — and she
+  // invests rarely ("as of yet i rarely invest"), so the split only shows up in
+  // the months where it actually happened rather than a column of zeros.
+  const bankFor = (mid: string): number => map[mid]?.['savings_bank'] || 0;
+  const investFor = (mid: string): number => map[mid]?.['savings_invested'] || 0;
+  const savedFor = (mid: string): number => bankFor(mid) + investFor(mid);
   const todayMonth = new Date().getMonth() + 1;
   const months = [...state.months].sort((a, b) => a.month_num - b.month_num);
   const ytd = ag(
     months.filter((m) => m.month_num <= todayMonth).reduce((s, m) => s + savedFor(m.id), 0),
   );
   const proj = ag(months.reduce((s, m) => s + savedFor(m.id), 0));
+  const past = months.filter((m) => m.month_num <= todayMonth);
+  const ytdBank = ag(past.reduce((s, m) => s + bankFor(m.id), 0));
+  const ytdInvest = ag(past.reduce((s, m) => s + investFor(m.id), 0));
 
   const rowsHtml = months
     .filter((m) => roundZ(savedFor(m.id)) !== 0)
     .map((m) => {
       const future = m.month_num > todayMonth;
-      return `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.18rem 0;font-size:.78rem;${future ? 'opacity:.55;' : ''}">
-          <span style="color:var(--text);">${MONTHS[m.month_num - 1].slice(0, 3)}${m.month_num === todayMonth ? ' ◉' : ''}</span>
-          <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:var(--accent);font-weight:600;">${shekels(savedFor(m.id))}</span>
+      const inv = investFor(m.id);
+      return `<div style="${future ? 'opacity:.55;' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.18rem 0;font-size:.78rem;">
+            <span style="color:var(--text);">${MONTHS[m.month_num - 1].slice(0, 3)}${m.month_num === todayMonth ? ' ◉' : ''}</span>
+            <span style="font-family:'DM Mono',monospace;white-space:nowrap;color:var(--accent);font-weight:600;">${shekels(savedFor(m.id))}</span>
+          </div>
+          ${
+            roundZ(inv) !== 0
+              ? `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:0 0 .12rem .7rem;font-size:.66rem;color:var(--dim);">
+            <span>↳ bank ${shekels(bankFor(m.id))} · invested ${shekels(inv)}</span>
+          </div>`
+              : ''
+          }
         </div>`;
     })
     .join('');
@@ -2073,6 +2091,11 @@ async function showSavedPop(el: HTMLElement): Promise<void> {
     '<span style="font-size:.8rem;color:var(--text);">So far this year</span>' +
     '<span style="font-family:\'DM Mono\',monospace;font-size:1.05rem;font-weight:600;color:var(--accent);">' +
     shekels(ytd) +
+    '</span></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;font-size:.68rem;color:var(--dim);margin-bottom:.2rem;">' +
+    '<span>🏦 in bank ' +
+    shekels(ytdBank) +
+    (roundZ(ytdInvest) !== 0 ? '  ·  📈 invested ' + shekels(ytdInvest) : '') +
     '</span></div>' +
     '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding-bottom:.4rem;border-bottom:1px solid var(--border);margin-bottom:.4rem;">' +
     '<span style="font-size:.72rem;color:var(--dim);">Projected, full year</span>' +
