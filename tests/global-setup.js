@@ -32,7 +32,7 @@ module.exports = async () => {
     console.warn(
       '[global-setup] BUDGET_TEST_PASSWORD not set — writing logged-out ' +
         'storageState. Auth-gated tests (budget.spec.js) will fail; set ' +
-        'BUDGET_TEST_PASSWORD to run them.'
+        'BUDGET_TEST_PASSWORD to run them.',
     );
     writeEmptyState();
     return;
@@ -51,9 +51,7 @@ module.exports = async () => {
     // login-err banner shows instead — fail loudly rather than save a bad state.
     const ok = await Promise.race([
       page.waitForSelector('.ptab', { timeout: 20000 }).then(() => true),
-      page
-        .waitForSelector('#login-err:not([hidden])', { timeout: 20000 })
-        .then(() => false),
+      page.waitForSelector('#login-err:not([hidden])', { timeout: 20000 }).then(() => false),
     ]);
     if (!ok) {
       const msg = await page.locator('#login-err').textContent();

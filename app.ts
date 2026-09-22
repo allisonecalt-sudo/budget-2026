@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v49';
-const BUILD_DATE = 'Sep 20, 2026 15:05';
+const APP_VERSION = 'v50';
+const BUILD_DATE = 'Sep 22, 2026 09:40';
 
 const MONTHS = [
   'January',
@@ -74,9 +74,12 @@ const CATEGORIES = [
 ];
 
 // The weekly-shop chains. Everything NOT on this list counts as a makolet —
-// her rule, given store by store on 2026-09-20: "Osher Ad, Yochananof,
-// Carrefour are supermarket, everything else makolet" (including the petrol
-// station, the Wolt order and the pizza place she bought a water bottle at).
+// her rule, given store by store on 2026-09-20: of the stores SHE has actually
+// used, "Osher Ad, Yochananof, Carrefour are supermarket, everything else
+// makolet" (including the petrol station, the Wolt order and the pizza place
+// she bought a water bottle at). Shufersal and Rami Levy stay on this list
+// though she has never used them — they are the same kind of weekly-shop chain,
+// and dropping them would misclassify the first trip she makes to one.
 // Carrefour was missing until then, so ~591 of supermarket shopping across 2
 // trips had been counted on the makolet side.
 const BIG_STORES = [
@@ -5608,7 +5611,7 @@ function renderTravelTab() {
       });
       // DT8 — case/whitespace-insensitive grouping. Previously the group key
       // used the raw `destination` value, so a payment "erin- north cascade"
-      // and an item label "Erin- North Cascade" produced TWO cards for the
+      // and a trip item label with a trailing-space variant produced TWO cards for the
       // same trip. Normalize the bucket key (lowercase, trimmed) but keep
       // a display name per bucket (prefer the item label when available).
       const norm = (s: string | null | undefined): string => (s || '').trim().toLowerCase();
@@ -8339,7 +8342,7 @@ function renderCashTab(): string {
 
 // ── Money she FRONTED for next year's tzedaka ─────────────────────────
 // Money that has already left her pocket against a FUTURE year's tzedaka —
-// she fronts it on purpose (the Rayna gift went out Sep 2026 and counts against
+// she fronts it on purpose (one 2027 gift went out in Sep 2026 and counts against
 // 2027). Her ask, 2026-09-20: "make section here all the money i owe myself
 // from tzedaka 2027 ... it shouldnt be in total ... just good for me to know."
 // Her word for it: "fronted money ... but dont add to total i jsut wna tot see it".

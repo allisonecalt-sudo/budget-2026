@@ -80,7 +80,7 @@ module.exports = [
     },
   },
   {
-    files: ['app.ts'],
+    files: ['app.ts', 'lib/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2022,

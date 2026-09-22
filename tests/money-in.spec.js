@@ -21,7 +21,7 @@ async function loadHelpers(page) {
       typeof window.creditTotal === 'function' &&
       typeof window.creditsForCategory === 'function' &&
       typeof window.creditsTotal === 'function',
-    { timeout: 20000 }
+    { timeout: 20000 },
   );
 }
 

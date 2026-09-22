@@ -52,6 +52,6 @@ Everything else on the ribbon is arithmetic feeding those three. **Keep the ribb
 
 - **NEVER write to her budget data without her explicit go for THAT write.** Reads are free. Modelling a scenario in chat is not permission. One tagged `change_log` row per write. A number with no obvious field → ASK, never borrow a field.
 - **This repo is PUBLIC and that is fine by her.** Keep OTHER people's names out of it anyway — that is their data, not hers to publish.
-- **Groceries: makolet vs supermarket.** Osher Ad / Yochananof / Carrefour are the supermarket; **everything else is a makolet** (`BIG_STORES` / `isBigStore`).
+- **Groceries: makolet vs supermarket.** Of the stores she actually uses: Osher Ad / Yochananof / Carrefour are the supermarket; **everything else is a makolet** — Wolt, the Paz petrol station, even a pizza place she bought a drink at. `BIG_STORES` also carries Shufersal and Rami Levy (+ Hebrew spellings), which she has never used but are the same kind of chain — leave them, dropping them would misclassify her first trip to one. Source of truth = `isBigStore`.
 - Household Items is split with her flatmate: she logs **what leaves her own pocket**; the other half accrues in Splitwise as owed-to-her.
 - Standing build rules: TS strict, ESLint, Prettier, CI green before deploy, bump `APP_VERSION` **and** the `sw.js` VERSION together every deploy, verify at **412×892** (her phone) and not only on desktop.

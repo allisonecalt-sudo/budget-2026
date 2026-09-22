@@ -2,9 +2,11 @@
 // and Payment Log never shows a bare "?" for an unknown month.
 const { test, expect } = require('@playwright/test');
 
-test('admin tab: summary cards are consistent and payment log has no "?" month', async ({ page }) => {
+test('admin tab: summary cards are consistent and payment log has no "?" month', async ({
+  page,
+}) => {
   const pageErrors = [];
-  page.on('pageerror', err => pageErrors.push(err.message));
+  page.on('pageerror', (err) => pageErrors.push(err.message));
 
   await page.goto('/');
   // Guard against running on the wrong server (e.g. another process squatting

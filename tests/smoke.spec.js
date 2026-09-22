@@ -11,7 +11,7 @@ test('page loads successfully', async ({ page }) => {
 
 test('no console errors', async ({ page }) => {
   const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
+  page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(APP_URL, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
   console.log('Errors:', errors.length ? errors : 'None');

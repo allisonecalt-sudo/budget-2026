@@ -16,7 +16,7 @@ async function loadHelpers(page) {
       typeof window.monthNumFromDate === 'function' &&
       typeof window.yearFromDate === 'function' &&
       typeof window.quickAddSheetBody === 'function',
-    { timeout: 20000 }
+    { timeout: 20000 },
   );
 }
 

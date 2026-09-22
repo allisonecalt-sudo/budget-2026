@@ -35,7 +35,6 @@ async function readRibbonPairs(page) {
   return prev;
 }
 
-
 // v30: the month chips became a dropdown (.month-select). ONE switcher for
 // every test that walks months — a future control change only edits here.
 // go(i) selects the i-th month and returns its 3-letter name ('Jan'), which

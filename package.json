@@ -8,10 +8,10 @@
     "test:unit": "tsc && node -e \"require('fs').writeFileSync('dist/package.json','{\\\"type\\\":\\\"module\\\"}')\" && node --test tests/*.test.mjs",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint app.ts sw.js",
-    "lint:fix": "eslint app.ts sw.js --fix",
-    "format": "prettier --write app.ts sw.js styles.css index.html manifest.webmanifest",
-    "format:check": "prettier --check app.ts sw.js styles.css index.html manifest.webmanifest"
+    "lint": "eslint app.ts sw.js lib",
+    "lint:fix": "eslint app.ts sw.js lib --fix",
+    "format": "prettier --write app.ts sw.js styles.css index.html manifest.webmanifest lib tests",
+    "format:check": "prettier --check app.ts sw.js styles.css index.html manifest.webmanifest lib tests"
   },
   "repository": {
     "type": "git",
