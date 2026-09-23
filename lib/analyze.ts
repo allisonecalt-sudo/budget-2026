@@ -20,10 +20,24 @@
 //     the Year tab's Total Used to the agora — that identity is a test.
 //   - Averages use COMPLETE months only (past), optionally the last N of them.
 //     Never the current month: it is half-logged by definition.
-//   - Floor defaults: envelope → lowest complete month; fixed → this month's
-//     lines; pots → 0; charity → its average. Her typed floor always wins.
+//   - Floor rule (her words, 2026-09-23: "sometimes the lowest is not the
+//     floor… there's a month I spent very little money because of other
+//     reasons… on average what I could spend"): an envelope's suggested floor
+//     is the AVERAGE of its N lowest NORMAL complete months — N per category
+//     (default 3), and she can veto months per category (August was America).
+//     Fewer than N normal months → average what is there; none → 0. Fixed →
+//     this month's lines; pots → 0; charity → its average. Her typed floor
+//     always wins (amount null = not set).
+//   - A vetoed month is out of that category's avg / low / high / floor too.
+//     summary.realAvg is NOT affected — the vetoes are per line, the year's
+//     real average is one number over one window.
+//   - "So far" means money at ACTUAL: the current month's envelopes count what
+//     is logged, not the higher-of rule; the budget-over-actual remainder is
+//     projected. realActual carries that per month; yearReal is unchanged.
 //   - Every returned number is agorot-snapped (ag). Display rounds separately.
-// What's built: analyzeYear (everything), plus the small helpers it uses.
+// What's built: analyzeYear (everything), plus the small helpers it uses —
+//   catKind, monthStatus, pickAvgMonths, lineKey, and clampAvgN / cleanExcluded
+//   (stored avg_n / excluded_months are cleaned, never trusted raw).
 // What's next: runway (liquid ÷ floor) once "liquid" has one agreed meaning.
 // Links: consumed by app.ts renderAnalyzeTab; pinned by tests/analyze.test.mjs.
 
@@ -71,6 +85,16 @@ export interface AnalyzeCategory {
 export type CatKind = 'envelope' | 'fixed' | 'pot' | 'charity';
 export type MonthStatus = 'past' | 'current' | 'future';
 
+/** One spend_floors row as the math needs it. */
+export interface AnalyzeFloorIn {
+  /** Her typed floor; null = not set, the suggestion shows. */
+  amount: number | null;
+  /** How many of the lowest normal months the envelope suggestion averages (1–12). */
+  avgN: number;
+  /** month_nums she has vetoed for this category ("that month was not normal"). */
+  excluded: number[];
+}
+
 export interface AnalyzeInput {
   months: AnalyzeMonthIn[];
   txns: AnalyzeTxn[];
@@ -82,8 +106,8 @@ export interface AnalyzeInput {
   todayMonth: number;
   /** 0 = every complete month; N = the last N complete months. */
   avgWindow: number;
-  /** Her stored floors by category key. Missing = not set. */
-  floors: Record<string, number | undefined>;
+  /** Her stored floors by category key. Missing = no row: not set, N = 3, no vetoes. */
+  floors: Record<string, AnalyzeFloorIn | undefined>;
 }
 
 export interface AnalyzeMonth {
@@ -98,6 +122,12 @@ export interface AnalyzeMonth {
   charity: number;
   /** fixed + envelope + pots + charity. Savings excluded. */
   real: number;
+  /**
+   * real with envelopes at what is actually logged — what "spent so far" means.
+   * Equals real on a past month; on the current month it drops the higher-of
+   * rule (the budget-over-actual remainder is projected); 0 on a future month.
+   */
+  realActual: number;
   savings: number;
   /** real + savings — the Year tab's "Total Used" on a past month. */
   used: number;
@@ -114,18 +144,25 @@ export interface AnalyzeCatStat {
   label: string;
   emoji: string;
   kind: CatKind;
-  /** Average over the averaging window (complete months). */
+  /** Average over the averaging window (complete months), minus this category's vetoed months. */
   avg: number;
   low: { month_num: number; amount: number } | null;
   high: { month_num: number; amount: number } | null;
-  /** Past + current months. */
+  /** Past months + the current month at actual. */
   ytd: number;
   /** ytd ÷ real ytd across all categories, 0–1. */
   share: number;
   /** The category's value in the reference month (current, else last). */
   now: number;
+  /** How many lowest normal months the suggestion averages (envelopes). */
+  avgN: number;
+  /** The months she vetoed for this category, ascending. */
+  excluded: number[];
+  /** The months actually averaged into the suggestion, ascending by amount. Empty for fixed and pots. */
+  floorMonths: { month_num: number; amount: number }[];
   floorDefault: number;
   floor: number;
+  /** True when her stored amount is a finite number. */
   floorSet: boolean;
   /** avg − floor. Negative means the floor sits above her average. */
   aboveFloor: number;
@@ -155,8 +192,11 @@ export interface AnalyzeSummary {
   ytdSavings: number;
   /** ytdSavings ÷ ytdIncome, 0–1 (0 when income is 0). */
   savingsRate: number;
+  /** yearRealActual + yearRealProjected — every month's real. */
   yearReal: number;
+  /** Past months' real + the current month at actual. */
   yearRealActual: number;
+  /** Future months' real + the current month's budget-over-actual remainder. */
   yearRealProjected: number;
   yearIncome: number;
   yearSavings: number;
@@ -197,6 +237,23 @@ export function lineKey(label: unknown): string {
     .replace(/\s*\(?\d+\s*\/\s*\d+\)?\s*$/, '')
     .trim()
     .toLowerCase();
+}
+
+/** avg_n as stored → 1–12, default 3. */
+export function clampAvgN(v: unknown): number {
+  const k = Math.round(Number(v));
+  return Number.isFinite(k) && k >= 1 ? Math.min(12, k) : 3;
+}
+
+/** excluded_months as stored → unique month_nums 1–12, ascending. */
+export function cleanExcluded(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  const set = new Set<number>();
+  for (const x of v) {
+    const k = Math.round(Number(x));
+    if (k >= 1 && k <= 12) set.add(k);
+  }
+  return [...set].sort((a, b) => a - b);
 }
 
 export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
@@ -258,6 +315,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
     const actualByCat: Record<string, number> = {};
     let fixed = 0,
       envelope = 0,
+      envelopeActual = 0,
       pots = 0,
       charity = 0;
     for (const c of cats) {
@@ -269,6 +327,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
         const budget = envelopeBudget(m, c.key);
         v = status === 'past' ? actual : status === 'future' ? budget : Math.max(actual, budget);
         envelope += v;
+        envelopeActual += actual;
       } else if (kind === 'fixed') {
         v = Math.max(bi(m.id, c.key), actual);
         fixed += v;
@@ -283,6 +342,9 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
     }
     const savings = bud(m.id, 'savings_bank') + bud(m.id, 'savings_invested');
     const real = fixed + envelope + pots + charity;
+    // Only envelopes differ at actual: fixed is already max(lines, paid) and
+    // pots/charity are the allocation either way. A future month has no "so far".
+    const realActual = status === 'future' ? 0 : fixed + envelopeActual + pots + charity;
     return {
       id: m.id,
       month_num: m.month_num,
@@ -294,6 +356,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
       pots: ag(pots),
       charity: ag(charity),
       real: ag(real),
+      realActual: ag(realActual),
       savings: ag(savings),
       used: ag(real + savings),
       byCat,
@@ -319,34 +382,68 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
     xs.length ? ag(xs.reduce((s, x) => s + x, 0) / xs.length) : 0;
 
   // ── Per category ───────────────────────────────────────────────────────
-  const realYtd = ytd.reduce((s, m) => s + m.real, 0);
+  // "So far" is at actual, so shares are taken over realActual (they sum to 1).
+  const realYtd = ytd.reduce((s, m) => s + m.realActual, 0);
+  const byAmount = (a: { month_num: number; amount: number }, b: typeof a): number =>
+    a.amount - b.amount || a.month_num - b.month_num;
   const catStats: AnalyzeCatStat[] = cats.map((c) => {
     const kind = catKind(c);
-    const avg = mean(inAvg.map((m) => m.byCat[c.key] || 0));
+    const stored = input.floors[c.key];
+    const avgN = clampAvgN(stored ? stored.avgN : 3);
+    const excluded = cleanExcluded(stored ? stored.excluded : []);
+    const exSet = new Set(excluded);
+    // Her vetoes take the month out of everything this line reads —
+    // avg, low, high and the suggestion. Never out of summary.realAvg.
+    const catAvgMonths = inAvg.filter((m) => !exSet.has(m.month_num));
+    const catComplete = complete.filter((m) => !exSet.has(m.month_num));
+    const avg = mean(catAvgMonths.map((m) => m.byCat[c.key] || 0));
     // Low/high read the ACTUAL for envelopes (what she really spent) and the
-    // counted value for everything else, over every complete month.
+    // counted value for everything else, over every normal complete month.
+    const valueOf = (m: AnalyzeMonth): number =>
+      kind === 'envelope' ? m.actualByCat[c.key] || 0 : m.byCat[c.key] || 0;
     let low: AnalyzeCatStat['low'] = null;
     let high: AnalyzeCatStat['high'] = null;
-    for (const m of complete) {
-      const v = kind === 'envelope' ? m.actualByCat[c.key] || 0 : m.byCat[c.key] || 0;
+    for (const m of catComplete) {
+      const v = valueOf(m);
       if (!low || v < low.amount) low = { month_num: m.month_num, amount: ag(v) };
       if (!high || v > high.amount) high = { month_num: m.month_num, amount: ag(v) };
     }
-    const catYtd = ag(ytd.reduce((s, m) => s + (m.byCat[c.key] || 0), 0));
+    // ytd counts the current month at actual (envelopes = what is logged).
+    const catYtd = ag(
+      ytd.reduce(
+        (s, m) =>
+          s +
+          (m.status === 'current' && kind === 'envelope'
+            ? m.actualByCat[c.key] || 0
+            : m.byCat[c.key] || 0),
+        0,
+      ),
+    );
     const now = reference ? reference.byCat[c.key] || 0 : 0;
+    // The suggestion: envelopes average their N lowest normal complete months;
+    // charity averages its window. Fixed and pots average nothing.
+    const floorMonths: AnalyzeCatStat['floorMonths'] =
+      kind === 'envelope'
+        ? catComplete
+            .map((m) => ({ month_num: m.month_num, amount: ag(valueOf(m)) }))
+            .sort(byAmount)
+            .slice(0, avgN)
+        : kind === 'charity'
+          ? catAvgMonths
+              .map((m) => ({ month_num: m.month_num, amount: ag(valueOf(m)) }))
+              .sort(byAmount)
+          : [];
     const floorDefault =
       kind === 'envelope'
-        ? low
-          ? low.amount
-          : 0
+        ? mean(floorMonths.map((x) => x.amount))
         : kind === 'fixed'
           ? ag(now)
           : kind === 'pot'
             ? 0
             : avg;
-    const stored = input.floors[c.key];
-    const floorSet = typeof stored === 'number' && Number.isFinite(stored);
-    const floor = floorSet ? ag(stored) : floorDefault;
+    const storedAmt = stored ? stored.amount : null;
+    const floorSet = typeof storedAmt === 'number' && Number.isFinite(storedAmt);
+    const floor = floorSet ? ag(storedAmt) : floorDefault;
     return {
       key: c.key,
       label: c.label,
@@ -358,6 +455,9 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
       ytd: catYtd,
       share: realYtd ? catYtd / realYtd : 0,
       now: ag(now),
+      avgN,
+      excluded,
+      floorMonths,
       floorDefault,
       floor,
       floorSet,
@@ -404,14 +504,17 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
   }
 
   // ── Summary ────────────────────────────────────────────────────────────
+  // realAvg is over the GLOBAL averaging window, on purpose: a per-category
+  // veto says "that month was not normal for groceries", not "that month did
+  // not happen". The year's real average stays one number over one window.
   const realAvg = mean(inAvg.map((m) => m.real));
   const floorTotal = ag(catStats.reduce((s, c) => s + c.floor, 0));
   const ytdIncome = ag(ytd.reduce((s, m) => s + m.income, 0));
   const ytdSavings = ag(ytd.reduce((s, m) => s + m.savings, 0));
+  // Actual = past months + the current month at actual. Projected = future
+  // months + whatever of the current month's budget is not spent yet.
   const yearRealActual = ag(realYtd);
-  const yearRealProjected = ag(
-    out.filter((m) => m.status === 'future').reduce((s, m) => s + m.real, 0),
-  );
+  const yearRealProjected = ag(out.reduce((s, m) => s + (m.real - m.realActual), 0));
 
   return {
     months: out,

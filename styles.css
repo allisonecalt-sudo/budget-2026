@@ -4425,8 +4425,42 @@ input[type='checkbox'] {
   border-top: 2px solid var(--border);
   background: var(--surface2);
 }
+/* Total rows are sums, not groups: .sn-group gives a pointer + hover tint
+   (it collapses on the Year tab); here there is nothing to open. */
+.an-total {
+  cursor: default;
+}
+.an-total:hover td {
+  background: var(--surface2);
+}
 .an-dead td {
   color: var(--dim);
+}
+/* The floor table and the fixed-lines table scroll sideways inside the card
+   on a narrow desktop window; on the phone they stack (sn-table cards). */
+.an-tablewrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Low / High: amount + month is one flex item on the phone (see .an-lh). */
+.an-lh {
+  white-space: nowrap;
+}
+.an-loading {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--dim);
+}
+/* Floor cell: line one = the box (+ "suggested"), line two = the months the
+   suggestion averages + how many lowest to take. Right-aligned like the
+   numbers around it; wraps on the phone. */
+.an-floorcell {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+  max-width: 100%;
 }
 .an-floorwrap {
   display: inline-flex;
@@ -4434,24 +4468,108 @@ input[type='checkbox'] {
   gap: 0.35rem;
   justify-content: flex-end;
 }
-.an-floor {
+/* The global input[type='number'] rule (specificity 0,1,1: boxed border,
+   width 100%, DM Sans) outranks .budget-inline (0,1,0), so the floor box was
+   rendering as a full-width boxed field. input.an-floor is also 0,1,1 and
+   comes later in the file, so it wins — and it restates the dashed-underline
+   look on purpose rather than inheriting it by luck. */
+input.an-floor {
   width: 82px;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.2rem 0.3rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
   text-align: right;
+  box-shadow: none;
+  transition: none;
 }
-.an-floor::placeholder {
+input.an-floor:hover {
+  border-bottom-color: var(--border);
+}
+input.an-floor:focus {
+  border-bottom-color: var(--accent);
+  background: var(--surface2);
+  border-radius: 3px;
+  box-shadow: none;
+}
+input.an-floor::placeholder {
   color: var(--dim);
   font-style: italic;
 }
-.an-floor.set {
+input.an-floor.set,
+input.an-floor.set:hover {
   color: var(--accent);
   font-weight: 600;
   border-bottom-color: var(--accent);
+}
+input.an-floor:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 .an-suggested {
   font-family: 'DM Sans', sans-serif;
   font-size: 0.58rem;
   color: var(--dim);
   font-style: italic;
+}
+/* The months behind the suggestion — tappable chips. A vetoed month stays
+   visible, struck through, so she can tap it back in. No red: leaving a month
+   out is a fact about that month, not a verdict. */
+.an-fmonths {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 260px;
+}
+.an-mchip {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  padding: 0.12rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.an-mchip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.an-mchip.out {
+  text-decoration: line-through;
+  border-style: dashed;
+  background: transparent;
+  color: var(--dim);
+}
+.an-mchip:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.an-nlbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.2rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  color: var(--dim);
+  white-space: nowrap;
+}
+select.an-nsel {
+  width: auto;
+  min-height: 0;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.68rem;
+  font-family: 'DM Mono', monospace;
+  border-radius: var(--r-sm);
 }
 @media (max-width: 600px) {
   .an-head {
@@ -4469,7 +4587,30 @@ input[type='checkbox'] {
   .an-floorwrap {
     justify-content: flex-end;
   }
-  .an-floor {
+  input.an-floor {
     width: 96px;
+    font-size: 0.9rem;
+    padding: 0.3rem 0.35rem;
+  }
+  /* The cell is a flex row (label · value); the floor cell takes what is
+     left so its chips wrap inside it instead of pushing the label. */
+  .an-floorcell {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .an-fmonths {
+    max-width: none;
+  }
+  .an-mchip {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.55rem;
+  }
+  .an-nlbl {
+    font-size: 0.72rem;
+  }
+  select.an-nsel {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.4rem;
+    min-height: 32px;
   }
 }

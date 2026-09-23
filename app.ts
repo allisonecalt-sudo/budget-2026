@@ -8,7 +8,7 @@ import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
 import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
 import { analyzeYear } from './lib/analyze.js';
-import type { AnalyzeCatStat, AnalyzeMonth, AnalyzeResult } from './lib/analyze.js';
+import type { AnalyzeCatStat, AnalyzeFloorIn, AnalyzeMonth, AnalyzeResult } from './lib/analyze.js';
 
 declare global {
   interface Window {
@@ -39,8 +39,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v54';
-const BUILD_DATE = 'Sep 23, 2026 15:00';
+const APP_VERSION = 'v55';
+const BUILD_DATE = 'Sep 23, 2026 15:40';
 
 const MONTHS = [
   'January',
@@ -423,12 +423,18 @@ interface YearData {
 }
 
 // spend_floors — her "least I'd spend" per category per year (Analyze tab).
-// One row per (year, category); absent = not set, the tab shows a suggestion.
+// One row per (year, category). amount null = not set (the tab shows the
+// suggestion); avg_n = how many lowest normal months the suggestion averages;
+// excluded_months = the months she vetoed for that line. Writes upsert only the
+// column they change (PostgREST merge-duplicates), so setting the amount never
+// clobbers the vetoes and vice versa. Rows are never deleted.
 interface SpendFloorRow {
   id: string;
   year: number;
   category: string;
-  amount: number;
+  amount: number | null;
+  avg_n: number;
+  excluded_months: number[];
   notes?: string | null;
   updated_at?: string | null;
 }
@@ -490,7 +496,8 @@ interface State {
   charity: CategorySection;
   openCats: Set<string>;
   yearData: YearData | null;
-  floors: Record<string, SpendFloorRow>;
+  /** spend_floors rows by category for the viewed year; null until loaded (writes refuse while null). */
+  floors: Record<string, SpendFloorRow> | null;
   inlineAddCat: string | null;
   allStores: StoreRow[];
   yearViewMonth: number | null;
@@ -528,7 +535,7 @@ let state: State = {
   charity: { items: [], allocations: {}, payments: [], subItems: [] },
   openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
   yearData: null,
-  floors: {}, // { category: spend_floors row } for the viewed year (Analyze tab)
+  floors: null, // { category: spend_floors row } for the viewed year (Analyze tab); null = not loaded yet
   inlineAddCat: null,
   allStores: [],
   yearViewMonth: null, // mobile Year view: which month column is shown (1-12); null = auto
@@ -561,6 +568,7 @@ function saveCache() {
         travel: state.travel,
         charity: state.charity,
         yearData: state.yearData,
+        floors: state.floors,
       }),
     );
   } catch (e) {
@@ -609,6 +617,9 @@ function restoreCache() {
     state.travel = c.travel || { items: [], allocations: {}, payments: [], subItems: [] };
     state.charity = c.charity || { items: [], allocations: {}, payments: [], subItems: [] };
     if (c.yearData) state.yearData = c.yearData;
+    // Year-keyed like the rest of the cache; an older cache has none → null,
+    // and the Analyze tab then waits for loadFloors rather than saving into {}.
+    state.floors = c.floors && typeof c.floors === 'object' ? c.floors : null;
     state.loading = false;
     return true;
   } catch (e) {
@@ -2402,6 +2413,7 @@ async function switchYear(year: number): Promise<void> {
   localStorage.setItem('activeYear', String(year));
   localStorage.removeItem('activeMonthId'); // belonged to the prior year
   state.currentMonthId = null;
+  state.floors = null; // the prior year's floors must never be written under this year
   state.loading = true;
   renderApp();
   await loadFresh();
@@ -3595,7 +3607,13 @@ function renderApp() {
         <button class="mtab toolbar-icon" onclick="openSearchPanel()" title="Search transactions" aria-label="Search">${ICON_SEARCH}</button>
         <button class="mtab toolbar-overflow-btn" onclick="openToolbarOverflow(event)" aria-label="More tools" title="More tools">⋯</button>
       </div>
-      <div class="hdr-months">
+      ${
+        // Year and Analyze show the whole year — a month picker up top would
+        // promise a month view that neither tab has. Nothing reads the element
+        // when it is absent (scroll-fade + scrollActiveMonthIntoView null-guard).
+        state.activeTab === 'year' || state.activeTab === 'analyze'
+          ? ''
+          : `<div class="hdr-months">
         <button class="mtab month-nav-chev" onclick="navMonth(-1)" aria-label="Previous month" title="Previous month">‹</button>
         <!-- v30: the 12 month chips smooshed in the corner → one dropdown.
              Her spec: "drop down but also arrow on either side easier to go
@@ -3609,7 +3627,8 @@ function renderApp() {
             .join('')}
         </select>
         <button class="mtab month-nav-chev" onclick="navMonth(1)" aria-label="Next month" title="Next month">›</button>
-      </div>
+      </div>`
+      }
     </div>
 
     ${renderRibbon(income, spent, totalSpent, totalBudgeted)}
@@ -9519,8 +9538,12 @@ function renderYearSnapshot(): string {
 // (Budget tab, this month only) or "Remaining" (Admin/Travel).
 
 async function loadFloors(): Promise<void> {
-  const { data, error } = await sb.from('spend_floors').select('*').eq('year', state.currentYear);
+  const year = state.currentYear;
+  const { data, error } = await sb.from('spend_floors').select('*').eq('year', year);
+  // She switched years while this was in flight — that switch reloads its own.
+  if (year !== state.currentYear) return;
   if (error) {
+    state.floors = null; // never keep another year's map under this year
     toast('Could not load floors');
     return;
   }
@@ -9548,9 +9571,15 @@ function setAnalyzeAvgWindow(n: number): void {
 
 function computeAnalyze(): AnalyzeResult | null {
   if (!state.yearData) return null;
-  const floors: Record<string, number | undefined> = {};
-  Object.keys(state.floors).forEach((k) => {
-    floors[k] = Number(state.floors[k].amount);
+  const rows = state.floors || {};
+  const floors: Record<string, AnalyzeFloorIn | undefined> = {};
+  Object.keys(rows).forEach((k) => {
+    const r = rows[k];
+    floors[k] = {
+      amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
+      avgN: r.avg_n ?? 3,
+      excluded: r.excluded_months ?? [],
+    };
   });
   return analyzeYear({
     months: state.months.map((m) => ({
@@ -9574,95 +9603,294 @@ function computeAnalyze(): AnalyzeResult | null {
   });
 }
 
-// Her floor for one category. '' clears it (back to the suggestion). One
-// change_log row per write; undo/redo write to the table directly so they
-// never re-enter this function (the saveBudget trap).
-async function saveSpendFloor(catKey: string, raw: string): Promise<void> {
-  const cat = CATEGORIES.find((c) => c.key === catKey);
-  const label = cat ? cat.label : catKey;
-  const existing = state.floors[catKey];
-  const year = state.currentYear;
-  const stamp = (): string => new Date().toISOString();
-  const put = async (amt: number): Promise<void> => {
-    const { data } = await sb
-      .from('spend_floors')
-      .upsert(
-        { year, category: catKey, amount: amt, updated_at: stamp() },
-        { onConflict: 'year,category' },
-      )
-      .select()
-      .single();
-    if (data) state.floors[catKey] = data as SpendFloorRow;
-  };
-  const drop = async (): Promise<void> => {
-    await sb.from('spend_floors').delete().eq('year', year).eq('category', catKey);
-    delete state.floors[catKey];
-  };
+// ── Floor writes ──────────────────────────────────────────────────────
+// Three things she can change per line — the amount, how many lowest months
+// the suggestion averages (avg_n), and which months are vetoed
+// (excluded_months). Each goes through writeFloor with ONLY its own column:
+// upsert on (year, category) merges the given columns into the row, so an
+// amount write never clobbers the vetoes and vice versa. Rows are never
+// deleted — clearing the amount sets it null so the vetoes survive.
+// One change_log row per write; undo/redo call writeFloor directly and never
+// re-enter the save functions (the saveBudget trap).
+type FloorPatch = Partial<Pick<SpendFloorRow, 'amount' | 'avg_n' | 'excluded_months'>>;
 
-  const trimmed = String(raw ?? '').trim();
-  if (trimmed === '') {
-    if (!existing) return;
-    const { error } = await sb.from('spend_floors').delete().eq('id', existing.id);
-    if (error) {
-      toast('Could not clear floor');
-      return;
-    }
-    delete state.floors[catKey];
-    const was = Number(existing.amount) || 0;
-    logChange(
-      'delete',
-      'spend_floor',
-      existing.id,
-      `Floor cleared: ${label} (was ₪${was})`,
-      { amount: was },
-      null,
-    );
-    pushUndo({
-      label: 'floor ' + label,
-      undo: async () => put(was),
-      redo: async () => drop(),
-    });
-    renderApp();
-    toast('Floor cleared ✓');
-    return;
-  }
-
-  const num = parseFloat(trimmed);
-  if (!Number.isFinite(num) || num < 0) {
-    toast('A floor is a number, 0 or more');
-    return;
-  }
-  const old = existing ? Number(existing.amount) || 0 : null;
-  if (old !== null && ag(old) === ag(num)) return; // unchanged → no write, no log
+async function writeFloor(
+  year: number,
+  category: string,
+  patch: FloorPatch,
+): Promise<SpendFloorRow | null> {
   const { data, error } = await sb
     .from('spend_floors')
     .upsert(
-      { year, category: catKey, amount: num, updated_at: stamp() },
+      { year, category, ...patch, updated_at: new Date().toISOString() },
       { onConflict: 'year,category' },
     )
     .select()
     .single();
-  if (error || !data) {
-    toast('Could not save floor');
+  if (error || !data) return null;
+  const row = data as SpendFloorRow;
+  // Undo/redo can fire after a year switch: only the viewed year's map is
+  // touched, and only once it is loaded (a null map is a load in flight).
+  if (state.currentYear === year && state.floors) state.floors[category] = row;
+  return row;
+}
+
+// Guards shared by every floor write. Returns the year to write under, or
+// null when nothing may be written right now (already toasted).
+async function floorWriteGate(catKey: string): Promise<number | null> {
+  const year = state.currentYear;
+  if (!state.floors) {
+    toast('Floors still loading');
+    rerenderAfterFloorWrite();
+    return null;
+  }
+  const existing = state.floors[catKey];
+  if (existing && existing.year !== year) {
+    // A stale map from another year — reload rather than write over it.
+    await loadFloors();
+    renderApp();
+    return null;
+  }
+  return year;
+}
+
+// renderApp() replaces the whole tree, which would wipe the box she has
+// already moved on to (tab → next floor, still typing). If focus is in a
+// floor control, defer the re-render to that control's blur — once — and if
+// that blur is itself a move to another floor control, hand the deferral on
+// rather than rendering under her Tab. Never render while a floor write is
+// still in flight (its completion renders). Otherwise render now.
+let _floorWritesInFlight = 0;
+function isFloorControl(x: unknown): x is HTMLElement {
+  return (
+    x instanceof HTMLElement &&
+    (x.classList.contains('an-floor') || x.classList.contains('an-nsel'))
+  );
+}
+function deferRenderToBlur(el: HTMLElement): void {
+  if (el.dataset.rerenderOnBlur) return;
+  el.dataset.rerenderOnBlur = '1';
+  el.addEventListener(
+    'blur',
+    (e: FocusEvent) => {
+      if (isFloorControl(e.relatedTarget)) {
+        deferRenderToBlur(e.relatedTarget);
+        return;
+      }
+      if (_floorWritesInFlight === 0) renderApp();
+    },
+    { once: true },
+  );
+}
+function rerenderAfterFloorWrite(): void {
+  const el = document.activeElement;
+  if (isFloorControl(el)) {
+    deferRenderToBlur(el);
     return;
   }
-  const row = data as SpendFloorRow;
-  state.floors[catKey] = row;
-  logChange(
-    'edit',
-    'spend_floor',
-    row.id,
-    `Floor set: ${label} ${old === null ? 'suggested' : '₪' + old} → ₪${num}`,
-    { amount: old },
-    { amount: num },
-  );
-  pushUndo({
-    label: 'floor ' + label,
-    undo: async () => (old === null ? drop() : put(old)),
-    redo: async () => put(num),
-  });
   renderApp();
-  toast('Floor saved ✓');
+}
+
+// A refused value (not a number, negative) goes back to what is stored —
+// just the one box, no re-render, so nothing else on the page moves.
+function revertFloorBox(catKey: string): void {
+  const el = document.querySelector(
+    '.an-floor[data-floor-cat="' + catKey + '"]',
+  ) as HTMLInputElement | null;
+  if (!el) return;
+  const row = state.floors ? state.floors[catKey] : undefined;
+  const amt =
+    row && row.amount !== null && Number.isFinite(Number(row.amount)) ? Number(row.amount) : null;
+  el.value = amt === null ? '' : String(roundZ(amt));
+}
+
+function floorLabel(catKey: string): string {
+  const cat = CATEGORIES.find((c) => c.key === catKey);
+  return cat ? cat.label : catKey;
+}
+
+// Her floor for one category. A genuinely empty box clears it (amount → null,
+// back to the suggestion); raw === null is the input's badInput signal (she
+// typed something that is not a number) and changes nothing.
+async function saveSpendFloor(catKey: string, raw: string | null): Promise<void> {
+  const label = floorLabel(catKey);
+  const year = await floorWriteGate(catKey);
+  if (year === null) return;
+  if (raw === null) {
+    toast('That isn’t a number — floor unchanged');
+    revertFloorBox(catKey);
+    return;
+  }
+  const existing = state.floors ? state.floors[catKey] : undefined;
+  const oldAmt =
+    existing && existing.amount !== null && Number.isFinite(Number(existing.amount))
+      ? Number(existing.amount)
+      : null;
+  const trimmed = String(raw).trim();
+
+  if (trimmed === '') {
+    if (oldAmt === null) return; // nothing set, nothing to clear
+    _floorWritesInFlight++;
+    try {
+      const row = await writeFloor(year, catKey, { amount: null });
+      if (!row) {
+        toast('Could not clear floor');
+        return;
+      }
+      logChange(
+        'edit',
+        'spend_floor',
+        row.id,
+        `Floor cleared: ${label} (was ₪${oldAmt})`,
+        { amount: oldAmt, category: catKey },
+        { amount: null, category: catKey },
+      );
+      pushUndo({
+        label: 'floor ' + label,
+        undo: async () => {
+          await writeFloor(year, catKey, { amount: oldAmt });
+        },
+        redo: async () => {
+          await writeFloor(year, catKey, { amount: null });
+        },
+      });
+      toast('Floor cleared ✓');
+    } finally {
+      _floorWritesInFlight--;
+      rerenderAfterFloorWrite();
+    }
+    return;
+  }
+
+  const num = parseFloat(trimmed);
+  if (!Number.isFinite(num)) {
+    toast('That isn’t a number — floor unchanged');
+    revertFloorBox(catKey);
+    return;
+  }
+  if (num < 0) {
+    toast('A floor is 0 or more — floor unchanged');
+    revertFloorBox(catKey);
+    return;
+  }
+  if (oldAmt !== null && ag(oldAmt) === ag(num)) return; // unchanged → no write, no log
+  _floorWritesInFlight++;
+  try {
+    const row = await writeFloor(year, catKey, { amount: num });
+    if (!row) {
+      toast('Could not save floor');
+      return;
+    }
+    logChange(
+      'edit',
+      'spend_floor',
+      row.id,
+      `Floor set: ${label} ${oldAmt === null ? 'suggested' : '₪' + oldAmt} → ₪${num}`,
+      { amount: oldAmt, category: catKey },
+      { amount: num, category: catKey },
+    );
+    pushUndo({
+      label: 'floor ' + label,
+      undo: async () => {
+        await writeFloor(year, catKey, { amount: oldAmt });
+      },
+      redo: async () => {
+        await writeFloor(year, catKey, { amount: num });
+      },
+    });
+    toast('Floor saved ✓');
+  } finally {
+    _floorWritesInFlight--;
+    rerenderAfterFloorWrite();
+  }
+}
+
+// Veto / un-veto one month for one category's floor. Her words: "sometimes
+// the lowest is not the floor… there's a month I spent very little money
+// because of other reasons".
+async function toggleFloorMonth(catKey: string, monthNum: number): Promise<void> {
+  const mn = Math.round(Number(monthNum));
+  if (!(mn >= 1 && mn <= 12)) return;
+  const label = floorLabel(catKey);
+  const year = await floorWriteGate(catKey);
+  if (year === null) return;
+  const existing = state.floors ? state.floors[catKey] : undefined;
+  const old =
+    existing && Array.isArray(existing.excluded_months) ? [...existing.excluded_months] : [];
+  const wasOut = old.includes(mn);
+  const next = wasOut ? old.filter((m) => m !== mn) : [...old, mn].sort((a, b) => a - b);
+  const mon = MONTH_ABBR[mn - 1];
+  _floorWritesInFlight++;
+  try {
+    const row = await writeFloor(year, catKey, { excluded_months: next });
+    if (!row) {
+      toast('Could not save floor months');
+      return;
+    }
+    logChange(
+      'edit',
+      'spend_floor',
+      row.id,
+      `Floor months: ${label} ${mon} ${wasOut ? 'included' : 'excluded'}`,
+      { excluded_months: old, category: catKey },
+      { excluded_months: next, category: catKey },
+    );
+    pushUndo({
+      label: 'floor months ' + label,
+      undo: async () => {
+        await writeFloor(year, catKey, { excluded_months: old });
+      },
+      redo: async () => {
+        await writeFloor(year, catKey, { excluded_months: next });
+      },
+    });
+    toast(wasOut ? mon + ' counts again ✓' : mon + ' left out ✓');
+  } finally {
+    _floorWritesInFlight--;
+    rerenderAfterFloorWrite();
+  }
+}
+
+// How many lowest normal months the suggestion averages for one category
+// (she asked for 5 on Household; 3 is the default).
+async function setFloorAvgN(catKey: string, nRaw: string | number): Promise<void> {
+  const n = parseInt(String(nRaw), 10);
+  if (!(n >= 1 && n <= 12)) return;
+  const label = floorLabel(catKey);
+  const year = await floorWriteGate(catKey);
+  if (year === null) return;
+  const existing = state.floors ? state.floors[catKey] : undefined;
+  const old = existing && Number.isFinite(Number(existing.avg_n)) ? Number(existing.avg_n) : 3;
+  if (old === n) return;
+  _floorWritesInFlight++;
+  try {
+    const row = await writeFloor(year, catKey, { avg_n: n });
+    if (!row) {
+      toast('Could not save floor months');
+      return;
+    }
+    logChange(
+      'edit',
+      'spend_floor',
+      row.id,
+      `Floor months: ${label} average of lowest ${old} → ${n}`,
+      { avg_n: old, category: catKey },
+      { avg_n: n, category: catKey },
+    );
+    pushUndo({
+      label: 'floor months ' + label,
+      undo: async () => {
+        await writeFloor(year, catKey, { avg_n: old });
+      },
+      redo: async () => {
+        await writeFloor(year, catKey, { avg_n: n });
+      },
+    });
+    toast('Floor = average of the ' + n + ' lowest ✓');
+  } finally {
+    _floorWritesInFlight--;
+    rerenderAfterFloorWrite();
+  }
 }
 
 function renderAnalyzeTab(): string {
@@ -9671,6 +9899,10 @@ function renderAnalyzeTab(): string {
   const { months, cats, lines, summary: s } = r;
   const todayMonth = todayMonthForYear();
   const win = analyzeAvgWindow();
+  // Floors not loaded for this year yet: the math above ran on none, so every
+  // floor-derived number is a placeholder — say so, never show a default as hers.
+  const floorsLoading = !state.floors;
+  const LOADING = '<span class="an-loading">loading…</span>';
   const money = (v: number): string => shekels(v || 0);
   // A negative "above floor" reads as −₪x, never ₪-x.
   const signed = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v));
@@ -9724,11 +9956,24 @@ function renderAnalyzeTab(): string {
     '</div><div class="an-sub">' +
     sub +
     '</div></div>';
+  // "Spent through Sep": the last month that is not still ahead.
+  const lastYtd = [...months].reverse().find((m) => m.status !== 'future');
+  const soFar = lastYtd
+    ? money(s.yearRealActual) + ' spent through ' + abbr(lastYtd.month_num)
+    : money(0) + ' spent';
   const kpis =
     '<div class="an-kpis">' +
     kpi('Real spend / mo', money(s.realAvg), 'average of ' + avgSpan + ', savings not counted') +
-    kpi('Floor / mo', money(s.floorTotal), nSet + ' of ' + cats.length + ' floors set by you') +
-    kpi('Above floor / mo', signed(s.aboveFloor), 'real spend minus floor') +
+    (floorsLoading
+      ? kpi('Floor / mo', LOADING, 'your floors are on their way')
+      : kpi(
+          'Floor / mo',
+          money(s.floorTotal),
+          nSet + ' of ' + cats.length + ' floors set by you',
+        )) +
+    (floorsLoading
+      ? kpi('Above floor / mo', LOADING, 'real spend minus floor')
+      : kpi('Above floor / mo', signed(s.aboveFloor), 'real spend minus floor')) +
     kpi(
       'Savings rate',
       pctStr(s.savingsRate),
@@ -9737,7 +9982,7 @@ function renderAnalyzeTab(): string {
     kpi(
       'Year real spend',
       money(s.yearReal),
-      money(s.yearRealActual) + ' so far + ' + money(s.yearRealProjected) + ' projected',
+      soFar + ' + ' + money(s.yearRealProjected) + ' projected',
     ) +
     '</div>';
 
@@ -9782,6 +10027,9 @@ function renderAnalyzeTab(): string {
   ];
   const fmtCell = (v: number, count?: boolean): string =>
     count ? String(Math.round(v)) : money(v);
+  // A month still ahead has no entries to count — a dash, not an italic 0.
+  const monthCell = (d: (typeof rowDefs)[number], m: AnalyzeMonth): string =>
+    d.count && m.status === 'future' ? '—' : fmtCell(d.pick(m), d.count);
   const tbody =
     '<tbody>' +
     rowDefs
@@ -9792,9 +10040,7 @@ function renderAnalyzeTab(): string {
           '"><td class="year-col-label">' +
           d.label +
           '</td>' +
-          months
-            .map((m) => '<td class="' + colCls(m) + '">' + fmtCell(d.pick(m), d.count) + '</td>')
-            .join('') +
+          months.map((m) => '<td class="' + colCls(m) + '">' + monthCell(d, m) + '</td>').join('') +
           '<td class="year-cell-avg">' +
           fmtCell(avgOf(d.pick), d.count) +
           '</td><td class="year-cell-extra">' +
@@ -9804,47 +10050,125 @@ function renderAnalyzeTab(): string {
       .join('') +
     '</tbody>';
   const byMonth =
-    '<div class="card an-card"><div class="card-title">What each month cost</div>' +
+    '<div class="card an-card"><div class="card-title">By month</div>' +
+    '<div class="an-intro">What each month cost, by behaviour. Complete months are what happened; the months still ahead are the budget.</div>' +
     '<div class="year-table-wrap"><table class="year-table an-table">' +
     thead +
     tbody +
     '</table></div>' +
     '<div class="an-legend">italics = projected from budget · ◉ ' +
     abbr(s.referenceMonth) +
-    ' in progress: counts the higher of spent-so-far and budget · Avg = ' +
+    ' in progress: envelopes count the higher of spent-so-far and budget; pots and charity count the allocation · Avg = ' +
     avgSpan +
-    ' · Real spend = fixed + envelopes + pots + charity · Used = real spend + savings, the Year tab’s Total Used</div>' +
+    ' · Real spend = fixed + envelopes + pots + charity · Used = real spend + savings — the Year tab’s Total Used on complete months</div>' +
     '</div>';
 
   // ── Floor: real vs the least, per category ────────────────────────────
   const kindOrder: { kind: AnalyzeCatStat['kind']; title: string; note: string }[] = [
-    { kind: 'envelope', title: 'Envelopes', note: 'suggested floor = your lowest complete month' },
-    { kind: 'fixed', title: 'Fixed', note: 'suggested floor = this month’s lines' },
+    {
+      kind: 'envelope',
+      title: 'Envelopes',
+      note: 'suggested floor = average of your lowest normal months',
+    },
+    {
+      kind: 'fixed',
+      title: 'Fixed',
+      note: 'suggested floor = this month’s lines (or what’s paid, if more)',
+    },
     { kind: 'pot', title: 'Pots', note: 'suggested floor = 0 — your call' },
     { kind: 'charity', title: 'Charity', note: 'suggested floor = your average' },
   ];
+  // Amount + month in ONE span: on the phone the cell is a flex row (label ·
+  // value) and two loose nodes would split into three items.
   const lowHigh = (x: AnalyzeCatStat['low']): string =>
-    x ? money(x.amount) + ' <span class="an-mon">' + abbr(x.month_num) + '</span>' : '—';
-  const floorCell = (c: AnalyzeCatStat): string => {
-    const row = state.floors[c.key];
-    return (
-      '<span class="an-floorwrap"><input type="number" class="budget-inline an-floor' +
-      (c.floorSet ? ' set' : '') +
-      '" value="' +
-      (c.floorSet ? roundZ(c.floor) : '') +
-      '" placeholder="' +
-      roundZ(c.floorDefault) +
-      '" min="0" step="1" inputmode="decimal" aria-label="Floor for ' +
+    x
+      ? '<span class="an-lh">' +
+        money(x.amount) +
+        ' <span class="an-mon">' +
+        abbr(x.month_num) +
+        '</span></span>'
+      : '—';
+  // The months behind an envelope's suggestion, as chips she can tap out —
+  // then the vetoed ones, struck through, tap again to count them. Plus how
+  // many lowest months to average. Envelopes only: fixed and pots average
+  // nothing, and charity follows income.
+  const monthAmount = (c: AnalyzeCatStat, mn: number): number => {
+    const m = months.find((x) => x.month_num === mn);
+    return m ? m.actualByCat[c.key] || 0 : 0;
+  };
+  const chip = (c: AnalyzeCatStat, mn: number, amt: number, out: boolean): string =>
+    '<button type="button" class="an-mchip' +
+    (out ? ' out' : '') +
+    '"' +
+    (floorsLoading ? ' disabled' : '') +
+    ' onclick="event.stopPropagation();toggleFloorMonth(\'' +
+    c.key +
+    "', " +
+    mn +
+    ')" title="' +
+    (out ? 'Tap to count this month again' : 'Tap to leave this month out') +
+    '" aria-label="' +
+    esc(c.label) +
+    ' ' +
+    abbr(mn) +
+    (out ? ': left out, tap to count it again' : ': tap to leave it out') +
+    '">' +
+    abbr(mn) +
+    ' ' +
+    money(amt) +
+    '</button>';
+  const floorMonths = (c: AnalyzeCatStat): string => {
+    if (c.kind !== 'envelope') return '';
+    const used = c.floorMonths.map((x) => chip(c, x.month_num, x.amount, false)).join('');
+    const out = c.excluded
+      .filter((mn) => months.some((m) => m.month_num === mn))
+      .map((mn) => chip(c, mn, monthAmount(c, mn), true))
+      .join('');
+    const nOpts = [3, 4, 5, 6];
+    if (!nOpts.includes(c.avgN)) nOpts.push(c.avgN);
+    const nSel =
+      '<label class="an-nlbl" onclick="event.stopPropagation()">lowest <select class="an-nsel" aria-label="How many lowest months to average for ' +
       esc(c.label) +
-      '" data-floor-id="' +
-      (row ? row.id : '') +
-      '" onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
+      '"' +
+      (floorsLoading ? ' disabled' : '') +
+      ' onchange="setFloorAvgN(\'' +
       c.key +
-      '\', this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
-      (c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
+      '\', this.value)">' +
+      nOpts
+        .sort((a, b) => a - b)
+        .map(
+          (n) =>
+            '<option value="' + n + '"' + (n === c.avgN ? ' selected' : '') + '>' + n + '</option>',
+        )
+        .join('') +
+      '</select></label>';
+    return (
+      '<span class="an-fmonths">' +
+      (used || out ? used + out : '<span class="an-suggested">no complete months yet</span>') +
+      nSel +
       '</span>'
     );
   };
+  const floorCell = (c: AnalyzeCatStat): string =>
+    '<div class="an-floorcell"><span class="an-floorwrap"><input type="number" class="budget-inline an-floor' +
+    (c.floorSet && !floorsLoading ? ' set' : '') +
+    '" value="' +
+    (c.floorSet && !floorsLoading ? roundZ(c.floor) : '') +
+    '" placeholder="' +
+    (floorsLoading ? '…' : roundZ(c.floorDefault)) +
+    '" min="0" step="1" inputmode="decimal" aria-label="Floor for ' +
+    esc(c.label) +
+    '" data-floor-cat="' +
+    c.key +
+    '"' +
+    (floorsLoading ? ' disabled' : '') +
+    ' onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
+    c.key +
+    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
+    (floorsLoading ? LOADING : c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
+    '</span>' +
+    (floorsLoading ? '' : floorMonths(c)) +
+    '</div>';
   const catRow = (c: AnalyzeCatStat): string =>
     '<tr class="sn-cat"><td>' +
     c.emoji +
@@ -9867,7 +10191,7 @@ function renderAnalyzeTab(): string {
     floorCell(c) +
     '</td>' +
     '<td data-label="Above floor">' +
-    signed(c.aboveFloor) +
+    (floorsLoading ? LOADING : signed(c.aboveFloor)) +
     '</td></tr>';
   const floorBody = kindOrder
     .map((k) => {
@@ -9889,15 +10213,15 @@ function renderAnalyzeTab(): string {
     money(s.realAvg) +
     '</td><td data-label="Low"></td><td data-label="High"></td><td data-label="Share">100%</td>' +
     '<td data-label="Floor">' +
-    money(s.floorTotal) +
+    (floorsLoading ? LOADING : money(s.floorTotal)) +
     '</td><td data-label="Above floor">' +
-    signed(s.aboveFloor) +
+    (floorsLoading ? LOADING : signed(s.aboveFloor)) +
     '</td></tr>';
   const floorTable =
-    '<div class="card an-card"><div class="card-title">The floor — the least each line would cost</div>' +
-    '<div class="an-intro">Avg, low and high are your complete months (' +
+    '<div class="card an-card"><div class="card-title">The floor</div>' +
+    '<div class="an-intro">The least each line would cost. An envelope’s suggestion is the average of its lowest normal months (3 by default — pick per line); tap a month to leave it out, because a month that was cheap for other reasons is not a floor. Type a floor to set your own; clear it to go back to the suggestion. Avg, low and high are your complete months (' +
     avgSpan +
-    ' for the average). Type a floor to set your own; clear it to go back to the suggestion.</div>' +
+    ' for the average).</div>' +
     '<div class="an-tablewrap"><table class="sn-table an-floortable">' +
     '<thead><tr><th>Category</th><th>Avg / mo</th><th>Low</th><th>High</th><th>Share</th><th>Floor</th><th>Above floor</th></tr></thead>' +
     '<tbody>' +
@@ -9930,8 +10254,8 @@ function renderAnalyzeTab(): string {
     '</td></tr>';
   const linesTotal = lines.reduce((a, l) => a + l.annual, 0);
   const linesTable =
-    '<div class="card an-card"><div class="card-title">Fixed lines over the year</div>' +
-    '<div class="an-intro">Every housing and recurring line, ' +
+    '<div class="card an-card"><div class="card-title">Fixed lines</div>' +
+    '<div class="an-intro">Every housing and recurring line over the year, ' +
     abbr(s.referenceMonth) +
     '’s amount and what it adds up to across ' +
     state.currentYear +
@@ -10079,6 +10403,10 @@ async function refreshBiz() {
 // MIGRATION REQUIRED (run once in Supabase SQL editor):
 //   ALTER TABLE budget_items ADD COLUMN IF NOT EXISTS subcategory TEXT;
 async function loadFresh() {
+  // Floors are year-keyed and only trusted once loaded for THIS year: null
+  // makes every floor write refuse until loadFloors (via loadAnalyzeData or
+  // the next switch to the tab) has the real rows.
+  state.floors = null;
   await loadMonths();
   await loadAvailableYears();
   if (!state.months.length) {
@@ -10124,6 +10452,10 @@ async function init() {
     });
   // Try cache first — show UI instantly, refresh in background
   if (restoreCache()) {
+    // A warm start straight onto Analyze with no cached floors would paint
+    // the floor column as "loading…" and refuse writes until the background
+    // refresh lands; one small read first keeps the first paint honest.
+    if (state.activeTab === 'analyze' && !state.floors) await loadFloors();
     renderApp();
     loadFresh()
       .then(() => {
@@ -10562,6 +10894,8 @@ async function openHistoryPanel() {
           if (r.entity_type === 'budget_amount') {
             const m = (r.description as string).match(/Budget changed: (\S+)/);
             if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+          } else if (r.entity_type === 'spend_floor') {
+            clickHandler = `jumpToHistoryEntry('spend_floor','${floorCatFromLog(r)}')`;
           } else {
             clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
           }
@@ -10578,6 +10912,25 @@ async function openHistoryPanel() {
     </div>`;
       })
       .join('');
+}
+
+// Which category a spend_floor history row is about. Since v55 the key is in
+// new_value ({ amount, category }); older rows only carry the label in the
+// description ('Floor set: Groceries …'), matched longest-label-first so
+// 'Admin & Professional' never resolves to a shorter label. '' = unknown.
+function floorCatFromLog(r: { description?: unknown; new_value?: unknown }): string {
+  try {
+    const nv = typeof r.new_value === 'string' ? JSON.parse(r.new_value) : r.new_value;
+    const key = nv && typeof nv === 'object' ? (nv as { category?: unknown }).category : null;
+    if (typeof key === 'string' && CATEGORIES.some((c) => c.key === key)) return key;
+  } catch {
+    // fall through to the description
+  }
+  const rest = String(r.description || '').replace(/^Floor (?:set|cleared|months): /, '');
+  const hit = [...CATEGORIES]
+    .sort((a, b) => b.label.length - a.label.length)
+    .find((c) => rest.startsWith(c.label));
+  return hit ? hit.key : '';
 }
 
 // Auto-refresh history if panel is open
@@ -10609,6 +10962,8 @@ async function refreshHistoryIfOpen() {
             if (r.entity_type === 'budget_amount') {
               const m = (r.description as string).match(/Budget changed: (\S+)/);
               if (m) clickHandler = `jumpToHistoryEntry('budget_amount','${m[1]}')`;
+            } else if (r.entity_type === 'spend_floor') {
+              clickHandler = `jumpToHistoryEntry('spend_floor','${floorCatFromLog(r)}')`;
             } else {
               clickHandler = `jumpToHistoryEntry('${r.entity_type}','${r.entity_id}')`;
             }
@@ -10759,10 +11114,16 @@ async function jumpToHistoryEntry(entityType: string, entityId: string): Promise
   }
 
   if (entityType === 'spend_floor') {
+    // entityId here is the CATEGORY KEY (floorCatFromLog), not a row id: a
+    // cleared floor keeps its input, and rows are per year, so the category
+    // is the only stable address.
     if (state.activeTab !== 'analyze') await switchTab('analyze');
     setTimeout(() => {
-      const el = document.querySelector('[data-floor-id="' + entityId + '"]') as HTMLElement | null;
-      if (el) highlight(el);
+      const el = document.querySelector(
+        '.an-floor[data-floor-cat="' + entityId + '"]',
+      ) as HTMLElement | null;
+      if (el) highlight((el.closest('.an-floorcell') as HTMLElement | null) || el);
+      else toast('Floor not found — another year, or the line is gone');
     }, 300);
     return;
   }
@@ -12009,6 +12370,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   loadAnalyzeData,
   loadFloors,
   saveSpendFloor,
+  toggleFloorMonth,
+  setFloorAvgN,
   setAnalyzeAvgWindow,
   computeAnalyze,
   analyzeYear,

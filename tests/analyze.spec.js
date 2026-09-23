@@ -55,9 +55,31 @@ test.describe('Analyze tab', () => {
     expect(rows.map((r) => r.replace(/^[^A-Za-z]+/, '').trim())).toEqual(
       expect.arrayContaining(['Fixed', 'Envelopes', 'Pots', 'Charity', 'Real spend', 'Used']),
     );
-    // One floor input per category, none of them touched
-    const cats = await page.evaluate(() => window.CATEGORIES.length);
-    expect(await page.locator('.an-floor').count()).toBe(cats);
+    // Card titles are 1–3 words; the sentence lives in .an-intro
+    const titles = await page.locator('.an-card .card-title').allTextContents();
+    expect(titles.map((t) => t.trim())).toEqual(['By month', 'The floor', 'Fixed lines']);
+    // "Year real spend" sub-line: spent through <Mon> + projected
+    const subs = await page.locator('.an-kpis .an-sub').allTextContents();
+    expect(subs[4]).toMatch(/^₪[\d,]+ spent(?: through [A-Z][a-z]{2})? \+ ₪[\d,]+ projected$/);
+    // One floor input per category, addressed by category key, none of them touched
+    const cats = await page.evaluate(() => window.CATEGORIES.map((c) => c.key));
+    expect(await page.locator('.an-floor[data-floor-cat]').count()).toBe(cats.length);
+    for (const key of cats) {
+      await expect(page.locator(`.an-floor[data-floor-cat="${key}"]`)).toHaveCount(1);
+    }
+    // Floors loaded: nothing is still "loading…" and no input is disabled
+    expect(await page.locator('.an-loading').count()).toBe(0);
+    expect(await page.locator('.an-floor:disabled').count()).toBe(0);
+    // Month chips + the N select exist for envelopes only, once there are complete months
+    const env = await page.evaluate(() =>
+      window.computeAnalyze().cats.filter((c) => c.kind === 'envelope'),
+    );
+    expect(await page.locator('.an-nsel').count()).toBe(env.length);
+    const chips = await page.locator('.an-mchip').count();
+    const expectedChips = env.reduce((n, c) => n + c.floorMonths.length + c.excluded.length, 0);
+    expect(chips).toBe(expectedChips);
+    // The header month picker is gone on this tab (it shows the whole year)
+    expect(await page.locator('.hdr-months').count()).toBe(0);
     await page.screenshot({ path: 'test-results/analyze-desktop.png', fullPage: true });
   });
 
@@ -149,10 +171,27 @@ test.describe('Analyze tab', () => {
         return w ? getComputedStyle(w).overflowX : 'none';
       })(),
       tabRowHidden: getComputedStyle(document.querySelector('.hdr-tabs')).display === 'none',
+      // The floor box must be the dashed-underline inline field, not the
+      // global boxed number input (B7: input.an-floor outranks input[type=number])
+      floorBox: (() => {
+        const i = document.querySelector('input.an-floor');
+        if (!i) return null;
+        const cs = getComputedStyle(i);
+        return { width: i.getBoundingClientRect().width, borderTop: cs.borderTopStyle };
+      })(),
+      // Low/High: label + ONE value item on the phone (B6)
+      lowItems: (() => {
+        const td = document.querySelector('.an-floortable tr.sn-cat td[data-label="Low"]');
+        return td ? td.childElementCount : null;
+      })(),
     }));
     expect(r.docWidth).toBeLessThanOrEqual(r.viewport);
     expect(r.gridScrolls).toBe('auto');
     expect(r.tabRowHidden).toBe(true);
+    expect(r.floorBox).not.toBeNull();
+    expect(r.floorBox.width).toBeLessThanOrEqual(100);
+    expect(r.floorBox.borderTop).toBe('none');
+    expect(r.lowItems).toBeLessThanOrEqual(1);
     await page.screenshot({ path: 'test-results/analyze-412-top.png' });
     await page.screenshot({ path: 'test-results/analyze-412.png', fullPage: true });
   });
