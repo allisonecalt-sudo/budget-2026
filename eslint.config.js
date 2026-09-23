@@ -80,6 +80,58 @@ module.exports = [
     },
   },
   {
+    // Playwright specs + node unit tests. Linted for a reason: on 2026-09-23 a
+    // variable rename left a dangling `spt` in budget.spec.js and nothing caught
+    // it until CI had spent four minutes booting a browser. `no-undef` finds it
+    // in a second. Node CommonJS here, but page.evaluate() bodies are written
+    // inline and run in the browser, so browser globals are declared too.
+    files: ['tests/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        exports: 'writable',
+        process: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        URL: 'readonly',
+        // page.evaluate() callback bodies
+        window: 'readonly',
+        document: 'readonly',
+        localStorage: 'readonly',
+        navigator: 'readonly',
+        getComputedStyle: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-redeclare': 'error',
+    },
+  },
+  {
+    // Node unit tests (node:test + node:assert) — ES modules, no browser.
+    files: ['tests/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-redeclare': 'error',
+    },
+  },
+  {
     files: ['app.ts', 'lib/**/*.ts'],
     languageOptions: {
       parser: tsParser,

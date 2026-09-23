@@ -721,9 +721,7 @@ test('budget page totals match year view for each month', async ({ page }) => {
 });
 
 // ─── Detailed Math Verification: All Numbers Add Up ───
-test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budget', async ({
-  page,
-}) => {
+test('ribbon math: Income - Used = Unspent, Income - Budgeted = Unallocated', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.ribbon-val', { timeout: 10000 });
 
@@ -752,12 +750,12 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
 
     console.log(`${monthName} ribbon:`, JSON.stringify(vals));
 
-    // Income - Budgeted = Left to Budget
+    // Income - Budgeted = Unallocated
     if (vals.income != null && vals.budgeted != null && vals.leftToBudget != null) {
       const expected = vals.income - vals.budgeted;
       const diff = Math.abs(expected - vals.leftToBudget);
       console.log(
-        `  ${monthName}: Income(${vals.income}) - Budgeted(${vals.budgeted}) = ${expected}, Left to Budget = ${vals.leftToBudget}, diff = ${diff}`,
+        `  ${monthName}: Income(${vals.income}) - Budgeted(${vals.budgeted}) = ${expected}, Unallocated = ${vals.leftToBudget}, diff = ${diff}`,
       );
       expect(diff).toBeLessThan(3);
     }
@@ -772,12 +770,12 @@ test('ribbon math: Income - Spent = Remaining, Income - Budgeted = Left to Budge
       expect(diff).toBeLessThan(3);
     }
 
-    // Budgeted - Spent = Remaining in Budget
+    // Budgeted - Used = Left to Spend
     if (vals.budgeted != null && vals.spent != null && vals.remainingInBudget != null) {
       const expected = vals.budgeted - vals.spent;
       const diff = Math.abs(expected - vals.remainingInBudget);
       console.log(
-        `  ${monthName}: Budgeted(${vals.budgeted}) - Spent(${vals.spent}) = ${expected}, Remaining in Budget = ${vals.remainingInBudget}, diff = ${diff}`,
+        `  ${monthName}: Budgeted(${vals.budgeted}) - Spent(${vals.spent}) = ${expected}, Left to Spend = ${vals.remainingInBudget}, diff = ${diff}`,
       );
       expect(diff).toBeLessThan(3);
     }
@@ -1303,7 +1301,7 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
   const monthCount = months.count;
   const pageValues = {};
 
-  // Collect "Left to Budget" from each month's ribbon
+  // Collect "Unallocated" from each month's ribbon
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
     await page.waitForTimeout(2000);
@@ -1313,7 +1311,7 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
       if (p.label.includes('Unallocated')) leftToBudget = p.num;
     }
     pageValues[monthName] = leftToBudget;
-    console.log(`Month page ${monthName}: Left to Budget = ${leftToBudget}`);
+    console.log(`Month page ${monthName}: Unallocated = ${leftToBudget}`);
   }
 
   // Switch to Year view and read the "Unallocated" row
@@ -1386,16 +1384,16 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
     console.log(`Ribbon: ${JSON.stringify(ribbon)}`);
 
     // ── 2. Ribbon math checks ──
-    // Income - Budgeted = Left to Budget
+    // Income - Budgeted = Unallocated
     if (ribbon['Income'] && ribbon['Budgeted'] && ribbon['Unallocated'] !== undefined) {
       const expected = ribbon['Income'] - ribbon['Budgeted'];
       const diff = Math.abs(expected - ribbon['Unallocated']);
       console.log(
-        `  Income(${ribbon['Income']}) - Budgeted(${ribbon['Budgeted']}) = ${expected}, Left to Budget = ${ribbon['Left to Budget']}, diff = ${diff}`,
+        `  Income(${ribbon['Income']}) - Budgeted(${ribbon['Budgeted']}) = ${expected}, Unallocated = ${ribbon['Unallocated']}, diff = ${diff}`,
       );
       if (diff > 3)
         errors.push(
-          `${monthName}: Income - Budgeted != Left to Budget (${expected.toFixed(2)} vs ${ribbon['Left to Budget']})`,
+          `${monthName}: Income - Budgeted != Unallocated (${expected.toFixed(2)} vs ${ribbon['Unallocated']})`,
         );
     }
 
@@ -1412,16 +1410,16 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
         );
     }
 
-    // Budgeted - Spent = Remaining in Budget
+    // Budgeted - Used = Left to Spend
     if (ribbon['Budgeted'] && ribbon['Used'] && ribbon['Left to Spend'] !== undefined) {
       const expected = ribbon['Budgeted'] - ribbon['Used'];
       const diff = Math.abs(expected - ribbon['Left to Spend']);
       console.log(
-        `  Budgeted(${ribbon['Budgeted']}) - Spent(${ribbon['Used']}) = ${expected}, Remaining in Budget = ${ribbon['Left to Spend']}, diff = ${diff}`,
+        `  Budgeted(${ribbon['Budgeted']}) - Used(${ribbon['Used']}) = ${expected}, Left to Spend = ${ribbon['Left to Spend']}, diff = ${diff}`,
       );
       if (diff > 3)
         errors.push(
-          `${monthName}: Budgeted - Spent != Remaining in Budget (${expected} vs ${ribbon['Left to Spend']})`,
+          `${monthName}: Budgeted - Used != Left to Spend (${expected} vs ${ribbon['Left to Spend']})`,
         );
     }
 
@@ -1683,11 +1681,11 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
         errors.push(`${name}: Page Budgeted (${pageBudgeted}) != Year Budgeted (${bud})`);
     }
 
-    if (monthRibbon && spt !== undefined) {
-      const pageSpent = monthRibbon['Used'] || 0;
-      const diff = Math.abs(Math.round(pageSpent) - spt);
-      console.log(`  ${name}: Page Spent(${pageSpent}) vs Year Spent(${spt}), diff = ${diff}`);
-      if (diff > 2) errors.push(`${name}: Page Spent (${pageSpent}) != Year Spent (${spt})`);
+    if (monthRibbon && used !== undefined) {
+      const pageUsed = monthRibbon['Used'] || 0;
+      const diff = Math.abs(Math.round(pageUsed) - used);
+      console.log(`  ${name}: Page Used(${pageUsed}) vs Year Used(${used}), diff = ${diff}`);
+      if (diff > 2) errors.push(`${name}: Page Used (${pageUsed}) != Year Used (${used})`);
     }
   }
 
