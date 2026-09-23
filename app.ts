@@ -37,8 +37,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v52';
-const BUILD_DATE = 'Sep 22, 2026 10:12';
+const APP_VERSION = 'v53';
+const BUILD_DATE = 'Sep 23, 2026 13:30';
 
 const MONTHS = [
   'January',
@@ -2909,24 +2909,9 @@ function renderRibbon(
         // Owed strip — Travel gap + Admin gap + Below-Threshold (Q1)
         // Always visible on Budget-tab top KPIs, glanceable on mobile too.
         const owedOpen = localStorage.getItem('owedStripOpen') !== 'false'; // default open
-        const tProj = (state.travel.items || []).reduce(
-          (s, i) => s + (Number(i.projected_amount) || 0),
-          0,
-        );
-        const tAlloc = Object.values(state.travel.allocations || {}).reduce(
-          (s, a) => s + (Number(a.amount) || 0),
-          0,
-        );
-        const tGap = ag(tProj - tAlloc); // signed: >0 short, <0 surplus
-        const aProj = (state.admin.items || []).reduce(
-          (s, i) => s + (Number(i.projected_amount) || 0),
-          0,
-        );
-        const aAlloc = Object.values(state.admin.allocations || {}).reduce(
-          (s, a) => s + (Number(a.amount) || 0),
-          0,
-        );
-        const aGap = ag(aProj - aAlloc - creditsTotal()); // signed: >0 short, <0 surplus
+        // signed: >0 short, <0 surplus. See categoryYearlyGap — the one home.
+        const tGap = categoryYearlyGap('travel', { signed: true });
+        const aGap = categoryYearlyGap('admin', { signed: true });
         const totalOwed = ag(tGap + aGap);
         const seg = (emoji: string, val: number, tab: string, label: string): string => {
           if (val > 0)
@@ -3669,18 +3654,12 @@ function renderApp() {
             const c = cats[0];
             let gapBadge = '';
             if (c.hasTab && (state as unknown as Record<string, unknown>)[c.key]) {
-              const _catSection = (state as unknown as Record<string, unknown>)[
-                c.key
-              ] as CategorySection;
-              const projected = (_catSection.items || []).reduce(
-                (s, i) => s + (Number(i.projected_amount) || 0),
-                0,
-              );
-              const allocated = Object.values(_catSection.allocations || {}).reduce(
-                (s: number, a: { amount?: unknown }) => s + (Number(a.amount) || 0),
-                0,
-              );
-              const gap = ag(projected - allocated);
+              // ONE source of truth for the yearly gap. This badge used to re-derive
+              // projected − allocated inline, which skipped the Money-In credits —
+              // so the sidebar said ₪1,508 while the Owed strip, the Pending list,
+              // the Admin tab KPI and the Year tab all said ₪1,123 on the same
+              // screen (2026-09-23, the ₪385 credit total). Never re-derive here.
+              const gap = ag(categoryYearlyGap(c.key));
               if (gap > 0)
                 gapBadge = `<span style="font-size:.62rem;color:var(--red);font-family:'DM Mono',monospace;margin-left:auto;padding-left:.4rem;">−${fmt(gap)}</span>`;
             }
@@ -8449,9 +8428,22 @@ function renderPrepaidTzedaka(n: (v: number | null | undefined) => string): stri
     </div>`;
 }
 
-// Q2 — yearly funding gap for Travel/Admin/Charity. Returns positive number
-// when projected need exceeds allocations across the full year.
-function categoryYearlyGap(catKey: string): number {
+// Q2 — yearly funding gap for Travel/Admin/Charity. Positive = projected need
+// exceeds allocations across the full year. `signed` keeps a surplus negative
+// (the Owed strip and the Year tab say "funded" / "+₪x"); the default clamps at
+// 0 (the sidebar badge and the Pending list only ever show a shortfall).
+//
+// THE ONLY PLACE THIS ARITHMETIC LIVES. Every surface that shows a Travel or
+// Admin gap resolves here. It used to be copy-pasted into four renderers, and
+// the sidebar copy silently skipped the Money-In credits — so the sidebar read
+// ₪1,508 while four other surfaces read ₪1,123 on the same screen (2026-09-23,
+// the ₪385 credit total). Don't re-derive it at a call site; extend it here.
+//
+// Money In is admin-only (it offsets admin cost) and reduces the gap, not the
+// spend — see the Admin-tab KPI comment. Charity is percentage-driven, not a
+// funded pot, so it has no yearly gap: 0.
+function categoryYearlyGap(catKey: string, opts?: { signed?: boolean }): number {
+  const clamp = (n: number): number => ag(opts?.signed ? n : Math.max(0, n));
   if (catKey === 'travel' && state.travel) {
     const proj = (state.travel.items || []).reduce(
       (s, i) => s + (Number(i.projected_amount) || 0),
@@ -8461,7 +8453,7 @@ function categoryYearlyGap(catKey: string): number {
       (s, a) => s + (Number(a.amount) || 0),
       0,
     );
-    return Math.max(0, proj - alloc);
+    return clamp(proj - alloc);
   }
   if (catKey === 'admin' && state.admin) {
     const proj = (state.admin.items || []).reduce(
@@ -8472,7 +8464,7 @@ function categoryYearlyGap(catKey: string): number {
       (s, a) => s + (Number(a.amount) || 0),
       0,
     );
-    return Math.max(0, proj - alloc - creditsTotal());
+    return clamp(proj - alloc - creditsTotal());
   }
   return 0;
 }
@@ -9042,24 +9034,19 @@ function renderYearSnapshot(): string {
     ),
   );
 
-  // Travel & Admin: projected budget from items, allocated from monthly allocations, gap = budget - allocated
+  // Travel & Admin: projected budget from items; the gap (budget − allocated,
+  // minus Money In for admin) comes from categoryYearlyGap — the one home.
   const totalTravelProjected = ag(
     (state.travel.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
-  const totalTravelAlloc = ag(
-    Object.values(state.travel.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
-  );
-  const travelGap = ag(totalTravelProjected - totalTravelAlloc);
+  const travelGap = categoryYearlyGap('travel', { signed: true });
   const totalAdminGross = ag(
     (state.admin.items || []).reduce((s, i) => s + (Number(i.projected_amount) || 0), 0),
   );
   // Money In does NOT reduce the admin expense total — it's a funding source
   // that lowers the Gap (shown on the Admin tab), not a spend offset.
   const totalAdminProjected = totalAdminGross;
-  const totalAdminAlloc = ag(
-    Object.values(state.admin.allocations || {}).reduce((s, a) => s + (Number(a.amount) || 0), 0),
-  );
-  const adminGap = ag(totalAdminGross - totalAdminAlloc - creditsTotal());
+  const adminGap = categoryYearlyGap('admin', { signed: true });
 
   // Format: always show ₪0 instead of dashes
   const fmtYZ = (n: number): string => shekels(n);
@@ -11032,26 +11019,11 @@ function landedToast(monthNum: number | null, yr: number, paidDate?: string | nu
 // compact widget near the toolbar. Click to expand into a popover with the
 // breakdown. Values match the Budget-tab Owed strip exactly.
 function computeOwed() {
-  const tProj = (state.travel?.items || []).reduce(
-    (s, i) => s + (Number(i.projected_amount) || 0),
-    0,
-  );
-  const tAlloc = Object.values(state.travel?.allocations || {}).reduce(
-    (s, a) => s + (Number(a.amount) || 0),
-    0,
-  );
-  const tGap = ag(Math.max(0, tProj - tAlloc));
-  const aProj = (state.admin?.items || []).reduce(
-    (s, i) => s + (Number(i.projected_amount) || 0),
-    0,
-  );
-  const aAlloc = Object.values(state.admin?.allocations || {}).reduce(
-    (s, a) => s + (Number(a.amount) || 0),
-    0,
-  );
-  // Subtract Money-In credits so the Pending "Admin gap" matches the Owed strip
-  // (L2653 does the same). Without this the two surfaces disagree by the credit total.
-  const aGap = ag(Math.max(0, aProj - aAlloc - creditsTotal()));
+  // Shortfall-only (clamped at 0) — the widget names what's still owed, never a
+  // surplus. Arithmetic lives in categoryYearlyGap so this can't drift from the
+  // Owed strip, the sidebar badge or the Year tab.
+  const tGap = categoryYearlyGap('travel');
+  const aGap = categoryYearlyGap('admin');
   return { tGap, aGap, total: ag(tGap + aGap) };
 }
 

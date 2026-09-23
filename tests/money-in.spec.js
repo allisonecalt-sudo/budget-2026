@@ -154,3 +154,89 @@ test.describe('Money In — pure helpers', () => {
     expect(r.totalExpected).toBe(160); // 60 + 100
   });
 });
+
+// ── Regression: the yearly gap has ONE home ───────────────────────────────
+// 2026-09-23 — the sidebar badge re-derived "projected − allocated" inline and
+// skipped Money In, so it read ₪1,508 while the Owed strip, the Pending list,
+// the Admin tab KPI and the Year tab all read ₪1,123 on the same screen. Every
+// surface now resolves to categoryYearlyGap(). These tests pin the contract:
+// admin subtracts credits, travel does not, charity has no gap, and computeOwed
+// never disagrees with the helper.
+test.describe('Yearly gap — one home, every surface agrees', () => {
+  // Swap in synthetic in-memory state, read every gap surface, restore.
+  // In-memory ONLY — no page.fill, no Supabase write. Safe against the live app.
+  async function gapsUnder(page, admin, travel, credits) {
+    return page.evaluate(
+      ({ admin, travel, credits }) => {
+        const prev = {
+          ai: window.state.admin.items,
+          aa: window.state.admin.allocations,
+          ac: window.state.admin.credits,
+          ti: window.state.travel.items,
+          ta: window.state.travel.allocations,
+        };
+        window.state.admin.items = admin.items;
+        window.state.admin.allocations = admin.allocations;
+        window.state.admin.credits = credits;
+        window.state.travel.items = travel.items;
+        window.state.travel.allocations = travel.allocations;
+        const out = {
+          admin: window.categoryYearlyGap('admin'),
+          adminSigned: window.categoryYearlyGap('admin', { signed: true }),
+          travel: window.categoryYearlyGap('travel'),
+          charity: window.categoryYearlyGap('charity'),
+          owed: window.computeOwed(),
+        };
+        window.state.admin.items = prev.ai;
+        window.state.admin.allocations = prev.aa;
+        window.state.admin.credits = prev.ac;
+        window.state.travel.items = prev.ti;
+        window.state.travel.allocations = prev.ta;
+        return out;
+      },
+      { admin, travel, credits },
+    );
+  }
+
+  const ADMIN_SHORT = {
+    items: [{ projected_amount: 1000 }, { projected_amount: 500 }], // 1500
+    allocations: { 1: { amount: 600 }, 2: { amount: 300 } }, // 900
+  };
+  const TRAVEL_SHORT = {
+    items: [{ projected_amount: 1000 }], // 1000
+    allocations: { 1: { amount: 400 } }, // 400
+  };
+  const CREDITS = [
+    { id: 'k1', category: 'Admin', amount: 100, is_received: true }, // 100
+  ];
+
+  test('admin gap subtracts Money In; travel does not; charity has none', async ({ page }) => {
+    await loadHelpers(page);
+    const r = await gapsUnder(page, ADMIN_SHORT, TRAVEL_SHORT, CREDITS);
+    // 1500 projected − 900 allocated − 100 Money In = 500
+    expect(r.admin).toBe(500);
+    expect(r.adminSigned).toBe(500);
+    // Money In is admin-only: 1000 − 400 = 600, credits untouched
+    expect(r.travel).toBe(600);
+    // Charity is percentage-driven, not a funded pot
+    expect(r.charity).toBe(0);
+    // The widget must never disagree with the helper it is built on
+    expect(r.owed.aGap).toBe(500);
+    expect(r.owed.tGap).toBe(600);
+    expect(r.owed.total).toBe(1100);
+  });
+
+  test('a surplus is negative when signed and clamped to 0 when not', async ({ page }) => {
+    await loadHelpers(page);
+    const overFunded = {
+      items: [{ projected_amount: 1000 }], // 1000
+      allocations: { 1: { amount: 2000 } }, // 2000
+    };
+    const r = await gapsUnder(page, overFunded, TRAVEL_SHORT, CREDITS);
+    // 1000 − 2000 − 100 = −1100 surplus. The Owed strip shows "+₪1,100";
+    // the sidebar badge and Pending list show nothing.
+    expect(r.adminSigned).toBe(-1100);
+    expect(r.admin).toBe(0);
+    expect(r.owed.aGap).toBe(0);
+  });
+});
