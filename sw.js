@@ -9,13 +9,17 @@
 //     successful network call or 'online'-style replay tick.
 //   - Each queued write gets a UUID 'op_id' to guard against double-flush.
 
-const VERSION = 'budget-v53';
+const VERSION = 'budget-v54';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const SHELL_ASSETS = [
   './',
   './index.html',
   './dist/app.js',
+  './dist/lib/analyze.js',
+  './dist/lib/budget-math.js',
+  './dist/lib/history-format.js',
+  './dist/lib/money.js',
   './styles.css',
   './manifest.webmanifest',
   './icon.svg',

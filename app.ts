@@ -7,6 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
 import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
+import { analyzeYear } from './lib/analyze.js';
+import type { AnalyzeCatStat, AnalyzeMonth, AnalyzeResult } from './lib/analyze.js';
 
 declare global {
   interface Window {
@@ -37,8 +39,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v53';
-const BUILD_DATE = 'Sep 23, 2026 13:30';
+const APP_VERSION = 'v54';
+const BUILD_DATE = 'Sep 23, 2026 15:00';
 
 const MONTHS = [
   'January',
@@ -420,6 +422,17 @@ interface YearData {
   incomeItems: IncomeItemRow[];
 }
 
+// spend_floors — her "least I'd spend" per category per year (Analyze tab).
+// One row per (year, category); absent = not set, the tab shows a suggestion.
+interface SpendFloorRow {
+  id: string;
+  year: number;
+  category: string;
+  amount: number;
+  notes?: string | null;
+  updated_at?: string | null;
+}
+
 interface UndoAction {
   label: string;
   undo: () => Promise<void>;
@@ -477,6 +490,7 @@ interface State {
   charity: CategorySection;
   openCats: Set<string>;
   yearData: YearData | null;
+  floors: Record<string, SpendFloorRow>;
   inlineAddCat: string | null;
   allStores: StoreRow[];
   yearViewMonth: number | null;
@@ -514,6 +528,7 @@ let state: State = {
   charity: { items: [], allocations: {}, payments: [], subItems: [] },
   openCats: new Set(JSON.parse(localStorage.getItem('openCats') || '[]')),
   yearData: null,
+  floors: {}, // { category: spend_floors row } for the viewed year (Analyze tab)
   inlineAddCat: null,
   allStores: [],
   yearViewMonth: null, // mobile Year view: which month column is shown (1-12); null = auto
@@ -3565,6 +3580,7 @@ function renderApp() {
           <button class="ptab ${state.activeTab === 'charity' ? 'active' : ''}" onclick="switchTab('charity')">Charity 💚</button>
           <button class="ptab ${state.activeTab === 'cash' ? 'active' : ''}" onclick="switchTab('cash')">Cash 💰</button>
           <button class="ptab ${state.activeTab === 'year' ? 'active' : ''}" onclick="switchTab('year')">Year 📊</button>
+          <button class="ptab ${state.activeTab === 'analyze' ? 'active' : ''}" onclick="switchTab('analyze')">Analyze 🔍</button>
         </div>
       </div>
       <div class="hdr-actions">
@@ -3598,23 +3614,25 @@ function renderApp() {
 
     ${renderRibbon(income, spent, totalSpent, totalBudgeted)}
 
-    <div class="${state.activeTab === 'year' ? 'main-full' : 'main'}">
+    <div class="${state.activeTab === 'year' || state.activeTab === 'analyze' ? 'main-full' : 'main'}">
       ${
         state.loading
           ? '<div class="loading">Loading...</div>'
           : state.activeTab === 'year'
             ? renderYearSnapshot()
-            : state.activeTab === 'cash'
-              ? renderCashTab()
-              : state.activeTab === 'charity'
-                ? renderCharityTab()
-                : state.activeTab === 'travel'
-                  ? renderTravelTab()
-                  : state.activeTab === 'admin'
-                    ? renderAdminTab()
-                    : state.activeTab === 'biz'
-                      ? renderBizTab()
-                      : `
+            : state.activeTab === 'analyze'
+              ? renderAnalyzeTab()
+              : state.activeTab === 'cash'
+                ? renderCashTab()
+                : state.activeTab === 'charity'
+                  ? renderCharityTab()
+                  : state.activeTab === 'travel'
+                    ? renderTravelTab()
+                    : state.activeTab === 'admin'
+                      ? renderAdminTab()
+                      : state.activeTab === 'biz'
+                        ? renderBizTab()
+                        : `
       <div class="page-layout">
       <nav class="side-nav" id="side-nav">
         <div class="sidenav-label">Jump to</div>
@@ -4416,6 +4434,14 @@ async function switchTab(tab: string): Promise<void> {
     renderApp();
     await loadYearData();
     state.loading = false;
+  } else if (tab === 'analyze') {
+    state.loading = true;
+    renderApp();
+    try {
+      await loadAnalyzeData();
+    } finally {
+      state.loading = false;
+    }
   }
   renderApp();
 }
@@ -9484,6 +9510,465 @@ function renderYearSnapshot(): string {
   );
 }
 
+// ── Analyze tab ─────────────────────────────────────────────────────────
+// What the year REALLY costs and the least it could. Her ask (2026-09-23):
+// "what is my real spend… what's the littlest I can spend." All arithmetic is
+// in lib/analyze.ts (pure, unit-tested); this block only loads rows, keeps her
+// floors in spend_floors, and renders. Vocabulary is new on purpose — "Real
+// spend", "Floor", "Above floor" — so it never collides with "Room to move"
+// (Budget tab, this month only) or "Remaining" (Admin/Travel).
+
+async function loadFloors(): Promise<void> {
+  const { data, error } = await sb.from('spend_floors').select('*').eq('year', state.currentYear);
+  if (error) {
+    toast('Could not load floors');
+    return;
+  }
+  const map: Record<string, SpendFloorRow> = {};
+  ((data || []) as SpendFloorRow[]).forEach((r) => {
+    map[r.category] = r;
+  });
+  state.floors = map;
+}
+
+async function loadAnalyzeData(): Promise<void> {
+  await Promise.all([loadYearData(), loadFloors()]);
+}
+
+// Averaging window: 0 = every complete month, 3 / 6 = the last N. Per device;
+// it changes what she is looking at, not any stored number.
+function analyzeAvgWindow(): number {
+  const v = parseInt(localStorage.getItem('analyzeAvgWindow') || '0', 10);
+  return v === 3 || v === 6 ? v : 0;
+}
+function setAnalyzeAvgWindow(n: number): void {
+  localStorage.setItem('analyzeAvgWindow', String(n));
+  renderApp();
+}
+
+function computeAnalyze(): AnalyzeResult | null {
+  if (!state.yearData) return null;
+  const floors: Record<string, number | undefined> = {};
+  Object.keys(state.floors).forEach((k) => {
+    floors[k] = Number(state.floors[k].amount);
+  });
+  return analyzeYear({
+    months: state.months.map((m) => ({
+      id: m.id,
+      month_num: m.month_num,
+      month_name: MONTHS[m.month_num - 1] || '',
+      income_petachya: m.income_petachya,
+      income_clalit: m.income_clalit,
+      income_private: m.income_private,
+      income_other: m.income_other,
+      charity_pct: m.charity_pct,
+    })),
+    txns: state.yearData.txns,
+    budgetItems: state.yearData.budgetItems,
+    budgets: state.yearData.allBudgets,
+    incomeItems: state.yearData.incomeItems,
+    categories: CATEGORIES,
+    todayMonth: todayMonthForYear(),
+    avgWindow: analyzeAvgWindow(),
+    floors,
+  });
+}
+
+// Her floor for one category. '' clears it (back to the suggestion). One
+// change_log row per write; undo/redo write to the table directly so they
+// never re-enter this function (the saveBudget trap).
+async function saveSpendFloor(catKey: string, raw: string): Promise<void> {
+  const cat = CATEGORIES.find((c) => c.key === catKey);
+  const label = cat ? cat.label : catKey;
+  const existing = state.floors[catKey];
+  const year = state.currentYear;
+  const stamp = (): string => new Date().toISOString();
+  const put = async (amt: number): Promise<void> => {
+    const { data } = await sb
+      .from('spend_floors')
+      .upsert(
+        { year, category: catKey, amount: amt, updated_at: stamp() },
+        { onConflict: 'year,category' },
+      )
+      .select()
+      .single();
+    if (data) state.floors[catKey] = data as SpendFloorRow;
+  };
+  const drop = async (): Promise<void> => {
+    await sb.from('spend_floors').delete().eq('year', year).eq('category', catKey);
+    delete state.floors[catKey];
+  };
+
+  const trimmed = String(raw ?? '').trim();
+  if (trimmed === '') {
+    if (!existing) return;
+    const { error } = await sb.from('spend_floors').delete().eq('id', existing.id);
+    if (error) {
+      toast('Could not clear floor');
+      return;
+    }
+    delete state.floors[catKey];
+    const was = Number(existing.amount) || 0;
+    logChange(
+      'delete',
+      'spend_floor',
+      existing.id,
+      `Floor cleared: ${label} (was ₪${was})`,
+      { amount: was },
+      null,
+    );
+    pushUndo({
+      label: 'floor ' + label,
+      undo: async () => put(was),
+      redo: async () => drop(),
+    });
+    renderApp();
+    toast('Floor cleared ✓');
+    return;
+  }
+
+  const num = parseFloat(trimmed);
+  if (!Number.isFinite(num) || num < 0) {
+    toast('A floor is a number, 0 or more');
+    return;
+  }
+  const old = existing ? Number(existing.amount) || 0 : null;
+  if (old !== null && ag(old) === ag(num)) return; // unchanged → no write, no log
+  const { data, error } = await sb
+    .from('spend_floors')
+    .upsert(
+      { year, category: catKey, amount: num, updated_at: stamp() },
+      { onConflict: 'year,category' },
+    )
+    .select()
+    .single();
+  if (error || !data) {
+    toast('Could not save floor');
+    return;
+  }
+  const row = data as SpendFloorRow;
+  state.floors[catKey] = row;
+  logChange(
+    'edit',
+    'spend_floor',
+    row.id,
+    `Floor set: ${label} ${old === null ? 'suggested' : '₪' + old} → ₪${num}`,
+    { amount: old },
+    { amount: num },
+  );
+  pushUndo({
+    label: 'floor ' + label,
+    undo: async () => (old === null ? drop() : put(old)),
+    redo: async () => put(num),
+  });
+  renderApp();
+  toast('Floor saved ✓');
+}
+
+function renderAnalyzeTab(): string {
+  const r = computeAnalyze();
+  if (!r) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
+  const { months, cats, lines, summary: s } = r;
+  const todayMonth = todayMonthForYear();
+  const win = analyzeAvgWindow();
+  const money = (v: number): string => shekels(v || 0);
+  // A negative "above floor" reads as −₪x, never ₪-x.
+  const signed = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v));
+  const pctStr = (v: number): string => Math.round((v || 0) * 100) + '%';
+  const abbr = (mn: number | null): string => (mn ? MONTH_ABBR[mn - 1] || '?' : '?');
+  const esc = (t: unknown): string =>
+    String(t ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/"/g, '&quot;');
+  const avgSpan = s.avgMonths.length
+    ? s.avgMonths.length === 1
+      ? abbr(s.avgMonths[0])
+      : abbr(s.avgMonths[0]) + '–' + abbr(s.avgMonths[s.avgMonths.length - 1])
+    : 'no complete months yet';
+  const nSet = cats.filter((c) => c.floorSet).length;
+  const mean = (xs: number[]): number =>
+    xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const avgSet = new Set(s.avgMonths);
+  const avgOf = (pick: (m: AnalyzeMonth) => number): number =>
+    mean(months.filter((m) => avgSet.has(m.month_num)).map(pick));
+  const sumOf = (pick: (m: AnalyzeMonth) => number): number =>
+    months.reduce((a, m) => a + pick(m), 0);
+
+  // ── Head: title + averaging window ────────────────────────────────────
+  const pill = (n: number, text: string): string =>
+    '<button class="yr-pillbtn an-winbtn' +
+    (win === n ? ' active' : '') +
+    '" onclick="setAnalyzeAvgWindow(' +
+    n +
+    ')">' +
+    text +
+    '</button>';
+  const head =
+    '<div class="an-head">' +
+    '<div class="an-title">Analyze ' +
+    state.currentYear +
+    ' <span class="an-tag">yearly view</span></div>' +
+    '<div class="an-win"><span class="an-winlbl">Average over</span>' +
+    pill(0, 'all complete months') +
+    pill(3, 'last 3') +
+    pill(6, 'last 6') +
+    '</div></div>';
+
+  // ── KPI row ───────────────────────────────────────────────────────────
+  const kpi = (label: string, val: string, sub: string): string =>
+    '<div class="year-sum-card"><div class="year-sum-label">' +
+    label +
+    '</div><div class="year-sum-val">' +
+    val +
+    '</div><div class="an-sub">' +
+    sub +
+    '</div></div>';
+  const kpis =
+    '<div class="an-kpis">' +
+    kpi('Real spend / mo', money(s.realAvg), 'average of ' + avgSpan + ', savings not counted') +
+    kpi('Floor / mo', money(s.floorTotal), nSet + ' of ' + cats.length + ' floors set by you') +
+    kpi('Above floor / mo', signed(s.aboveFloor), 'real spend minus floor') +
+    kpi(
+      'Savings rate',
+      pctStr(s.savingsRate),
+      money(s.ytdSavings) + ' of ' + money(s.ytdIncome) + ' income so far',
+    ) +
+    kpi(
+      'Year real spend',
+      money(s.yearReal),
+      money(s.yearRealActual) + ' so far + ' + money(s.yearRealProjected) + ' projected',
+    ) +
+    '</div>';
+
+  // ── By month: behaviour × month ───────────────────────────────────────
+  const colCls = (m: AnalyzeMonth): string =>
+    'year-cell' +
+    (m.status === 'future' ? ' future' : '') +
+    (m.status === 'current' ? ' current-col' : '');
+  const thead =
+    '<thead><tr><th class="year-th-label">By month</th>' +
+    months
+      .map(
+        (m) =>
+          '<th class="year-th-month' +
+          (m.status === 'current'
+            ? ' current-month'
+            : m.status === 'future'
+              ? ' future-month'
+              : '') +
+          '">' +
+          m.name +
+          (m.status === 'current' ? ' ◉' : '') +
+          '</th>',
+      )
+      .join('') +
+    '<th class="year-th-extra">Avg</th><th class="year-th-extra">Year</th></tr></thead>';
+  const rowDefs: {
+    label: string;
+    pick: (m: AnalyzeMonth) => number;
+    cls?: string;
+    count?: boolean;
+  }[] = [
+    { label: '\u{1F4C8} Income', pick: (m) => m.income },
+    { label: '\u{1F3E0} Fixed', pick: (m) => m.fixed, cls: 'year-row-sub' },
+    { label: '\u{1F6D2} Envelopes', pick: (m) => m.envelope, cls: 'year-row-sub' },
+    { label: '✈️\u{1F4CB} Pots', pick: (m) => m.pots, cls: 'year-row-sub' },
+    { label: '\u{1F49A} Charity', pick: (m) => m.charity, cls: 'year-row-sub' },
+    { label: 'Real spend', pick: (m) => m.real, cls: 'year-row-bold' },
+    { label: '\u{1F3E6} Savings', pick: (m) => m.savings },
+    { label: 'Used', pick: (m) => m.used, cls: 'year-row-net' },
+    { label: 'Entries logged', pick: (m) => m.entries, cls: 'year-row-sub', count: true },
+  ];
+  const fmtCell = (v: number, count?: boolean): string =>
+    count ? String(Math.round(v)) : money(v);
+  const tbody =
+    '<tbody>' +
+    rowDefs
+      .map(
+        (d) =>
+          '<tr class="' +
+          (d.cls || 'year-row') +
+          '"><td class="year-col-label">' +
+          d.label +
+          '</td>' +
+          months
+            .map((m) => '<td class="' + colCls(m) + '">' + fmtCell(d.pick(m), d.count) + '</td>')
+            .join('') +
+          '<td class="year-cell-avg">' +
+          fmtCell(avgOf(d.pick), d.count) +
+          '</td><td class="year-cell-extra">' +
+          fmtCell(sumOf(d.pick), d.count) +
+          '</td></tr>',
+      )
+      .join('') +
+    '</tbody>';
+  const byMonth =
+    '<div class="card an-card"><div class="card-title">What each month cost</div>' +
+    '<div class="year-table-wrap"><table class="year-table an-table">' +
+    thead +
+    tbody +
+    '</table></div>' +
+    '<div class="an-legend">italics = projected from budget · ◉ ' +
+    abbr(s.referenceMonth) +
+    ' in progress: counts the higher of spent-so-far and budget · Avg = ' +
+    avgSpan +
+    ' · Real spend = fixed + envelopes + pots + charity · Used = real spend + savings, the Year tab’s Total Used</div>' +
+    '</div>';
+
+  // ── Floor: real vs the least, per category ────────────────────────────
+  const kindOrder: { kind: AnalyzeCatStat['kind']; title: string; note: string }[] = [
+    { kind: 'envelope', title: 'Envelopes', note: 'suggested floor = your lowest complete month' },
+    { kind: 'fixed', title: 'Fixed', note: 'suggested floor = this month’s lines' },
+    { kind: 'pot', title: 'Pots', note: 'suggested floor = 0 — your call' },
+    { kind: 'charity', title: 'Charity', note: 'suggested floor = your average' },
+  ];
+  const lowHigh = (x: AnalyzeCatStat['low']): string =>
+    x ? money(x.amount) + ' <span class="an-mon">' + abbr(x.month_num) + '</span>' : '—';
+  const floorCell = (c: AnalyzeCatStat): string => {
+    const row = state.floors[c.key];
+    return (
+      '<span class="an-floorwrap"><input type="number" class="budget-inline an-floor' +
+      (c.floorSet ? ' set' : '') +
+      '" value="' +
+      (c.floorSet ? roundZ(c.floor) : '') +
+      '" placeholder="' +
+      roundZ(c.floorDefault) +
+      '" min="0" step="1" inputmode="decimal" aria-label="Floor for ' +
+      esc(c.label) +
+      '" data-floor-id="' +
+      (row ? row.id : '') +
+      '" onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
+      c.key +
+      '\', this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
+      (c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
+      '</span>'
+    );
+  };
+  const catRow = (c: AnalyzeCatStat): string =>
+    '<tr class="sn-cat"><td>' +
+    c.emoji +
+    ' ' +
+    esc(c.label) +
+    '</td>' +
+    '<td data-label="Avg / mo">' +
+    money(c.avg) +
+    '</td>' +
+    '<td data-label="Low">' +
+    lowHigh(c.low) +
+    '</td>' +
+    '<td data-label="High">' +
+    lowHigh(c.high) +
+    '</td>' +
+    '<td data-label="Share">' +
+    pctStr(c.share) +
+    '</td>' +
+    '<td data-label="Floor">' +
+    floorCell(c) +
+    '</td>' +
+    '<td data-label="Above floor">' +
+    signed(c.aboveFloor) +
+    '</td></tr>';
+  const floorBody = kindOrder
+    .map((k) => {
+      const rows = cats.filter((c) => c.kind === k.kind);
+      if (!rows.length) return '';
+      return (
+        '<tr class="sn-section"><td colspan="7">' +
+        k.title +
+        ' <span class="an-note">' +
+        k.note +
+        '</span></td></tr>' +
+        rows.map(catRow).join('')
+      );
+    })
+    .join('');
+  const floorTotal =
+    '<tr class="sn-group an-total"><td>Total</td>' +
+    '<td data-label="Avg / mo">' +
+    money(s.realAvg) +
+    '</td><td data-label="Low"></td><td data-label="High"></td><td data-label="Share">100%</td>' +
+    '<td data-label="Floor">' +
+    money(s.floorTotal) +
+    '</td><td data-label="Above floor">' +
+    signed(s.aboveFloor) +
+    '</td></tr>';
+  const floorTable =
+    '<div class="card an-card"><div class="card-title">The floor — the least each line would cost</div>' +
+    '<div class="an-intro">Avg, low and high are your complete months (' +
+    avgSpan +
+    ' for the average). Type a floor to set your own; clear it to go back to the suggestion.</div>' +
+    '<div class="an-tablewrap"><table class="sn-table an-floortable">' +
+    '<thead><tr><th>Category</th><th>Avg / mo</th><th>Low</th><th>High</th><th>Share</th><th>Floor</th><th>Above floor</th></tr></thead>' +
+    '<tbody>' +
+    floorBody +
+    floorTotal +
+    '</tbody></table></div></div>';
+
+  // ── Fixed lines, annualized ───────────────────────────────────────────
+  const lineRow = (l: (typeof lines)[number]): string =>
+    '<tr class="sn-cat' +
+    (l.dead ? ' an-dead' : '') +
+    '"><td>' +
+    esc(l.label) +
+    (l.dead ? ' <span class="an-note">no money this year</span>' : '') +
+    '</td>' +
+    '<td data-label="Type">' +
+    esc(l.category === 'housing' ? 'housing' : 'recurring') +
+    (l.subcategory ? ' · ' + esc(l.subcategory) : '') +
+    '</td>' +
+    '<td data-label="' +
+    abbr(s.referenceMonth) +
+    '">' +
+    money(l.monthly) +
+    '</td>' +
+    '<td data-label="Year">' +
+    money(l.annual) +
+    '</td>' +
+    '<td data-label="Months">' +
+    l.monthsPresent +
+    '</td></tr>';
+  const linesTotal = lines.reduce((a, l) => a + l.annual, 0);
+  const linesTable =
+    '<div class="card an-card"><div class="card-title">Fixed lines over the year</div>' +
+    '<div class="an-intro">Every housing and recurring line, ' +
+    abbr(s.referenceMonth) +
+    '’s amount and what it adds up to across ' +
+    state.currentYear +
+    '. Largest first.</div>' +
+    '<div class="an-tablewrap"><table class="sn-table an-linestable">' +
+    '<thead><tr><th>Line</th><th>Type</th><th>' +
+    abbr(s.referenceMonth) +
+    '</th><th>Year</th><th>Months</th></tr></thead><tbody>' +
+    lines.map(lineRow).join('') +
+    '<tr class="sn-group an-total"><td>Total</td><td data-label="Type"></td><td data-label="' +
+    abbr(s.referenceMonth) +
+    '">' +
+    money(lines.reduce((a, l) => a + l.monthly, 0)) +
+    '</td><td data-label="Year">' +
+    money(linesTotal) +
+    '</td><td data-label="Months"></td></tr>' +
+    '</tbody></table></div></div>';
+
+  const emptyNote =
+    todayMonth === 0
+      ? '<div class="an-intro">Every month of ' +
+        state.currentYear +
+        ' is still ahead, so averages and floors are empty here. Budgets fill the projected columns.</div>'
+      : '';
+
+  return (
+    '<div class="year-tab-wrap ym-full an-wrap">' +
+    head +
+    kpis +
+    emptyNote +
+    byMonth +
+    floorTable +
+    linesTable +
+    '</div>'
+  );
+}
+
 function setYearViewMonth(monthNum: number): void {
   state.yearViewMonth = monthNum;
   renderApp();
@@ -9624,6 +10109,7 @@ async function loadFresh() {
   const tab = state.activeTab;
   if (tab === 'biz') await loadBizData();
   else if (tab === 'year') await loadYearData();
+  else if (tab === 'analyze') await loadAnalyzeData();
   state.loading = false;
   saveCache();
 }
@@ -10268,6 +10754,15 @@ async function jumpToHistoryEntry(entityType: string, entityId: string): Promise
           if (el2) highlight(el2);
         }, 200);
       } else toast('Payment not found — may have been deleted');
+    }, 300);
+    return;
+  }
+
+  if (entityType === 'spend_floor') {
+    if (state.activeTab !== 'analyze') await switchTab('analyze');
+    setTimeout(() => {
+      const el = document.querySelector('[data-floor-id="' + entityId + '"]') as HTMLElement | null;
+      if (el) highlight(el);
     }, 300);
     return;
   }
@@ -11139,7 +11634,7 @@ document.addEventListener(
     // Year view shows the whole year and drives its own month chip selector
     // (setYearViewMonth); the global month-swipe would jump months out from
     // under a vertical scroll, so it's disabled here.
-    if (state.activeTab === 'year') return;
+    if (state.activeTab === 'year' || state.activeTab === 'analyze') return;
     if (
       (e.target as HTMLElement).closest('.app-panel') ||
       (e.target as HTMLElement).closest('input,textarea,select,button')
@@ -11228,7 +11723,7 @@ function scrollActiveMonthIntoView() {
 
 // ── M3 — Mobile bottom tab bar ─────────────────────────────────────────
 // 5 visible tabs (Budget / Travel / Charity / Admin / More). "More" opens a
-// sheet with Year / Cash / Biz. Desktop top pill row stays unchanged.
+// sheet with Year / Analyze / Cash / Biz. Desktop top pill row stays unchanged.
 const MOBILE_TABS_VISIBLE = [
   { key: 'budget', label: 'Budget', icon: '🏠' },
   { key: 'travel', label: 'Travel', icon: '✈️' },
@@ -11237,6 +11732,7 @@ const MOBILE_TABS_VISIBLE = [
 ];
 const MOBILE_TABS_MORE = [
   { key: 'year', label: 'Year', icon: '📊' },
+  { key: 'analyze', label: 'Analyze', icon: '🔍' },
   { key: 'cash', label: 'Cash', icon: '💰' },
   { key: 'biz', label: 'Biz', icon: '💼' },
 ];
@@ -11509,6 +12005,13 @@ Object.assign(window as unknown as Record<string, unknown>, {
   renderSpendingGrid,
   renderTravelTab,
   renderYearSnapshot,
+  renderAnalyzeTab,
+  loadAnalyzeData,
+  loadFloors,
+  saveSpendFloor,
+  setAnalyzeAvgWindow,
+  computeAnalyze,
+  analyzeYear,
   restoreCache,
   runSearch,
   saveAdminAllocation,
@@ -11551,6 +12054,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   spentByCategory,
   startRibbonDrag,
   state,
+  CATEGORIES,
+  MOBILE_TABS_MORE,
   submitQuickAdd,
   switchMonth,
   switchTab,
