@@ -536,7 +536,12 @@ test('savings spent equals savings budget in snapshot modal', async ({ page }) =
   expect(budgetText.trim()).toBe(spentText.trim());
 });
 
-// ─── Year View: Savings & Unbudgeted ───
+// ─── Year View: Savings & Unallocated ───
+// Row vocabulary is the v52 terminology audit's ("one word, one meaning"):
+// Total Income · Total Budgeted · Total Used · 💰 Unallocated · ✅ Unspent.
+// These specs matched the PRE-v52 words ("Total Spent", "Unbudgeted",
+// "Remaining") — one hard-failed and two silently skipped themselves for a day.
+// If a row is renamed again, rename it here in the same commit.
 test('year view loads without errors', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
@@ -898,7 +903,7 @@ test('category spent amounts sum to total spent in ribbon', async ({ page }) => 
   }
 });
 
-test('year view: Income - Budgeted = Unbudgeted for each month', async ({ page }) => {
+test('year view: Income - Budgeted = Unallocated for each month', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
   await page.locator('.ptab', { hasText: 'Year' }).click();
@@ -917,14 +922,17 @@ test('year view: Income - Budgeted = Unbudgeted for each month', async ({ page }
 
   const incomeRow = await findRow('Total Income');
   const budgetedRow = await findRow('Total Budgeted');
-  const unbudgetedRow = await findRow('Unbudgeted');
-  const spentRow = await findRow('Total Spent');
-  const remainingRow = await findRow('Remaining');
+  const unallocatedRow = await findRow('Unallocated');
+  const usedRow = await findRow('Total Used');
+  const unspentRow = await findRow('Unspent');
 
-  if (!incomeRow || !budgetedRow || !unbudgetedRow) {
-    console.log('Could not find required year view rows');
-    return;
-  }
+  // Fail loud. A missing row means the Year tab renamed something out from
+  // under this spec — silently returning is how it stayed dead after v52.
+  expect(incomeRow, 'Year tab: no "Total Income" row').not.toBeNull();
+  expect(budgetedRow, 'Year tab: no "Total Budgeted" row').not.toBeNull();
+  expect(unallocatedRow, 'Year tab: no "Unallocated" row').not.toBeNull();
+  expect(usedRow, 'Year tab: no "Total Used" row').not.toBeNull();
+  expect(unspentRow, 'Year tab: no "Unspent" row').not.toBeNull();
 
   const parseCell = async (row, idx) => {
     const cell = row.locator('td').nth(idx);
@@ -938,25 +946,23 @@ test('year view: Income - Budgeted = Unbudgeted for each month', async ({ page }
     const col = m + 1;
     const income = await parseCell(incomeRow, col);
     const budgeted = await parseCell(budgetedRow, col);
-    const unbudgeted = await parseCell(unbudgetedRow, col);
+    const unallocated = await parseCell(unallocatedRow, col);
 
     const expected = income - budgeted;
-    const diff = Math.abs(expected - unbudgeted);
+    const diff = Math.abs(expected - unallocated);
     console.log(
-      `${monthNames[m]}: Income(${income}) - Budgeted(${budgeted}) = ${expected}, Unbudgeted = ${unbudgeted}, diff = ${diff}`,
+      `${monthNames[m]}: Income(${income}) - Budgeted(${budgeted}) = ${expected}, Unallocated = ${unallocated}, diff = ${diff}`,
     );
     expect(diff).toBeLessThan(2);
 
-    if (spentRow && remainingRow) {
-      const spent = await parseCell(spentRow, col);
-      const remaining = await parseCell(remainingRow, col);
-      const expectedRem = income - spent;
-      const remDiff = Math.abs(expectedRem - remaining);
-      console.log(
-        `  Income(${income}) - Spent(${spent}) = ${expectedRem}, Remaining = ${remaining}, diff = ${remDiff}`,
-      );
-      expect(remDiff).toBeLessThan(2);
-    }
+    const used = await parseCell(usedRow, col);
+    const unspent = await parseCell(unspentRow, col);
+    const expectedUnspent = income - used;
+    const unspentDiff = Math.abs(expectedUnspent - unspent);
+    console.log(
+      `  Income(${income}) - Used(${used}) = ${expectedUnspent}, Unspent = ${unspent}, diff = ${unspentDiff}`,
+    );
+    expect(unspentDiff).toBeLessThan(2);
   }
 });
 
@@ -1285,8 +1291,8 @@ test('search for known term shows summary with total', async ({ page }) => {
   }
 });
 
-// ─── Unbudgeted: Month Page "Left to Budget" Must Match Year View "Unbudgeted" ───
-test('month page "Left to Budget" matches year view "Unbudgeted" for each month', async ({
+// ─── Month page "Unallocated" must match Year view "Unallocated" ───
+test('month page "Unallocated" matches year view "Unallocated" for each month', async ({
   page,
 }) => {
   await page.goto('/');
@@ -1310,20 +1316,20 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
     console.log(`Month page ${monthName}: Left to Budget = ${leftToBudget}`);
   }
 
-  // Switch to Year view and read "Unbudgeted" row
+  // Switch to Year view and read the "Unallocated" row
   await page.locator('.ptab', { hasText: 'Year' }).click();
   await page.waitForTimeout(4000);
 
   const yearRows = page.locator('tr');
   const rowCount = await yearRows.count();
-  let unbudgetedRow = null;
+  let unallocatedRow = null;
   for (let r = 0; r < rowCount; r++) {
     const text = await yearRows.nth(r).textContent();
-    if (text.includes('Unbudgeted') && !unbudgetedRow) unbudgetedRow = yearRows.nth(r);
+    if (text.includes('Unallocated') && !unallocatedRow) unallocatedRow = yearRows.nth(r);
   }
 
-  expect(unbudgetedRow).not.toBeNull();
-  const cells = unbudgetedRow.locator('td');
+  expect(unallocatedRow, 'Year tab: no "Unallocated" row').not.toBeNull();
+  const cells = unallocatedRow.locator('td');
   const cellCount = await cells.count();
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
@@ -1332,7 +1338,7 @@ test('month page "Left to Budget" matches year view "Unbudgeted" for each month'
     const monthName = monthNames[m];
     const pageVal = pageValues[monthName];
 
-    console.log(`${monthName}: Page Left to Budget=${pageVal} vs Year Unbudgeted=${yearVal}`);
+    console.log(`${monthName}: Month Unallocated=${pageVal} vs Year Unallocated=${yearVal}`);
 
     if (pageVal !== null && !isNaN(pageVal) && !isNaN(yearVal)) {
       const diff = Math.abs(Math.round(pageVal) - yearVal);
@@ -1610,7 +1616,7 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
 
   // Find key rows
   const yearData = {};
-  const rowLabels = ['Total Income', 'Total Budgeted', 'Total Spent', 'Unbudgeted', 'Remaining'];
+  const rowLabels = ['Total Income', 'Total Budgeted', 'Total Used', 'Unallocated', 'Unspent'];
   for (let r = 0; r < rowCount; r++) {
     const text = await yearRows.nth(r).textContent();
     for (const label of rowLabels) {
@@ -1629,34 +1635,40 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
 
   console.log(`Year data: ${JSON.stringify(yearData)}`);
 
-  // Year view math: Income - Budgeted = Unbudgeted, Income - Spent = Remaining
+  // Year view math: Income - Budgeted = Unallocated, Income - Used = Unspent
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr'];
+  // A row this spec can't find is a rename it slept through — say so, don't skip.
+  for (const label of rowLabels) {
+    if (!yearData[label]) errors.push(`Year tab: no "${label}" row found`);
+  }
   for (let m = 0; m < 4; m++) {
     const name = monthNames[m];
     const inc = yearData['Total Income']?.[m];
     const bud = yearData['Total Budgeted']?.[m];
-    const spt = yearData['Total Spent']?.[m];
-    const unb = yearData['Unbudgeted']?.[m];
-    const rem = yearData['Remaining']?.[m];
+    const used = yearData['Total Used']?.[m];
+    const unalloc = yearData['Unallocated']?.[m];
+    const unspent = yearData['Unspent']?.[m];
 
-    if (inc !== undefined && bud !== undefined && unb !== undefined) {
-      const expectedUnb = inc - bud;
-      const diff = Math.abs(expectedUnb - unb);
+    if (inc !== undefined && bud !== undefined && unalloc !== undefined) {
+      const expectedUnalloc = inc - bud;
+      const diff = Math.abs(expectedUnalloc - unalloc);
       console.log(
-        `  ${name}: Income(${inc}) - Budgeted(${bud}) = ${expectedUnb}, Unbudgeted = ${unb}, diff = ${diff}`,
+        `  ${name}: Income(${inc}) - Budgeted(${bud}) = ${expectedUnalloc}, Unallocated = ${unalloc}, diff = ${diff}`,
       );
       if (diff > 2)
-        errors.push(`Year ${name}: Income - Budgeted (${expectedUnb}) != Unbudgeted (${unb})`);
+        errors.push(
+          `Year ${name}: Income - Budgeted (${expectedUnalloc}) != Unallocated (${unalloc})`,
+        );
     }
 
-    if (inc !== undefined && spt !== undefined && rem !== undefined) {
-      const expectedRem = inc - spt;
-      const diff = Math.abs(expectedRem - rem);
+    if (inc !== undefined && used !== undefined && unspent !== undefined) {
+      const expectedUnspent = inc - used;
+      const diff = Math.abs(expectedUnspent - unspent);
       console.log(
-        `  ${name}: Income(${inc}) - Spent(${spt}) = ${expectedRem}, Remaining = ${rem}, diff = ${diff}`,
+        `  ${name}: Income(${inc}) - Used(${used}) = ${expectedUnspent}, Unspent = ${unspent}, diff = ${diff}`,
       );
       if (diff > 2)
-        errors.push(`Year ${name}: Income - Spent (${expectedRem}) != Remaining (${rem})`);
+        errors.push(`Year ${name}: Income - Used (${expectedUnspent}) != Unspent (${unspent})`);
     }
 
     // Cross-check year vs month page
