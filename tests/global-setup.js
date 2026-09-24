@@ -11,7 +11,25 @@ const { chromium } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
-const BASE_URL = 'http://localhost:3100'; // keep in sync with playwright.config.js (3000 is squatted by Gmail MCP locally)
+// Same port rule as playwright.config.js (BUDGET_TEST_PORT overrides 3100;
+// 3000 is squatted by the Gmail MCP locally).
+const BASE_URL = `http://localhost:${Number(process.env.BUDGET_TEST_PORT) || 3100}`;
+
+// Fail loud if the server on that port is not serving THIS checkout. With
+// reuseExistingServer, a stale `serve` left by another window quietly runs the
+// whole suite against an old build (it served v44 on 2026-09-24).
+async function assertServedBuildMatches(page) {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'app.ts'), 'utf8');
+  const local = (src.match(/const APP_VERSION = '([^']+)'/) || [])[1];
+  const res = await page.request.get(`${BASE_URL}/dist/app.js`);
+  const served = (((await res.text()) || '').match(/APP_VERSION = '([^']+)'/) || [])[1];
+  if (local && served && local !== served) {
+    throw new Error(
+      `${BASE_URL} is serving ${served} but this checkout is ${local} — another server is on that port. ` +
+        `Run with BUDGET_TEST_PORT=3101 (or stop the stale server).`,
+    );
+  }
+}
 const EMAIL = process.env.BUDGET_TEST_EMAIL || 'allisonecalt@gmail.com';
 const PASSWORD = process.env.BUDGET_TEST_PASSWORD;
 const STATE_PATH = path.join(__dirname, '.auth', 'state.json');
@@ -41,6 +59,7 @@ module.exports = async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   try {
+    await assertServedBuildMatches(page);
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
     // Login form rendered by renderLogin() in app.js.
     await page.waitForSelector('#login-form', { timeout: 15000 });

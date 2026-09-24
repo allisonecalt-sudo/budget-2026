@@ -40,7 +40,7 @@ const PT_KEY =
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v55';
-const BUILD_DATE = 'Sep 24, 2026 09:20';
+const BUILD_DATE = 'Sep 24, 2026 15:45';
 
 const MONTHS = [
   'January',
@@ -180,24 +180,137 @@ function updateUndoButtons() {
   if (u) u.disabled = undoStack.length === 0;
   if (r) r.disabled = redoStack.length === 0;
 }
+// One undo at a time; a failed undo goes back on the stack and says so,
+// instead of vanishing (before 2026-09-24 a throw lost the action silently).
+let undoBusy = false;
 async function doUndo() {
+  if (undoBusy) return;
   const a = undoStack.pop();
   if (!a) return;
-  await a.undo();
-  redoStack.push(a);
-  updateUndoButtons();
+  undoBusy = true;
+  try {
+    await a.undo();
+    redoStack.push(a);
+  } catch (e) {
+    undoStack.push(a);
+    console.warn('undo failed:', e);
+    toast('Could not undo ' + a.label);
+    return;
+  } finally {
+    undoBusy = false;
+    updateUndoButtons();
+  }
   renderApp();
+  updateUndoButtons();
   toast('Undone: ' + a.label);
 }
 async function doRedo() {
+  if (undoBusy) return;
   const a = redoStack.pop();
   if (!a) return;
-  await a.redo();
-  undoStack.push(a);
-  updateUndoButtons();
+  undoBusy = true;
+  try {
+    await a.redo();
+    undoStack.push(a);
+  } catch (e) {
+    redoStack.push(a);
+    console.warn('redo failed:', e);
+    toast('Could not redo ' + a.label);
+    return;
+  } finally {
+    undoBusy = false;
+    updateUndoButtons();
+  }
   renderApp();
+  updateUndoButtons();
   toast('Redone: ' + a.label);
 }
+
+// ── Generic undo for the simple writes ───────────────────────────────
+// Reverse the row in the database, then RELOAD the section it belongs to, so
+// state matches the database without re-implementing each function's local
+// bookkeeping. The ↶ button is only as good as its coverage: every write she
+// can make from the screen goes through one of these or its own pushUndo.
+// (Audit 2026-09-24: 28 user-facing writes had no undo at all — adding a line,
+// every sub-item, every pot payment, cash accounts, the income modal, the
+// housing/recurring grids.)
+type Reload = () => Promise<void>;
+type Row = Record<string, unknown>;
+function undoableInsert(table: string, row: Row, label: string, reload: Reload): void {
+  const id = row.id as string;
+  pushUndo({
+    label,
+    undo: async () => {
+      const { error } = await sb.from(table).delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+    },
+    redo: async () => {
+      const { error } = await sb.from(table).insert(row);
+      if (error) throw error;
+      await reload();
+    },
+  });
+}
+function undoableDelete(table: string, row: Row, label: string, reload: Reload): void {
+  const id = row.id as string;
+  pushUndo({
+    label,
+    undo: async () => {
+      const { error } = await sb.from(table).insert(row);
+      if (error) throw error;
+      await reload();
+    },
+    redo: async () => {
+      const { error } = await sb.from(table).delete().eq('id', id);
+      if (error) throw error;
+      await reload();
+    },
+  });
+}
+function undoableUpdate(
+  table: string,
+  id: string,
+  before: Row,
+  after: Row,
+  label: string,
+  reload: Reload,
+): void {
+  pushUndo({
+    label,
+    undo: async () => {
+      const { error } = await sb.from(table).update(before).eq('id', id);
+      if (error) throw error;
+      await reload();
+    },
+    redo: async () => {
+      const { error } = await sb.from(table).update(after).eq('id', id);
+      if (error) throw error;
+      await reload();
+    },
+  });
+}
+const reloadCharity: Reload = async () => {
+  invalidateNextYearCharity();
+  await loadCharityData();
+};
+const reloadTravel: Reload = async () => {
+  await loadTravelData();
+};
+const reloadAdmin: Reload = async () => {
+  await loadAdminData();
+};
+const reloadCash: Reload = async () => {
+  await loadCashData();
+};
+const reloadLines: Reload = async () => {
+  if (state.currentMonthId) await loadBudgetItems(state.currentMonthId);
+  await Promise.all([loadAllRecurringItems(), loadAllHousingItems()]);
+};
+const reloadMonths: Reload = async () => {
+  await loadMonths();
+};
+const monAbbr = (n: number): string => MONTH_ABBR[n - 1] || '?';
 
 // ── Row interfaces for Supabase tables ──────────────────────────────────────
 
@@ -1029,6 +1142,8 @@ async function saveRecurringFromMonth(
     }
   }
 
+  const updates: { id: string; before: number }[] = [];
+  const inserts: Row[] = [];
   for (const month of targetMonths) {
     if (!state.allRecurringItems[month.id]) state.allRecurringItems[month.id] = [];
     const items = state.allRecurringItems[month.id];
@@ -1036,6 +1151,7 @@ async function saveRecurringFromMonth(
     if (item) {
       const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
       if (error) toast('Could not save recurring item');
+      else updates.push({ id: item.id, before: Number(item.amount) || 0 });
       item.amount = num;
     } else {
       // Item doesn't exist for this month — create it
@@ -1051,7 +1167,10 @@ async function saveRecurringFromMonth(
         })
         .select()
         .single();
-      if (newItem) items.push(newItem);
+      if (newItem) {
+        items.push(newItem);
+        inserts.push(newItem as Row);
+      }
     }
   }
   // Also sync current month's budgetItems
@@ -1060,8 +1179,57 @@ async function saveRecurringFromMonth(
     const cur = (state.budgetItems['recurring'] || []).find((i) => i.label === label);
     if (cur) cur.amount = num;
   }
+  pushGridUndo('recurring', label, fromMonthNum, forward, num, updates, inserts);
   renderApp();
   toast('Updated ✓');
+}
+
+// One undo for a grid edit that may have touched several months: put every
+// changed amount back and remove every line the edit created.
+function pushGridUndo(
+  catKey: 'recurring' | 'housing',
+  label: string,
+  fromMonthNum: number,
+  forward: boolean,
+  num: number,
+  updates: { id: string; before: number }[],
+  inserts: Row[],
+): void {
+  if (!updates.length && !inserts.length) return;
+  const where = (forward ? 'from ' : '') + monAbbr(fromMonthNum);
+  logChange(
+    'edit',
+    'budget_item',
+    null,
+    `Edited ${label} ${where}: → ₪${num} • ${catKey} (grid, ${updates.length + inserts.length} month${updates.length + inserts.length === 1 ? '' : 's'})`,
+    { updates },
+    { amount: num, inserted: inserts.map((r) => r.id) },
+  );
+  pushUndo({
+    label: label + ' ' + where,
+    undo: async () => {
+      for (const u of updates) {
+        const { error } = await sb.from('budget_items').update({ amount: u.before }).eq('id', u.id);
+        if (error) throw error;
+      }
+      for (const r of inserts) {
+        const { error } = await sb.from('budget_items').delete().eq('id', r.id);
+        if (error) throw error;
+      }
+      await reloadLines();
+    },
+    redo: async () => {
+      for (const u of updates) {
+        const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', u.id);
+        if (error) throw error;
+      }
+      for (const r of inserts) {
+        const { error } = await sb.from('budget_items').insert(r);
+        if (error) throw error;
+      }
+      await reloadLines();
+    },
+  });
 }
 
 function renderRecurringGrid() {
@@ -1409,6 +1577,8 @@ async function saveHousingFromMonth(
     }
   }
 
+  const updates: { id: string; before: number }[] = [];
+  const inserts: Row[] = [];
   for (const month of targetMonths) {
     if (!state.allHousingItems[month.id]) state.allHousingItems[month.id] = [];
     const items = state.allHousingItems[month.id];
@@ -1416,6 +1586,7 @@ async function saveHousingFromMonth(
     if (item) {
       const { error } = await sb.from('budget_items').update({ amount: num }).eq('id', item.id);
       if (error) toast('Could not save housing item');
+      else updates.push({ id: item.id, before: Number(item.amount) || 0 });
       item.amount = num;
     } else {
       const { data: newItem } = await sb
@@ -1430,7 +1601,10 @@ async function saveHousingFromMonth(
         })
         .select()
         .single();
-      if (newItem) items.push(newItem);
+      if (newItem) {
+        items.push(newItem);
+        inserts.push(newItem as Row);
+      }
     }
   }
   const currentMonth = state.months.find((m) => m.id === state.currentMonthId);
@@ -1438,6 +1612,7 @@ async function saveHousingFromMonth(
     const cur = (state.budgetItems['housing'] || []).find((i) => i.label === label);
     if (cur) cur.amount = num;
   }
+  pushGridUndo('housing', label, fromMonthNum, forward, num, updates, inserts);
   renderApp();
   toast('Updated ✓');
 }
@@ -2184,6 +2359,7 @@ async function addTashlum() {
     )
   )
     return;
+  const created: Row[] = [];
   for (let i = 0; i < targetMonths.length; i++) {
     const month = targetMonths[i];
     const label = `${name.trim()} ${i + 1}/${total}`;
@@ -2200,6 +2376,7 @@ async function addTashlum() {
       .select()
       .single();
     if (data) {
+      created.push(data as Row);
       if (!state.allRecurringItems[month.id]) state.allRecurringItems[month.id] = [];
       state.allRecurringItems[month.id].push(data);
       if (month.id === state.currentMonthId) {
@@ -2207,6 +2384,31 @@ async function addTashlum() {
         state.budgetItems['recurring'].push(data);
       }
     }
+  }
+  if (created.length) {
+    logChange(
+      'add',
+      'budget_item',
+      created[0].id as string,
+      `Added tashlum: ${name.trim()} ₪${amount} × ${created.length} • recurring`,
+      null,
+      { ids: created.map((r) => r.id) },
+    );
+    pushUndo({
+      label: 'tashlum ' + name.trim(),
+      undo: async () => {
+        for (const r of created) {
+          const { error } = await sb.from('budget_items').delete().eq('id', r.id);
+          if (error) throw error;
+        }
+        await reloadLines();
+      },
+      redo: async () => {
+        const { error } = await sb.from('budget_items').insert(created);
+        if (error) throw error;
+        await reloadLines();
+      },
+    });
   }
   renderApp();
   toast('תשלומים נוספו ✓');
@@ -2229,6 +2431,10 @@ async function addBudgetItem(catKey: string): Promise<void> {
     })
     .select()
     .single();
+  if (!data) {
+    toast('Could not add line');
+    return;
+  }
   if (!state.budgetItems[catKey]) state.budgetItems[catKey] = [];
   state.budgetItems[catKey].push(data);
   logChange(
@@ -2249,10 +2455,30 @@ async function addBudgetItem(catKey: string): Promise<void> {
       state.allHousingItems[state.currentMonthId!] = [];
     state.allHousingItems[state.currentMonthId!].push(data);
   }
-  // Also save to template
-  await sb
+  // Also save to template (the default new months are seeded from). Was
+  // inserted as 'New item' regardless of the name she typed — fixed 2026-09-24.
+  const template = { category: catKey, label, amount: 0, sort_order: sortOrder };
+  const { data: tplRow } = await sb
     .from('budget_item_templates')
-    .insert({ category: catKey, label: 'New item', amount: 0, sort_order: sortOrder });
+    .insert(template)
+    .select()
+    .single();
+  const row = data as Row;
+  pushUndo({
+    label: 'add ' + label,
+    undo: async () => {
+      const { error } = await sb.from('budget_items').delete().eq('id', row.id);
+      if (error) throw error;
+      if (tplRow) await sb.from('budget_item_templates').delete().eq('id', tplRow.id);
+      await reloadLines();
+    },
+    redo: async () => {
+      const { error } = await sb.from('budget_items').insert(row);
+      if (error) throw error;
+      if (tplRow) await sb.from('budget_item_templates').insert(tplRow);
+      await reloadLines();
+    },
+  });
   renderApp();
 }
 
@@ -2265,10 +2491,16 @@ async function saveBudgetItem(id: string, field: string, value: unknown): Promis
   const numericFields = ['amount'];
   const val = numericFields.includes(field) ? parseFloat(value as string) || 0 : (value as string);
   const oldItemVal = item[field];
-  await sb
+  if (oldItemVal === val) return; // nothing changed → no write, no log, no undo entry
+  const oldLabel = item.label;
+  const { error } = await sb
     .from('budget_items')
     .update({ [field]: val })
     .eq('id', id);
+  if (error) {
+    toast('Could not save line');
+    return;
+  }
   logChange(
     'edit',
     'budget_item',
@@ -2278,13 +2510,23 @@ async function saveBudgetItem(id: string, field: string, value: unknown): Promis
     { [field]: val },
   );
   item[field] = val;
-  // Subcategory: propagate to all months with same label+category
+  // Subcategory: propagate to all months with same label+category. Remember
+  // each sibling's old value so Undo can put every month back.
+  let siblings: { id: string; subcategory: string | null }[] = [];
   if (field === 'subcategory') {
+    const { data: sibs } = await sb
+      .from('budget_items')
+      .select('id, subcategory')
+      .eq('category', catKey)
+      .eq('label', oldLabel);
+    siblings = ((sibs || []) as { id: string; subcategory: string | null }[]).filter(
+      (s) => s.id !== id,
+    );
     await sb
       .from('budget_items')
       .update({ subcategory: val })
       .eq('category', catKey)
-      .eq('label', item.label);
+      .eq('label', oldLabel);
     // Update allRecurringItems and allHousingItems in state
     const allItems =
       catKey === 'recurring'
@@ -2295,19 +2537,55 @@ async function saveBudgetItem(id: string, field: string, value: unknown): Promis
     if (allItems)
       Object.values(allItems).forEach((arr) =>
         arr.forEach((i) => {
-          if (i.label === item.label) i.subcategory = val as string;
+          if (i.label === oldLabel) i.subcategory = val as string;
         }),
       );
   }
-  // Sync label changes to template
+  // Sync label changes to template. Match on the OLD label — item.label was
+  // already the new one here, so this update matched nothing (bug, fixed 2026-09-24).
   if (field === 'label') {
     await sb
       .from('budget_item_templates')
       .update({ label: val })
       .eq('category', catKey)
-      .eq('label', item.label)
+      .eq('label', oldLabel)
       .eq('sort_order', item.sort_order);
   }
+  const before: Row = { [field]: oldItemVal };
+  const after: Row = { [field]: val };
+  pushUndo({
+    label: `${oldLabel} ${field}`,
+    undo: async () => {
+      const { error: e } = await sb.from('budget_items').update(before).eq('id', id);
+      if (e) throw e;
+      for (const s of siblings) {
+        await sb.from('budget_items').update({ subcategory: s.subcategory }).eq('id', s.id);
+      }
+      if (field === 'label')
+        await sb
+          .from('budget_item_templates')
+          .update({ label: oldItemVal })
+          .eq('category', catKey)
+          .eq('label', val)
+          .eq('sort_order', item.sort_order);
+      await reloadLines();
+    },
+    redo: async () => {
+      const { error: e } = await sb.from('budget_items').update(after).eq('id', id);
+      if (e) throw e;
+      for (const s of siblings) {
+        await sb.from('budget_items').update({ subcategory: val }).eq('id', s.id);
+      }
+      if (field === 'label')
+        await sb
+          .from('budget_item_templates')
+          .update({ label: val })
+          .eq('category', catKey)
+          .eq('label', oldItemVal)
+          .eq('sort_order', item.sort_order);
+      await reloadLines();
+    },
+  });
   renderApp();
 }
 
@@ -3688,8 +3966,8 @@ function renderApp() {
         <span id="offline-queue-indicator" class="offline-queue-indicator" style="display:none;" title="Pending writes — will sync when online" onclick="syncQueueNow()">
           <span class="oqi-dot"></span><span id="offline-queue-count">0</span> to sync
         </span>
-        <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" disabled title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
-        <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" disabled title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
+        <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" ${undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
+        <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" ${redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
         <button class="mtab toolbar-icon" onclick="openSnapshot()" title="Snapshot" aria-label="Snapshot">${ICON_SNAPSHOT}</button>
         <button class="mtab toolbar-icon" onclick="collapseAll()" title="Collapse all" aria-label="Collapse all">${ICON_COLLAPSE}</button>
         <button class="mtab toolbar-icon" onclick="openHistoryPanel()" title="History log" aria-label="History">${ICON_HISTORY}</button>
@@ -3866,7 +4144,7 @@ function renderApp() {
             label: string,
             emoji: string,
             budgetKey: string,
-            spentField: string,
+            _spentField: string,
             budgetVal: number,
             _spentVal?: number,
           ): string => {
@@ -3875,7 +4153,7 @@ function renderApp() {
                 <div class="cat-name"><span class="cat-emoji">${emoji}</span>${label}</div>
                 <div class="cat-amounts">
                   <input type="number" class="budget-inline" value="${budgetVal || ''}" placeholder="set amount" min="0" step="1"
-                    onchange="saveBudget('${budgetKey}', this.value);saveSavingsField('${spentField}', this.value)"
+                    onchange="saveBudget('${budgetKey}', this.value)"
                     onkeydown="if(event.key==='Enter')this.blur()"
                     style="width:100px">
                 </div>
@@ -4081,48 +4359,58 @@ async function saveCharityPct(value: string | number): Promise<void> {
     toast('Could not save charity %');
     return;
   }
+  const oldPct = month ? month.charity_pct : null;
+  const oldCash = state.budgets['charity'] || 0;
+  const mid = state.currentMonthId!;
   if (month) month.charity_pct = newPct;
   const income = month ? totalIncome(month) : 0;
   const calc = Math.round((income * pct) / 100);
   // Pre-seed the sync marker so the next render doesn't redundantly re-write the same cash.
   if (!state._lastCharitySync) state._lastCharitySync = {};
-  state._lastCharitySync[state.currentMonthId!] = calc;
+  state._lastCharitySync[mid] = calc;
+  // saveBudget registers its own undo for the cash half; replace it with ONE
+  // entry that reverts the percent AND the cash together (one action = one undo).
+  const depth = undoStack.length;
   await saveBudget('charity', calc);
+  undoStack.length = depth;
+  const applyPct = async (p: number | null, cash: number): Promise<void> => {
+    const { error: e } = await sb.from('months').update({ charity_pct: p }).eq('id', mid);
+    if (e) throw e;
+    await writeBudgetAmount('charity', cash, mid);
+    if (!state._lastCharitySync) state._lastCharitySync = {};
+    state._lastCharitySync[mid] = cash;
+    await loadMonths();
+  };
+  pushUndo({
+    label: 'charity %',
+    undo: async () => applyPct(oldPct, oldCash),
+    redo: async () => applyPct(newPct, calc),
+  });
   renderApp();
 }
 
-async function saveBudget(catKey: string, amount: string | number): Promise<void> {
-  const num = parseFloat(String(amount)) || 0;
-  const old = state.budgets[catKey] || 0;
-  const monthId = state.currentMonthId;
-  // Editing either savings line changes the year total the Saved popover shows.
+// The database half of a budget-amount change: upsert the budgets row and keep
+// the pot allocation tables + state in sync. No log, no undo, no render — so
+// undo/redo can call it directly without re-entering saveBudget (which used to
+// push a fresh undo entry and clear the redo stack while an undo was running).
+async function writeBudgetAmount(catKey: string, num: number, monthId: string): Promise<void> {
   if (catKey === 'savings_bank' || catKey === 'savings_invested') invalidateSavedYearCache();
-  // Upsert — try update first, then insert
   const { data: existing } = await sb
     .from('budgets')
     .select('id')
     .eq('month_id', monthId)
     .eq('category', catKey)
-    .single();
+    .maybeSingle();
   if (existing) {
     const { error } = await sb.from('budgets').update({ amount: num }).eq('id', existing.id);
-    if (error) toast('Could not save budget');
+    if (error) throw error;
   } else {
     const { error } = await sb
       .from('budgets')
       .insert({ month_id: monthId, category: catKey, amount: num });
-    if (error) toast('Could not save budget');
+    if (error) throw error;
   }
-  logChange(
-    'edit',
-    'budget_amount',
-    null,
-    `Budget changed: ${catKey} ₪${old} → ₪${num}`,
-    { amount: old },
-    { amount: num },
-  );
-  state.budgets[catKey] = num;
-  // Keep tab allocations in sync when budget tab is edited
+  if (monthId === state.currentMonthId) state.budgets[catKey] = num;
   const month = state.months.find((m) => m.id === monthId);
   if (month) {
     if (catKey === 'admin') {
@@ -4135,40 +4423,45 @@ async function saveBudget(catKey: string, amount: string | number): Promise<void
         .select()
         .single();
       if (data) state.admin.allocations[month.month_num] = data;
-    } else if (catKey === 'travel') {
-      const existingAlloc = state.travel.allocations[month.month_num];
-      if (existingAlloc) {
-        existingAlloc.amount = num;
-      } else {
-        state.travel.allocations[month.month_num] = {
-          month_id: monthId,
-          amount: num,
-        } as AdminAllocationRow;
-      }
-    } else if (catKey === 'charity') {
-      const existingAlloc = state.charity.allocations[month.month_num];
-      if (existingAlloc) {
-        existingAlloc.amount = num;
-      } else {
-        state.charity.allocations[month.month_num] = {
-          month_id: monthId,
-          amount: num,
-        } as AdminAllocationRow;
-      }
+    } else if (catKey === 'travel' || catKey === 'charity') {
+      const allocs = catKey === 'travel' ? state.travel.allocations : state.charity.allocations;
+      const existingAlloc = allocs[month.month_num];
+      if (existingAlloc) existingAlloc.amount = num;
+      else allocs[month.month_num] = { month_id: monthId, amount: num } as AdminAllocationRow;
+    } else if (catKey === 'savings_bank' || catKey === 'savings_invested') {
+      // Mirror to months.* for backwards compatibility (the Saved popover reads it).
+      await sb
+        .from('months')
+        .update({ [catKey]: num })
+        .eq('id', monthId);
+      month[catKey] = num;
     }
   }
+}
+
+async function saveBudget(catKey: string, amount: string | number): Promise<void> {
+  const num = parseFloat(String(amount)) || 0;
+  const old = state.budgets[catKey] || 0;
+  const monthId = state.currentMonthId!;
+  try {
+    await writeBudgetAmount(catKey, num, monthId);
+  } catch {
+    toast('Could not save budget');
+    return;
+  }
+  logChange(
+    'edit',
+    'budget_amount',
+    null,
+    `Budget changed: ${catKey} ₪${old} → ₪${num}`,
+    { amount: old },
+    { amount: num },
+  );
+  const mon = state.months.find((m) => m.id === monthId);
   pushUndo({
-    label: 'budget ' + catKey,
-    undo: async () => {
-      await saveBudget(catKey, old);
-      if (catKey === 'savings_bank' || catKey === 'savings_invested')
-        await saveSavingsField(catKey, old);
-    },
-    redo: async () => {
-      await saveBudget(catKey, num);
-      if (catKey === 'savings_bank' || catKey === 'savings_invested')
-        await saveSavingsField(catKey, num);
-    },
+    label: 'budget ' + catKey + (mon ? ' ' + monAbbr(mon.month_num) : ''),
+    undo: async () => writeBudgetAmount(catKey, old, monthId),
+    redo: async () => writeBudgetAmount(catKey, num, monthId),
   });
   renderApp();
   toast('Budget saved ✓');
@@ -4483,11 +4776,29 @@ async function saveIncome() {
     income_other: parseFloat(byId('inc-other').value) || 0,
     savings_bank: parseFloat(byId('inc-savings').value) || 0,
   };
-  const { error } = await sb.from('months').update(updates).eq('id', state.currentMonthId!);
+  const mid = state.currentMonthId!;
+  const month = state.months.find((m) => m.id === mid);
+  const before: Row = {};
+  Object.keys(updates).forEach((k) => {
+    before[k] = month ? month[k] : null;
+  });
+  const { error } = await sb.from('months').update(updates).eq('id', mid);
   if (error) {
     toast('Error saving');
     return;
   }
+  logChange(
+    'edit',
+    'income_field',
+    mid,
+    `Income modal saved: ${Object.entries(updates)
+      .map(([k, v]) => `${k.replace('income_', '')} ₪${v}`)
+      .join(', ')}`,
+    before,
+    updates,
+    mid,
+  );
+  undoableUpdate('months', mid, before, updates, 'income', reloadMonths);
   await loadMonths();
   state.currentMonthId = state.currentMonthId; // keep current
   closeModal();
@@ -4746,6 +5057,7 @@ async function addCharityItem(): Promise<void> {
     null,
     data,
   );
+  undoableInsert('charity_items', data as Row, 'add charity item', reloadCharity);
   renderApp();
 }
 
@@ -4838,6 +5150,7 @@ async function addCharitySub(itemId: string): Promise<void> {
   }
   state.charity.subItems.push(data);
   localStorage.setItem('sn-chr-' + itemId, '1');
+  undoableInsert('charity_sub_items', data as Row, 'add charity line', reloadCharity);
   renderApp();
 }
 
@@ -4850,17 +5163,31 @@ async function updateCharitySub(id: string, field: string, value: unknown): Prom
       : field === 'is_paid'
         ? Boolean(value)
         : (value as string);
-  await sb
+  if (s[field] === val) return;
+  const before: Row = { [field]: s[field] };
+  const { error } = await sb
     .from('charity_sub_items')
     .update({ [field]: val })
     .eq('id', id);
+  if (error) {
+    toast('Could not save');
+    return;
+  }
   s[field] = val;
+  undoableUpdate('charity_sub_items', id, before, { [field]: val }, 'charity line', reloadCharity);
   renderApp();
 }
 
 async function deleteCharitySub(id: string): Promise<void> {
-  await sb.from('charity_sub_items').delete().eq('id', id);
+  const row = state.charity.subItems.find((s) => s.id === id);
+  const { error } = await sb.from('charity_sub_items').delete().eq('id', id);
+  if (error) {
+    toast('Could not delete');
+    return;
+  }
   state.charity.subItems = state.charity.subItems.filter((s) => s.id !== id);
+  if (row)
+    undoableDelete('charity_sub_items', { ...row } as Row, 'delete charity line', reloadCharity);
   renderApp();
 }
 
@@ -4956,6 +5283,15 @@ async function addCharityPayment() {
     state.charity.payments.push(data);
     state.charity.payments.sort(byPaymentMonth);
   }
+  logChange(
+    'add',
+    'charity_payment',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Gave ${label} ₪${amount}${monthNum ? ' • ' + monAbbr(monthNum) : ' • general'} ${yr}`,
+    null,
+    data,
+  );
+  undoableInsert('charity_payments', data as Row, 'gift ' + label, reloadCharity);
   byId('cp-label').value = '';
   byId('cp-date').value = '';
   byId('cp-amount').value = '';
@@ -5082,6 +5418,7 @@ async function addTravelItem(): Promise<void> {
     null,
     data,
   );
+  undoableInsert('travel_items', data as Row, 'add travel item', reloadTravel);
   renderApp();
 }
 
@@ -5174,6 +5511,7 @@ async function addTravelSub(itemId: string): Promise<void> {
   }
   state.travel.subItems.push(data);
   localStorage.setItem('sn-trv-' + itemId, '1');
+  undoableInsert('travel_sub_items', data as Row, 'add travel line', reloadTravel);
   renderApp();
 }
 
@@ -5186,17 +5524,31 @@ async function updateTravelSub(id: string, field: string, value: unknown): Promi
       : field === 'is_paid'
         ? Boolean(value)
         : (value as string);
-  await sb
+  if (s[field] === val) return;
+  const before: Row = { [field]: s[field] };
+  const { error } = await sb
     .from('travel_sub_items')
     .update({ [field]: val })
     .eq('id', id);
+  if (error) {
+    toast('Could not save');
+    return;
+  }
   s[field] = val;
+  undoableUpdate('travel_sub_items', id, before, { [field]: val }, 'travel line', reloadTravel);
   renderApp();
 }
 
 async function deleteTravelSub(id: string): Promise<void> {
-  await sb.from('travel_sub_items').delete().eq('id', id);
+  const row = state.travel.subItems.find((s) => s.id === id);
+  const { error } = await sb.from('travel_sub_items').delete().eq('id', id);
+  if (error) {
+    toast('Could not delete');
+    return;
+  }
   state.travel.subItems = state.travel.subItems.filter((s) => s.id !== id);
+  if (row)
+    undoableDelete('travel_sub_items', { ...row } as Row, 'delete travel line', reloadTravel);
   renderApp();
 }
 
@@ -5298,6 +5650,15 @@ async function addTravelPayment() {
     state.travel.payments.push(data);
     state.travel.payments.sort(byPaymentMonth);
   }
+  logChange(
+    'add',
+    'travel_payment',
+    (data as Record<string, unknown>)?.['id'] as string,
+    `Travel paid: ${label} ₪${amount}${destination ? ' • ' + destination : ''} • ${monAbbr(monthNum)} ${yr}`,
+    null,
+    data,
+  );
+  undoableInsert('travel_payments', data as Row, 'travel ' + label, reloadTravel);
   byId('tp-label').value = '';
   byId('tp-dest').value = '';
   byId('tp-amount').value = '';
@@ -5333,6 +5694,7 @@ async function addTravelPaymentCat(dest: string, category: string): Promise<void
   state.travel.payments.sort(byPaymentMonth);
   const tripKey = (dest || '').trim().toLowerCase();
   localStorage.setItem('sn-trvcat-' + tripKey + '-' + category, '1');
+  undoableInsert('travel_payments', data as Row, 'travel line ' + category, reloadTravel);
   renderApp();
   toast('Added — type the details');
 }
@@ -7409,6 +7771,7 @@ async function addAdminItem(): Promise<void> {
     null,
     data,
   );
+  undoableInsert('admin_items', data as Row, 'add admin item', reloadAdmin);
   renderApp();
   // Auto-focus the new item's name input
   setTimeout(() => {
@@ -7602,6 +7965,7 @@ async function addAdminCredit(): Promise<void> {
     null,
     data,
   );
+  undoableInsert('admin_credits', data as Row, 'add Money In', reloadAdmin);
   renderApp();
   // Auto-focus the new row's label input so she can start typing immediately.
   setTimeout(() => {
@@ -7704,6 +8068,7 @@ async function addAdminSub(itemId: string): Promise<void> {
   }
   state.admin.subItems.push(data);
   localStorage.setItem('sn-adm-' + itemId, '1');
+  undoableInsert('admin_sub_items', data as Row, 'add admin payment', reloadAdmin);
   renderApp();
 }
 
@@ -7718,17 +8083,31 @@ async function updateAdminSub(id: string, field: string, value: unknown): Promis
         : field === 'is_paid' || field === 'is_estimate'
           ? Boolean(value)
           : value;
-  await sb
+  if (s[field] === val) return;
+  const before: Row = { [field]: s[field] };
+  const { error } = await sb
     .from('admin_sub_items')
     .update({ [field]: val })
     .eq('id', id);
+  if (error) {
+    toast('Could not save');
+    return;
+  }
   s[field] = val;
+  undoableUpdate('admin_sub_items', id, before, { [field]: val }, 'admin payment', reloadAdmin);
   renderApp();
 }
 
 async function deleteAdminSub(id: string): Promise<void> {
-  await sb.from('admin_sub_items').delete().eq('id', id);
+  const row = state.admin.subItems.find((s) => s.id === id);
+  const { error } = await sb.from('admin_sub_items').delete().eq('id', id);
+  if (error) {
+    toast('Could not delete');
+    return;
+  }
   state.admin.subItems = state.admin.subItems.filter((s) => s.id !== id);
+  if (row)
+    undoableDelete('admin_sub_items', { ...row } as Row, 'delete admin payment', reloadAdmin);
   renderApp();
 }
 
@@ -8209,18 +8588,40 @@ function cashILS(acct: CashAccountRow): number {
 async function saveCashField(id: string, field: string, value: unknown): Promise<void> {
   const acct = state.cashAccounts.find((a) => a.id === id);
   if (!acct) return;
-  // const old = acct[field]; // unused
   if (field === 'amount') value = parseFloat(String(value)) || 0;
-  acct[field] = value;
-  await sb
+  const old = acct[field];
+  if (old === value) return;
+  const stamp = new Date().toISOString();
+  const { error } = await sb
     .from('cash_accounts')
-    .update({ [field]: value, updated_at: new Date().toISOString() })
+    .update({ [field]: value, updated_at: stamp })
     .eq('id', id);
+  if (error) {
+    toast('Could not save');
+    return;
+  }
+  acct[field] = value;
+  logChange(
+    'edit',
+    'cash_account',
+    id,
+    `Cash ${String(acct['name'] || '')} ${field}: ${String(old)} → ${String(value)}`,
+    { [field]: old },
+    { [field]: value },
+  );
+  undoableUpdate(
+    'cash_accounts',
+    id,
+    { [field]: old, updated_at: stamp },
+    { [field]: value, updated_at: stamp },
+    'cash ' + String(acct['name'] || ''),
+    reloadCash,
+  );
   renderApp();
 }
 
 async function addCashAccount(): Promise<void> {
-  const { data } = await sb
+  const { data, error } = await sb
     .from('cash_accounts')
     .insert({
       name: 'New Account',
@@ -8230,16 +8631,41 @@ async function addCashAccount(): Promise<void> {
     })
     .select()
     .single();
-  if (data) {
-    state.cashAccounts.push(data);
-    renderApp();
+  if (error || !data) {
+    toast('Could not add account');
+    return;
   }
+  state.cashAccounts.push(data);
+  logChange('add', 'cash_account', (data as Row).id as string, 'Added cash account', null, data);
+  undoableInsert('cash_accounts', data as Row, 'add account', reloadCash);
+  renderApp();
 }
 
 async function deleteCashAccount(id: string): Promise<void> {
   if (!confirm('Delete this account?')) return;
-  await sb.from('cash_accounts').delete().eq('id', id);
+  const row = state.cashAccounts.find((a) => a.id === id);
+  const { error } = await sb.from('cash_accounts').delete().eq('id', id);
+  if (error) {
+    toast('Could not delete');
+    return;
+  }
   state.cashAccounts = state.cashAccounts.filter((a) => a.id !== id);
+  if (row) {
+    logChange(
+      'delete',
+      'cash_account',
+      id,
+      `Deleted cash account ${String(row['name'] || '')}`,
+      row,
+      null,
+    );
+    undoableDelete(
+      'cash_accounts',
+      { ...row } as Row,
+      'delete ' + String(row['name'] || 'account'),
+      reloadCash,
+    );
+  }
   renderApp();
 }
 
