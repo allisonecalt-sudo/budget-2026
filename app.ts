@@ -40,7 +40,7 @@ const PT_KEY =
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v55';
-const BUILD_DATE = 'Sep 23, 2026 15:40';
+const BUILD_DATE = 'Sep 24, 2026 09:20';
 
 const MONTHS = [
   'January',
@@ -2316,7 +2316,15 @@ async function deleteBudgetItem(id: string): Promise<void> {
     state.budgetItems[k].find((i) => i.id === id),
   );
   const item = (state.budgetItems[catKey!] || []).find((i: BudgetItemRow) => i.id === id);
-  await sb.from('budget_items').delete().eq('id', id);
+  const { error } = await sb.from('budget_items').delete().eq('id', id);
+  if (error) {
+    toast('Could not delete line');
+    return;
+  }
+  // The template row(s) this delete removes — kept so Undo can put them back.
+  // (Deleting a line also drops it from the defaults new months are seeded
+  // from; that is why an undone delete must restore the template too.)
+  let templates: Record<string, unknown>[] = [];
   if (item) {
     logChange(
       'delete',
@@ -2326,15 +2334,96 @@ async function deleteBudgetItem(id: string): Promise<void> {
       item,
       null,
     );
-  }
-  if (item)
+    const { data: tpl } = await sb
+      .from('budget_item_templates')
+      .select('*')
+      .eq('category', catKey)
+      .eq('sort_order', item.sort_order);
+    templates = (tpl || []) as Record<string, unknown>[];
     await sb
       .from('budget_item_templates')
       .delete()
       .eq('category', catKey)
       .eq('sort_order', item.sort_order);
-  for (const k of Object.keys(state.budgetItems)) {
-    state.budgetItems[k] = state.budgetItems[k].filter((i) => i.id !== id);
+  }
+  const dropFromState = (rowId: string): void => {
+    for (const k of Object.keys(state.budgetItems)) {
+      state.budgetItems[k] = state.budgetItems[k].filter((i) => i.id !== rowId);
+    }
+    for (const grid of [state.allHousingItems, state.allRecurringItems]) {
+      for (const mid of Object.keys(grid)) grid[mid] = grid[mid].filter((i) => i.id !== rowId);
+    }
+  };
+  dropFromState(id);
+
+  // Undo = put back the exact row (same id, month, label, amount, slot,
+  // subcategory) and its template. Before 2026-09-24 a deleted line had no
+  // undo at all — the ↶ button silently undid the edit BEFORE it instead.
+  // Undo/redo write directly and never re-enter this function.
+  if (item && catKey) {
+    const row = {
+      id: item.id,
+      month_id: item.month_id,
+      category: catKey,
+      label: item.label,
+      amount: item.amount,
+      sort_order: item.sort_order,
+      subcategory: item.subcategory,
+    };
+    pushUndo({
+      label: 'delete ' + item.label,
+      undo: async () => {
+        const { error: insErr } = await sb.from('budget_items').insert(row);
+        if (insErr) {
+          toast('Could not restore ' + item.label);
+          return;
+        }
+        if (templates.length) await sb.from('budget_item_templates').insert(templates);
+        logChange(
+          'add',
+          'budget_item',
+          row.id,
+          `Restored budget item (undo): ${item.label} ₪${item.amount} • ${catKey}`,
+          null,
+          row,
+          row.month_id,
+        );
+        const restored = { ...item } as BudgetItemRow;
+        if (row.month_id === state.currentMonthId) {
+          const arr = (state.budgetItems[catKey] ||= []);
+          if (!arr.some((i) => i.id === row.id)) arr.push(restored);
+          arr.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        }
+        const grid =
+          catKey === 'housing'
+            ? state.allHousingItems
+            : catKey === 'recurring'
+              ? state.allRecurringItems
+              : null;
+        if (grid && grid[row.month_id] && !grid[row.month_id].some((i) => i.id === row.id)) {
+          grid[row.month_id].push({ ...restored });
+        }
+      },
+      redo: async () => {
+        await sb.from('budget_items').delete().eq('id', row.id);
+        if (templates.length)
+          await sb
+            .from('budget_item_templates')
+            .delete()
+            .eq('category', catKey)
+            .eq('sort_order', row.sort_order);
+        logChange(
+          'delete',
+          'budget_item',
+          row.id,
+          `Deleted budget item (redo): ${item.label} ₪${item.amount} • ${catKey}`,
+          row,
+          null,
+          row.month_id,
+        );
+        dropFromState(row.id);
+      },
+    });
   }
   renderApp();
 }
