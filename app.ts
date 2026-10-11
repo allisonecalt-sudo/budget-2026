@@ -57,8 +57,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v59';
-const BUILD_DATE = 'Oct 11, 2026 17:01';
+const APP_VERSION = 'v60';
+const BUILD_DATE = 'Oct 11, 2026 17:10';
 
 const MONTHS = [
   'January',
@@ -10719,8 +10719,8 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
         '~₪960 below Aug: no ביגוד',
       ],
       petachya: [
-        'August salary, ₪1,730 over her ₪9,300 estimate',
-        "Why: unknown — havra'a? ₪120 retro? (Sep 9 tlush)",
+        'August salary + havra’a: ₪1,730 over a usual month',
+        "The extra was havra'a — your word, Oct 11 (slip to come)",
       ],
       private: ['No August sessions (Salzburg + USA, Aug 5–23)', "Only the accountant's ₪200 fee"],
       other: ['₪22 entered Oct 2; source unknown'],
@@ -10733,8 +10733,8 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
       ],
       petachya: [
         'September salary, entered Oct 8',
-        'First month of ₪120 terms but looks like ₪112',
-        'Raise not on it yet, or chag travel days? Unknown',
+        'Travel was missing from this slip — your word, Oct 11',
+        '₪120 rate on it? Check on the slip',
       ],
       private: [
         'Sep sessions to Sep 17 (1 cash, 4 bank) = ₪1,887',
@@ -10777,7 +10777,7 @@ const INCOME_PATTERNS: Record<number, string[]> = {
     'Extra hours added about ₪2,500–3,400 net a month. They show in the Jun–Oct budgets (Apr–Aug work) and stopped Sep 6–7.',
     'Grant months: Feb (קליטה ₪5,292) · May (היקף ₪6,000 + a one-off ~₪4K catch-up = the year’s top, ₪11,694) · Nov (היקף ₪6,000). Smaller: Jul (הבראה) · Aug (ביגוד).',
     'Premiot never explain a swing — they sit at the ceiling every month (~₪2,800–2,970 gross).',
-    'Petachya is flat (₪8,845–9,253) except September (₪11,030 — why is still unknown).',
+    'Petachya is flat (₪8,845–9,253): September carried havra’a; October’s slip was missing travel.',
     'Private follows your calendar: the war (Apr, May) and the USA trip (Sep) are the near-zero months. The Biz tab books a month late.',
     'Timing: a budget month holds last month’s salary; Clalit extra hours land one more month later, premiot two.',
   ],
