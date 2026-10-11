@@ -57,8 +57,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v60';
-const BUILD_DATE = 'Oct 11, 2026 17:10';
+const APP_VERSION = 'v61';
+const BUILD_DATE = 'Oct 11, 2026 17:11';
 
 const MONTHS = [
   'January',
@@ -10745,7 +10745,7 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
       clalit: [
         'Oct salary carries מענק היקף ₪6,000 gross',
         '+ base + Aug premium (vacation month, still paid)',
-        'Few/no Sep extra hours: stopped Sep 6–7',
+        'No extra hours from Sep on — your word, Oct 11',
         'Her estimate: 9,000 → 7,100 on Sep 6',
       ],
       petachya: [
