@@ -5183,3 +5183,12 @@ input.an-oneoff-in {
     display: none;
   }
 }
+
+/* v63 fix: the runway note wraps inside its column (CI fonts are wider). */
+.an-runway {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.an-srow > span {
+  min-width: 0;
+}

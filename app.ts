@@ -59,7 +59,7 @@ const PT_KEY =
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v63';
-const BUILD_DATE = 'Oct 11, 2026 19:11';
+const BUILD_DATE = 'Oct 11, 2026 19:20';
 
 const MONTHS = [
   'January',
@@ -12164,9 +12164,7 @@ function renderAnalyzeTab(): string {
         margin(rw.margin) +
         (rw.months !== null
           ? '<span class="an-runway">' +
-            (rw.months > 60
-              ? 'a small gap — cash covers it for years'
-              : 'cash lasts ' + rw.months + ' mo') +
+            (rw.months > 60 ? 'years of cash' : 'cash lasts ' + rw.months + ' mo') +
             '</span>'
           : '')
       );
