@@ -10,7 +10,9 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ serviceWorkers: 'block' });
 
-const SUBS = ['real', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
+const SUBS = ['real', 'now', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
+// Tiles and the 'look closer' chips both open a section by its key.
+const openSub = (page, sub) => page.locator(`[onclick="setAnalyzeSub('${sub}')"]`).first().click();
 
 async function openApp(page) {
   await page.route('**/rest/v1/**', (route) =>
@@ -91,18 +93,24 @@ test.describe('Analysis section', () => {
     const qs = await page.locator('.an-qtile .an-q').allTextContents();
     expect(qs).toEqual([
       'Real spend',
+      'A month now',
       'Why so high',
       'Floor',
       'Where to cut',
-      'If it goes wrong',
+      'After Feb 7',
+    ]);
+    const chips = await page.locator('.an-chip').allTextContents();
+    expect(chips.map((t) => t.replace(/\s*₪.*$/, '').trim())).toEqual([
       'Income',
       'Bills',
       'Travel & admin',
     ]);
-    for (const [i, sub] of SUBS.entries()) {
-      await page.locator('.an-qtile').nth(i).click();
+    // Savings leads, above the questions.
+    await expect(page.locator('.an-score')).toContainText('saved');
+    for (const sub of SUBS) {
+      await openSub(page, sub);
       await expect(page.locator('.an-section')).toHaveAttribute('data-sub', sub);
-      await expect(page.locator('.an-qtile.active')).toHaveCount(1);
+      await expect(page.locator('.an-qtile.active, .an-chip.active')).toHaveCount(1);
       expect(await page.locator('.an-section .an-say').count()).toBeGreaterThan(0);
       // No red anywhere in the section.
       const red = await page.evaluate(() => {
@@ -205,7 +213,7 @@ test.describe('Analysis section', () => {
       return {
         sum: a.cats.reduce((s, c) => s + c.floor, 0),
         floorTotal: a.summary.floorTotal,
-        tile: document.querySelectorAll('.an-qtile .an-a')[2].textContent,
+        tile: document.querySelectorAll('.an-qtile .an-a')[3].textContent,
         above: a.summary.aboveFloor,
         real: a.summary.realAvg,
       };
@@ -294,7 +302,7 @@ test.describe('Analysis section', () => {
     expect(r.stamp).toContain('budgeted');
     expect(r.tile.replace(/[^\d]/g, '')).toBe(String(Math.round(r.avg)));
     // Why so high in whole-year mode compares against the year's last months.
-    await page.locator('.an-qtile').nth(1).click();
+    await openSub(page, 'why');
     await expect(page.locator('.an-section')).toContainText('(budgeted)');
     await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
   });
@@ -315,7 +323,9 @@ test.describe('Analysis section', () => {
         linesNow: bl.reduce((s, l) => s + l.now, 0),
         linesYear: bl.reduce((s, l) => s + l.annual, 0),
         fixedNow: a.months.find((m) => m.month_num === ref).fixed,
-        tile: document.querySelectorAll('.an-qtile .an-a')[6].textContent,
+        tile: [...document.querySelectorAll('.an-chip')].find((c) =>
+          c.textContent.includes('Bills'),
+        ).textContent,
         rows: document.querySelectorAll('.an-section .an-open').length,
       };
     });
@@ -352,14 +362,47 @@ test.describe('Analysis section', () => {
     expect(r.text).toContain(String(r.year + 1));
   });
 
+  test('A month now: bills + everyday + charity add up, and the tile says the same', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'now');
+    const r = await page.evaluate(() => ({
+      tile: document.querySelectorAll('.an-qtile .an-a')[1].textContent,
+      text: document.querySelector('.an-section').textContent,
+    }));
+    expect(r.tile).toMatch(/₪[\d,]+/);
+    expect(r.text.replace(/,/g, '')).toContain(r.tile.replace(/[^\d]/g, ''));
+    expect(r.text).toContain('A month now');
+  });
+
+  test('a year with nothing complete shows no invented numbers, even on Whole year', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'real');
+    await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '-1'));
+    await page.evaluate(() => window.switchYear(window.state.currentYear + 1));
+    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
+    await page.waitForSelector('.an-tiles', { timeout: 30000 });
+    const vals = await page.locator('.an-qtile .an-a').allTextContents();
+    // Real spend, A month now, Floor, Where to cut, After Feb 7: no number at all.
+    for (const i of [0, 1, 3, 4, 5]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
+    await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
+    await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
+  });
+
   test('phone width: no sideways scroll on any section, tiles two across', async ({ page }) => {
     await page.setViewportSize({ width: 412, height: 892 });
     await openAnalyze(page, 'real');
-    for (const [i, sub] of SUBS.entries()) {
-      await page.locator('.an-qtile').nth(i).click();
+    for (const sub of SUBS) {
+      await openSub(page, sub);
       await expect(page.locator('.an-section')).toHaveAttribute('data-sub', sub);
       const r = await page.evaluate(() => ({
         docWidth: document.documentElement.scrollWidth,
+        // Content wider than its card (clipped, so the page width can't see it).
+        sectionOverflow: (() => {
+          const sec = document.querySelector('.an-section');
+          return sec ? sec.scrollWidth - sec.clientWidth : 0;
+        })(),
         viewport: window.innerWidth,
         cols: getComputedStyle(document.querySelector('.an-tiles')).gridTemplateColumns.split(' ')
           .length,
@@ -370,6 +413,7 @@ test.describe('Analysis section', () => {
         ),
       }));
       expect(r.docWidth, sub).toBeLessThanOrEqual(r.viewport);
+      expect(r.sectionOverflow, sub + ' section overflow').toBeLessThanOrEqual(1);
       expect(r.cols).toBe(2);
       expect(r.tileH).toBeGreaterThanOrEqual(44);
       await page.screenshot({ path: `test-results/analyze-412-${sub}.png`, fullPage: true });

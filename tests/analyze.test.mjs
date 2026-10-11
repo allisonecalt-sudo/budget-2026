@@ -31,6 +31,7 @@ const {
   WHOLE_YEAR,
   billLines,
   potYear,
+  monthNow,
 } = await import(pathToFileURL(compiled).href);
 
 // A stored floor row as the math sees it.
@@ -600,4 +601,29 @@ test('potYear: items with what was paid, grouped; unmatched payments are kept, n
     'id',
   );
   assert.deepEqual(admin.byGroup, [{ group: 'Car', planned: 3500, paid: 2333 }]);
+});
+
+// ── v63: a month now ─────────────────────────────────────────────────────
+
+test('monthNow: the coming month’s bills + recent everyday (with her rules) + charity', () => {
+  const r = run({ todayMonth: 3 }); // Jan, Feb complete; Mar current; Apr ahead
+  const n = monthNow(r, { billsMonth: 4, recentN: 2 });
+  const apr = r.months[3];
+  assert.equal(n.bills, apr.fixed); // April's lines, as budgeted
+  assert.equal(n.charity, apr.charity);
+  // groceries: (1000 + 400) / 2 actual, never the budget
+  assert.equal(n.byCat.groceries, 700);
+  assert.deepEqual(n.everydayMonths, [1, 2]);
+  assert.equal(n.total, n.bills + n.everyday + n.charity);
+  // a line can start later, or be 0 by her choice
+  const n2 = monthNow(r, {
+    billsMonth: 4,
+    recentN: 2,
+    fromMonth: { groceries: 2 },
+    zero: ['retail'],
+  });
+  assert.equal(n2.byCat.groceries, 400);
+  assert.equal(n2.byCat.retail, 0);
+  // nothing complete → nothing to say
+  assert.equal(monthNow(run({ todayMonth: 0 }), { billsMonth: 1 }), null);
 });

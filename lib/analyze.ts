@@ -972,3 +972,66 @@ export function potYear(
     byGroup: Object.values(groups).sort((a, b) => b.planned - a.planned),
   };
 }
+
+// ── v63: "A month now" — what a month costs from here on ────────────────
+
+/**
+ * Her question turned forward (PM reassessment, 2026-10-11): rent is ₪3,200
+ * now, Mounjaro ended, Claude is ₪310 — a Jan–Sep average says none of that.
+ * A month now = this coming month's bills as budgeted (the lines, so rent
+ * and Claude as they are now) + everyday at the average of the last
+ * `recentN` complete months (per envelope; a line can start later — health
+ * from the month Mounjaro stopped — or be 0 by her choice, e.g. therapy) +
+ * that month's charity. Pots (trips, one-offs) are left out — the caller
+ * adds a plan figure beside it, labelled.
+ */
+export interface MonthNowRules {
+  /** month_num whose bills and charity count (the coming month). */
+  billsMonth: number;
+  /** How many of the latest complete months the everyday average takes. */
+  recentN?: number;
+  /** Envelope key → first month_num to average from (e.g. health from Sep). */
+  fromMonth?: Record<string, number>;
+  /** Envelopes counted as 0 by her choice. */
+  zero?: string[];
+}
+export interface MonthNow {
+  billsMonth: number;
+  bills: number;
+  everyday: number;
+  /** month_nums the everyday average is taken over. */
+  everydayMonths: number[];
+  byCat: Record<string, number>;
+  charity: number;
+  total: number;
+}
+export function monthNow(r: AnalyzeResult, rules: MonthNowRules): MonthNow | null {
+  const past = r.months.filter((m) => m.status === 'past');
+  if (!past.length) return null;
+  const bm =
+    r.months.find((m) => m.month_num === rules.billsMonth) || r.months[r.months.length - 1];
+  if (!bm) return null;
+  const recent = past.slice(-Math.max(1, rules.recentN ?? 6));
+  const byCat: Record<string, number> = {};
+  for (const c of r.cats) {
+    if (c.kind !== 'envelope') continue;
+    if (rules.zero && rules.zero.includes(c.key)) {
+      byCat[c.key] = 0;
+      continue;
+    }
+    const from = rules.fromMonth ? rules.fromMonth[c.key] : undefined;
+    const fromMs = from ? past.filter((m) => m.month_num >= from) : [];
+    const ms = fromMs.length ? fromMs : recent;
+    byCat[c.key] = ag(ms.reduce((s, m) => s + (m.actualByCat[c.key] || 0), 0) / ms.length);
+  }
+  const everyday = ag(Object.values(byCat).reduce((s, v) => s + v, 0));
+  return {
+    billsMonth: bm.month_num,
+    bills: bm.fixed,
+    everyday,
+    everydayMonths: recent.map((m) => m.month_num),
+    byCat,
+    charity: bm.charity,
+    total: ag(bm.fixed + everyday + bm.charity),
+  };
+}

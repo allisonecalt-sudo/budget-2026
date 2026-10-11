@@ -15,6 +15,7 @@ import {
   WHOLE_YEAR,
   billLines,
   potYear,
+  monthNow,
 } from './lib/analyze.js';
 import type {
   AnalyzeCatStat,
@@ -57,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v62';
-const BUILD_DATE = 'Oct 11, 2026 17:43';
+const APP_VERSION = 'v63';
+const BUILD_DATE = 'Oct 11, 2026 19:11';
 
 const MONTHS = [
   'January',
@@ -10144,7 +10145,11 @@ function computeAnalyze(): AnalyzeResult | null {
     incomeItems: state.yearData.incomeItems,
     categories: CATEGORIES,
     todayMonth: todayMonthForYear(),
-    avgWindow: analyzeAvgWindow(),
+    // Whole year in a year where nothing has happened yet would average 12
+    // budgeted months and pass them off as a year (v62 bug, numbers check
+    // 2026-10-11) — fall back to complete months, i.e. none.
+    avgWindow:
+      analyzeAvgWindow() === WHOLE_YEAR && todayMonthForYear() === 0 ? 0 : analyzeAvgWindow(),
     floors,
   });
 }
@@ -10456,8 +10461,8 @@ async function setFloorAvgN(catKey: string, nRaw: string | number): Promise<void
 //   = the Cash tab's Total Liquid (cashTotals), never a third meaning.
 // What's next: a cross-year view for January 2027; scenario incomes she can
 //   edit (needs a table — her go).
-type AnSub = 'real' | 'why' | 'floor' | 'cut' | 'safe' | 'income' | 'bills' | 'pots';
-const AN_SUBS: AnSub[] = ['real', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
+type AnSub = 'real' | 'now' | 'why' | 'floor' | 'cut' | 'safe' | 'income' | 'bills' | 'pots';
+const AN_SUBS: AnSub[] = ['real', 'now', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
 function analyzeSub(): AnSub {
   let v = '';
   try {
@@ -10605,6 +10610,13 @@ const WHY_ROWS: { key: string; label: string; tag: string; why: string }[] = [
     why: 'Your words Oct 9: “its flex… can evn be 0 if needed”.',
   },
 ];
+// "A month now" — her own words decide two lines (v63, 2026-10-11):
+// health from September on ("no more mujaro", Oct 9) and therapy at 0 unless
+// she goes back ("I might do therapy", Oct 9). Everything else = the
+// average of the last 6 complete months.
+const MONTH_NOW_RULES: Record<number, { fromMonth: Record<string, number>; zero: string[] }> = {
+  2026: { fromMonth: { health: 9 }, zero: ['therapy'] },
+};
 const TAG_LABEL: Record<string, string> = {
   ended: 'ended',
   'one-off': 'one-off',
@@ -10825,7 +10837,7 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
         'Her estimate: 9,000 → 7,100 on Sep 6',
       ],
       petachya: [
-        'Slip 2026-10: net ₪10,100',
+        '(expected) app ₪10,100 — slip not issued yet',
         '(expected) ₪120 base + Oct travel ~₪800 gross',
         '(expected) Sep travel retro ~₪800, like Sep 2025',
         "(expected) ~₪9,720 net if the retro doesn't come",
@@ -10844,7 +10856,7 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
         'Nov 9 day off = vacation, free (still earns premium)',
       ],
       petachya: [
-        'Slip 2026-11: net ₪9,700',
+        '(expected) app ₪9,700 — slip not issued yet',
         '(expected) ₪120 base + ~8 days travel ≈ ₪9,720',
         "(expected) no havra'a or retro",
       ],
@@ -10933,7 +10945,7 @@ const PLAN_NEXT: Record<
     },
     { label: 'Dentist', group: 'Health', pot: 'admin', amount: 750, note: 'twice a year' },
     {
-      label: 'Esther, Jan + Feb',
+      label: 'Fitness, Jan + Feb',
       group: 'Other',
       pot: 'admin',
       amount: 458,
@@ -10993,14 +11005,15 @@ async function loadPotsCompare(): Promise<void> {
 function renderAnalyzeTab(): string {
   const r = computeAnalyze();
   if (!r) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
-  const { months, cats, lines, summary: s } = r;
+  const { months, cats, summary: s } = r;
   const sub = analyzeSub();
   const win = analyzeAvgWindow();
   // Floors not loaded for this year yet: the math above ran on none, so every
   // floor-derived number is a placeholder — say so, never show a default as hers.
   const floorsLoading = !state.floors;
   const LOADING = '<span class="an-loading">loading…</span>';
-  const money = (v: number): string => shekels(v || 0);
+  // Never ₪-x: a minus sits in front of the shekel sign.
+  const money = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v || 0));
   // A negative reads as −₪x, never ₪-x.
   const signed = (v: number): string =>
     roundZ(v) < 0 ? '−' + shekels(-v) : roundZ(v) > 0 ? '+' + shekels(v) : shekels(0);
@@ -11023,11 +11036,10 @@ function renderAnalyzeTab(): string {
     esc(t).replace(/[֐-׿][֐-׿\s"'׳״-]*[֐-׿]|[֐-׿]/g, '<bdi>$&</bdi>');
   // Whole year (v57): every month, the ones still ahead counted as budgeted —
   // and every label says which months are budgeted, never passed off as real.
-  const whole = win === WHOLE_YEAR;
+  const whole = win === WHOLE_YEAR && months.some((m) => m.status === 'past');
   const aheadNums = months.filter((m) => m.status !== 'past').map((m) => m.month_num);
   const avgSpan =
     span(s.avgMonths) + (whole && aheadNums.length ? ', ' + span(aheadNums) + ' budgeted' : '');
-  const nSet = cats.filter((c) => c.floorSet).length;
   const avgSet = new Set(s.avgMonths);
   const inAvg = months.filter((m) => avgSet.has(m.month_num));
   const mean = (xs: number[]): number =>
@@ -11073,7 +11085,7 @@ function renderAnalyzeTab(): string {
       .join('') +
     '</div>';
   const back =
-    '<button type="button" class="an-back" onclick="analyzeToTop()">↑ the five questions</button>';
+    '<button type="button" class="an-back" onclick="analyzeToTop()">↑ the questions</button>';
   const how = (text: string): string =>
     '<details class="an-how"><summary>How this is figured</summary><div>' +
     text +
@@ -11101,12 +11113,27 @@ function renderAnalyzeTab(): string {
   // A span in "why" that reaches into months not yet happened says so.
   const wspan = (ms: number[]): string =>
     span(ms) + (why && ms.some((x) => why.projected.includes(x)) ? ' (budgeted)' : '');
+  const nowRules = MONTH_NOW_RULES[state.currentYear] || { fromMonth: {}, zero: [] };
+  const refNum = s.referenceMonth || 12;
+  const mNow = none
+    ? null
+    : monthNow(r, {
+        billsMonth: months.some((m) => m.month_num === refNum + 1) ? refNum + 1 : refNum,
+        recentN: 6,
+        fromMonth: nowRules.fromMonth,
+        zero: nowRules.zero,
+      });
+  const planNext = PLAN_NEXT[state.currentYear + 1] || [];
+  const oneOffsMo = planNext.reduce((a, p) => a + p.amount, 0) / 12;
   const cash = cashTotals();
   const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
   const pet = SAFE_SCENARIOS[0];
+  const plan = SAFE_SCENARIOS.find((x) => x.key === 'all') || pet;
   const cashLeft = cash.liquid - _anOneOff;
   const petFloor = runway(cashLeft, pet.income, s.floorTotal);
   const petReal = runway(cashLeft, pet.income, s.realAvg);
+  const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
+  const petNow = mNow ? runway(cashLeft, pet.income, mNow.total) : null;
   const marginTxt = (v: number): string => (v >= 0 ? '+' + money(v) : 'short ' + money(-v));
   const margin = (v: number): string =>
     v >= 0
@@ -11145,14 +11172,33 @@ function renderAnalyzeTab(): string {
         span(aheadNums) +
         ' as budgeted">Whole year</button>',
     );
+  const usesWindow = sub === 'real' || sub === 'why' || sub === 'floor' || sub === 'cut';
+  const savingsLine = none
+    ? ''
+    : '<p class="an-score">🏦 You saved <b>' +
+      money(savingsAvg) +
+      '</b> a month — ' +
+      pctStr(savingsRate) +
+      ' of what came in (' +
+      avgSpan +
+      ').</p>';
   const head =
+    savingsLine +
     '<div class="an-head"><div class="an-stamp">' +
     state.currentYear +
     (sub === 'why' && why
       ? ' · compares <b>' + wspan(why.early) + '</b> with <b>' + wspan(why.recent) + '</b>'
-      : ' · averages over <b>' + avgSpan + '</b>') +
+      : usesWindow
+        ? ' · averages over <b>' + avgSpan + '</b>'
+        : sub === 'now'
+          ? ' · from here on'
+          : sub === 'pots'
+            ? ' · this year vs next'
+            : sub === 'safe'
+              ? ' · after Feb 7'
+              : ' · month by month') +
     '</div>' +
-    (pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
+    (usesWindow && pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
     '</div>';
 
   // ── The five question tiles ───────────────────────────────────────────
@@ -11170,9 +11216,26 @@ function renderAnalyzeTab(): string {
     '</span><span class="an-qn">' +
     note +
     '</span></button>';
+  const chip = (key: AnSub, label: string, val: string): string =>
+    '<button type="button" class="an-chip' +
+    (sub === key ? ' active' : '') +
+    '" aria-pressed="' +
+    (sub === key) +
+    '" onclick="setAnalyzeSub(\'' +
+    key +
+    '\')">' +
+    label +
+    (val ? ' <b>' + val + '</b>' : '') +
+    '</button>';
   const tiles =
     '<div class="an-tiles">' +
     tile('real', 'Real spend', none ? '—' : money(s.realAvg), 'a month, ' + avgSpan) +
+    tile(
+      'now',
+      'A month now',
+      mNow ? money(mNow.total) : '—',
+      mNow ? 'bills + everyday + charity, from here on' : 'needs a complete month',
+    ) +
     tile(
       'why',
       'Why so high',
@@ -11182,8 +11245,12 @@ function renderAnalyzeTab(): string {
     tile(
       'floor',
       'Floor',
-      floorsLoading ? LOADING : money(s.floorTotal),
-      floorsLoading ? 'on its way' : 'the least a month could cost',
+      floorsLoading ? LOADING : none ? '—' : money(s.floorTotal),
+      floorsLoading
+        ? 'on its way'
+        : none
+          ? 'nothing has happened yet'
+          : 'the least a month could cost',
     ) +
     tile(
       'cut',
@@ -11193,27 +11260,21 @@ function renderAnalyzeTab(): string {
     ) +
     tile(
       'safe',
-      'If it goes wrong',
-      floorsLoading ? LOADING : none ? '—' : marginTxt(petFloor.margin),
-      none
-        ? 'needs a complete month and a floor for ' + state.currentYear
-        : 'Petachya only, at your floor · ' + marginTxt(petReal.margin) + ' at real spend',
+      'After Feb 7',
+      floorsLoading ? LOADING : planNow ? marginTxt(planNow.margin) : '—',
+      planNow && petNow
+        ? 'your plan vs a month now · Petachya only: ' + marginTxt(petNow.margin)
+        : 'needs a complete month',
     ) +
     '</div>' +
-    '<div class="an-tiles2"><span class="an-closer">Look closer</span>' +
-    tile(
-      'income',
-      'Income',
-      none ? '—' : money(avgOf((m) => m.income)),
-      'a month came in · why each month',
-    ) +
-    tile(
+    '<div class="an-chips"><span class="an-closer">Look closer</span>' +
+    chip('income', 'Income', none ? '' : money(avgOf((m) => m.income)) + '/mo') +
+    chip(
       'bills',
       'Bills',
-      money(months.find((m) => m.month_num === (s.referenceMonth || 12))?.fixed || 0),
-      'a month now · line by line',
+      none ? '' : money(months.find((m) => m.month_num === refNum)?.fixed || 0) + '/mo',
     ) +
-    tile(
+    chip(
       'pots',
       'Travel & admin',
       state.potsCmp && state.potsCmp.years[0] === state.currentYear
@@ -11222,9 +11283,8 @@ function renderAnalyzeTab(): string {
               (a, r) => a + Math.max(r.planned, r.paid),
               0,
             ),
-          )
-        : '—',
-      state.currentYear + ' vs ' + (state.currentYear + 1),
+          ) + '/yr'
+        : '',
     ) +
     '</div>';
 
@@ -11234,7 +11294,7 @@ function renderAnalyzeTab(): string {
     // Savings leads — it is the score (her words, Sep 4).
     const say =
       '<p class="an-say">' +
-      (whole ? 'Across the whole year, savings come to <b>' : 'You saved <b>') +
+      (whole ? 'Across the whole year, savings come to <b>' : 'Saved: <b>') +
       money(savingsAvg) +
       '</b> a month — ' +
       pctStr(savingsRate) +
@@ -11672,6 +11732,7 @@ function renderAnalyzeTab(): string {
       c.emoji +
       ' ' +
       esc(c.label) +
+      (floorsLoading ? '' : '<span class="an-sublbl">' + levelTxt(c) + '</span>') +
       '</button><span class="an-fin">' +
       floorInput(c) +
       (floorsLoading ? '' : c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
@@ -11681,15 +11742,225 @@ function renderAnalyzeTab(): string {
       (open ? '<div class="an-detail">' + floorDetail(c) + '</div>' : '')
     );
   };
+  // ── Floor audit (v63): each line against what the data says ───────────
+  // Her ask 2026-10-11 17:56: "can you actually understand the floor… assess
+  // what I wrote and what is written". A floor line is read against its
+  // bill NOW (bills) or her own months (everything else): the average, and
+  // the 3 lowest normal months (months with few entries left out).
+  const pastMs = months.filter((m) => m.status === 'past');
+  const entryCounts = pastMs.map((m) => m.entries).sort((a, b) => a - b);
+  const medEntries = entryCounts[Math.floor(entryCounts.length / 2)] || 0;
+  const thinSet = new Set(
+    pastMs.filter((m) => medEntries > 0 && m.entries < 0.6 * medEntries).map((m) => m.month_num),
+  );
+  const billNow = (c: AnalyzeCatStat): number => {
+    const bm = mNow ? months.find((m) => m.month_num === mNow.billsMonth) : null;
+    return bm ? bm.byCat[c.key] || 0 : c.now;
+  };
+  const lowNormal = (c: AnalyzeCatStat): number => {
+    const vals = pastMs
+      .filter((m) => !thinSet.has(m.month_num))
+      .map((m) => (c.kind === 'envelope' ? m.actualByCat[c.key] || 0 : m.byCat[c.key] || 0))
+      .sort((a, b) => a - b)
+      .slice(0, 3);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  };
+  type Level =
+    | 'unset'
+    | 'below-now'
+    | 'about-now'
+    | 'bill-now'
+    | 'normal'
+    | 'pace-now'
+    | 'lean'
+    | 'leanest';
+  const levelOf = (c: AnalyzeCatStat): Level => {
+    if (!c.floorSet) return 'unset';
+    if (c.kind === 'fixed') {
+      const b = billNow(c);
+      if (c.floor >= b) return 'bill-now';
+      return b - c.floor <= Math.max(50, b * 0.02) ? 'about-now' : 'below-now';
+    }
+    if (c.avg > 0 && c.floor >= 0.85 * c.avg) return 'normal';
+    // Her pace now (the recent months, with her own rules — health since
+    // Mounjaro stopped) can sit far below the year's average.
+    const pace = mNow ? mNow.byCat[c.key] : undefined;
+    if (pace !== undefined && pace > 0 && c.floor >= 0.85 * pace && c.floor <= 1.2 * pace)
+      return 'pace-now';
+    if (c.floor <= lowNormal(c) * 1.05) return 'leanest';
+    return 'lean';
+  };
+  const levelTxt = (c: AnalyzeCatStat): string => {
+    const lv = levelOf(c);
+    if (lv === 'unset') return 'not set — counts as ₪0';
+    if (lv === 'below-now') return 'below the bill now (' + money(billNow(c)) + ')';
+    if (lv === 'bill-now') return 'covers the bill now (' + money(billNow(c)) + ')';
+    if (lv === 'about-now') return 'about the bill now (' + money(billNow(c)) + ')';
+    if (lv === 'pace-now')
+      return 'your pace now (' + money(mNow ? mNow.byCat[c.key] || 0 : 0) + ')';
+    if (lv === 'normal') return 'a normal month (avg ' + money(c.avg) + ')';
+    if (lv === 'leanest') return 'your leanest months or less (' + money(lowNormal(c)) + ')';
+    return 'lean (avg ' + money(c.avg) + ', leanest ' + money(lowNormal(c)) + ')';
+  };
+
+  // ── 1b · A month now — what a month costs from here on ────────────────
+  const nowSection = (): string => {
+    if (!mNow) return noneNote;
+    const bmName = abbr(mNow.billsMonth);
+    const potsAvg = avgOf((m) => m.pots);
+    const say =
+      '<p class="an-say">From here on, a month costs about <b>' +
+      money(mNow.total) +
+      '</b> — bills as they are now, everyday at your recent pace, and charity.' +
+      (oneOffsMo
+        ? ' With the trips and one-offs in your ' +
+          (state.currentYear + 1) +
+          ' plan, about <b>' +
+          money(mNow.total + oneOffsMo) +
+          '</b>.'
+        : '') +
+      '</p>' +
+      '<p class="an-say an-say-sm">Your ' +
+      avgSpan +
+      ' real spend was ' +
+      money(s.realAvg) +
+      ' — ' +
+      money(s.realAvg - potsAvg) +
+      ' without its trips and one-offs.</p>';
+    const env = cats.filter((c) => c.kind === 'envelope');
+    const envRows = env
+      .filter((c) => Math.round(mNow.byCat[c.key] || 0) !== 0 || nowRules.zero.includes(c.key))
+      .sort((a, b) => (mNow.byCat[b.key] || 0) - (mNow.byCat[a.key] || 0))
+      .map((c) =>
+        row(
+          c.emoji +
+            ' ' +
+            esc(c.label) +
+            (nowRules.fromMonth[c.key]
+              ? '<span class="an-sublbl">from ' +
+                abbr(nowRules.fromMonth[c.key]) +
+                ' on — Mounjaro stopped (your words, Oct 9)</span>'
+              : nowRules.zero.includes(c.key)
+                ? '<span class="an-sublbl">0 unless you go back (your words, Oct 9)</span>'
+                : ''),
+          money(mNow.byCat[c.key] || 0),
+          'ym-row-sub',
+        ),
+      )
+      .join('');
+    const go = (key: AnSub, label: string): string =>
+      '<button type="button" class="an-go" onclick="setAnalyzeSub(\'' +
+      key +
+      '\')">' +
+      label +
+      ' ›</button>';
+    const list =
+      '<div class="an-block"><div class="an-h">A month now</div>' +
+      row('🏠 Bills · ' + bmName + ', as budgeted', money(mNow.bills)) +
+      go('bills', 'every bill, line by line') +
+      openRow(
+        'now:env',
+        '🛒 Everyday · your ' + span(mNow.everydayMonths) + ' average',
+        money(mNow.everyday),
+        envRows,
+      ) +
+      row('💚 Charity · ' + bmName, money(mNow.charity)) +
+      row('A month now', money(mNow.total), 'ym-row-bold') +
+      (oneOffsMo
+        ? row(
+            '✈️📋 Trips + one-offs · your ' + (state.currentYear + 1) + ' plan',
+            '+' + money(oneOffsMo),
+          ) +
+          go('pots', 'travel & admin, this year vs next') +
+          row('With trips and one-offs', money(mNow.total + oneOffsMo), 'ym-row-bold')
+        : '') +
+      '</div>';
+    // What moved against the window average — biggest first.
+    const moves: { label: string; was: number; now: number }[] = [
+      { label: '🏠 Bills', was: avgOf((m) => m.fixed), now: mNow.bills },
+      ...env.map((c) => ({
+        label: c.emoji + ' ' + c.label,
+        was: c.avg,
+        now: mNow.byCat[c.key] || 0,
+      })),
+      { label: '💚 Charity', was: avgOf((m) => m.charity), now: mNow.charity },
+    ]
+      .filter((x) => Math.abs(x.now - x.was) >= 50)
+      .sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was))
+      .slice(0, 6);
+    const movesBlock = moves.length
+      ? '<div class="an-block"><div class="an-h">What moved vs your ' +
+        avgSpan +
+        ' average · a month</div>' +
+        moves
+          .map((x) =>
+            row(
+              esc(x.label) +
+                '<span class="an-sublbl">' +
+                money(x.was) +
+                ' → ' +
+                money(x.now) +
+                '</span>',
+              signed(x.now - x.was),
+            ),
+          )
+          .join('') +
+        '</div>'
+      : '';
+    return (
+      say +
+      list +
+      movesBlock +
+      how(
+        'Bills = ' +
+          bmName +
+          '’s lines as budgeted, so rent and Claude count as they are now. Everyday = each envelope’s average over your last ' +
+          mNow.everydayMonths.length +
+          ' complete months (' +
+          span(mNow.everydayMonths) +
+          '), what you actually spent — except where your own words say otherwise. Charity = ' +
+          bmName +
+          '’s. Trips and one-offs are kept apart because they come and go; the plan figure is your Sep 4 plan for next year, ÷ 12.',
+      )
+    );
+  };
+
+  // ── 3 · Floor ─────────────────────────────────────────────────────────
   const floorSection = (): string => {
+    if (none) return noneNote;
+    const lv = cats.map((c) => ({ c, lv: levelOf(c) }));
+    const names = (l: Level[]): string =>
+      lv
+        .filter((x) => l.includes(x.lv))
+        .map((x) => esc(x.c.label))
+        .join(', ');
+    const unset = names(['unset']);
+    const below = names(['below-now']);
+    const normal = names(['normal']);
+    const leanest = names(['leanest']);
     const say =
       '<p class="an-say">The least a month could cost: <b>' +
       (floorsLoading ? LOADING : money(s.floorTotal)) +
-      '</b>. ' +
+      '</b>.</p>' +
       (floorsLoading
         ? ''
-        : nSet + ' of ' + cats.length + ' lines are your numbers, the rest are suggestions.') +
-      '</p>';
+        : '<p class="an-say an-say-sm">It mixes kinds of floor: ' +
+          [
+            normal ? '<b>a normal month</b> for ' + normal : '',
+            names(['pace-now']) ? '<b>your pace now</b> for ' + names(['pace-now']) : '',
+            leanest ? '<b>your leanest months or less</b> for ' + leanest : '',
+            unset ? '<b>not set</b> (counted as ₪0): ' + unset : '',
+          ]
+            .filter(Boolean)
+            .join(' · ') +
+          '.' +
+          (below
+            ? ' <span class="an-warn">' +
+              below +
+              (below.includes(',') ? ' sit' : ' sits') +
+              ' below what the bill is now.</span>'
+            : '') +
+          '</p>');
     const groups = kindOrder
       .map((k) => {
         const rows = cats.filter((c) => c.kind === k.kind);
@@ -11717,7 +11988,7 @@ function renderAnalyzeTab(): string {
       money(s.realAvg) +
       '</span></div></div>' +
       how(
-        'Type a floor to set your own; clear it to go back to the suggestion. An everyday line’s suggestion is the average of its lowest normal months (3 unless you pick more) — tap a line to see those months and leave out one that was cheap for other reasons (August: America). Bills suggest this month’s lines, pots suggest 0, charity suggests its average.',
+        'Under each line: what kind of floor it is. Bills are checked against the bill now; everything else against your own months — your average, and your 3 lowest normal months (months with few entries, like when you were away, are left out). Type a floor to set your own; clear it to go back to the suggestion. Tap a line to see its months.',
       )
     );
   };
@@ -11726,7 +11997,11 @@ function renderAnalyzeTab(): string {
   const cutSection = (): string => {
     if (none) return noneNote;
     if (floorsLoading) return '<p class="an-say">' + LOADING + '</p>';
-    const above = cats
+    // Lines she never set count as ₪0 — their "room" is not a decision she
+    // made, so they never rank as "most room" (UX reassessment, Oct 11).
+    const set = cats.filter((c) => c.floorSet);
+    const unsetC = cats.filter((c) => !c.floorSet && roundZ(c.aboveFloor) > 0);
+    const above = set
       .filter((c) => roundZ(c.aboveFloor) > 0)
       .sort((a, b) =>
         a.kind === 'charity' ? 1 : b.kind === 'charity' ? -1 : b.aboveFloor - a.aboveFloor,
@@ -11734,130 +12009,81 @@ function renderAnalyzeTab(): string {
     const top = above.filter((c) => c.kind !== 'charity').slice(0, 3);
     const under = cats.filter((c) => roundZ(c.aboveFloor) < 0);
     const aboveSum = above.reduce((a, c) => a + c.aboveFloor, 0);
+    const unsetSum = unsetC.reduce((a, c) => a + c.aboveFloor, 0);
     const underSum = under.reduce((a, c) => a + c.aboveFloor, 0);
-    // The headline and the list must add up on screen: lines above their
-    // floor, minus lines already UNDER theirs (e.g. rent rose past the
-    // average), = the net figure on the tile.
     const say =
-      '<p class="an-say">Lines above their floor add up to <b>' +
+      '<p class="an-say">Lines with a floor you set sit <b>' +
       money(aboveSum) +
-      '</b> a month (' +
+      '</b> a month above it (' +
       avgSpan +
       ').' +
-      (under.length
-        ? ' ' +
-          under.map((c) => esc(c.label)).join(', ') +
-          ' sit' +
-          (under.length === 1 ? 's' : '') +
-          ' ' +
-          money(-underSum) +
-          ' under ' +
-          (under.length === 1 ? 'its' : 'their') +
-          ' floor, so overall <b>' +
-          money(Math.max(0, s.aboveFloor)) +
-          '</b> sits above.'
-        : '') +
       (top.length
         ? ' Most room: ' +
           top.map((c) => esc(c.label) + ' ' + money(c.aboveFloor)).join(' · ') +
           '.'
         : '') +
-      '</p>';
+      '</p>' +
+      (under.length || unsetC.length
+        ? '<p class="an-say an-say-sm">' +
+          (under.length
+            ? under.map((c) => esc(c.label)).join(', ') +
+              ': the bill went up — your floor is already above the average (' +
+              money(-underSum) +
+              '). '
+            : '') +
+          (unsetC.length
+            ? 'Not set yet (counted as ₪0): ' +
+              unsetC.map((c) => esc(c.label)).join(', ') +
+              ' — ' +
+              money(unsetSum) +
+              '.'
+            : '') +
+          '</p>'
+        : '');
+    const cutRow = (c: AnalyzeCatStat): string =>
+      openRow(
+        'cut:' + c.key,
+        c.emoji + ' ' + esc(c.label) + '<span class="an-sublbl">' + levelTxt(c) + '</span>',
+        signed(c.aboveFloor),
+        '<div class="an-why">Average ' +
+          money(c.avg) +
+          ' → your floor ' +
+          money(c.floor) +
+          (c.floorSet ? '' : ' (not set — counted as ₪0)') +
+          '</div>' +
+          (c.kind === 'charity'
+            ? '<div class="an-why">Your words Oct 9: “its flex… can evn be 0 if needed”.</div>'
+            : '') +
+          (c.kind === 'fixed'
+            ? '<div class="an-why">The bill now: ' + money(billNow(c)) + '.</div>'
+            : '') +
+          monthChips((m) => m.byCat[c.key] || 0, inAvg),
+      );
+    const net = aboveSum + unsetSum + underSum;
     const list =
-      '<div class="an-block"><div class="an-h">Above the floor, most first · a month</div>' +
-      above
-        .map((c) =>
-          openRow(
-            'cut:' + c.key,
-            c.emoji + ' ' + esc(c.label),
-            money(c.aboveFloor),
-            '<div class="an-why">Average ' +
-              money(c.avg) +
-              ' → your floor ' +
-              money(c.floor) +
-              (c.floorSet ? '' : ' (suggested)') +
-              '</div>' +
-              (c.kind === 'charity'
-                ? '<div class="an-why">Your words Oct 9: “its flex… can evn be 0 if needed”.</div>'
-                : '') +
-              monthChips((m) => m.byCat[c.key] || 0, inAvg),
-          ),
-        )
-        .join('') +
-      '</div>';
-    const atFloorBlock =
+      '<div class="an-block"><div class="an-h">Above your floor, most first · a month</div>' +
+      above.map(cutRow).join('') +
+      (unsetC.length
+        ? '<div class="an-h an-h2">Not set yet — counted as ₪0</div>' + unsetC.map(cutRow).join('')
+        : '') +
       (under.length
-        ? '<div class="an-block"><div class="an-h">Under the floor · a month</div>' +
-          under
-            .map((c) =>
-              openRow(
-                'cut:' + c.key,
-                c.emoji + ' ' + esc(c.label),
-                signed(c.aboveFloor),
-                '<div class="an-why">Average ' +
-                  money(c.avg) +
-                  ' → your floor ' +
-                  money(c.floor) +
-                  '. The floor is higher than the average — usually a bill that went up during the year.</div>' +
-                  monthChips((m) => m.byCat[c.key] || 0, inAvg),
-              ),
-            )
-            .join('') +
-          row(
-            'Net above the floor',
-            money(s.aboveFloor) +
-              (Math.abs(aboveSum + underSum - s.aboveFloor) < 1
-                ? ' <span class="an-ok">adds up ✓</span>'
-                : ''),
-            'ym-row-bold',
-          ) +
-          '</div>'
+        ? '<div class="an-h an-h2">The bill went up past the average</div>' +
+          under.map(cutRow).join('')
         : '') +
-      (() => {
-        const atFloor = cats.filter((c) => roundZ(c.aboveFloor) === 0);
-        return atFloor.length
-          ? '<details class="an-how"><summary>' +
-              atFloor.length +
-              (atFloor.length === 1 ? ' line' : ' lines') +
-              ' right at the floor</summary><div>' +
-              atFloor
-                .map((c) =>
-                  row(c.emoji + ' ' + esc(c.label), money(c.avg) + ' · floor ' + money(c.floor)),
-                )
-                .join('') +
-              '</div></details>'
-          : '';
-      })();
-    const live = lines.filter((l) => !l.dead);
-    const dead = lines.filter((l) => l.dead);
-    const linesTotal = lines.reduce((a, l) => a + l.annual, 0);
-    const linesBlock =
-      '<details class="an-how an-lines"><summary>Every bill over the year — ' +
-      money(linesTotal) +
-      '</summary><div>' +
-      live
-        .map((l) =>
-          row(
-            esc(l.label) +
-              '<span class="an-sublbl">' +
-              esc(l.category === 'housing' ? 'housing' : 'recurring') +
-              (l.subcategory ? ' · ' + esc(l.subcategory) : '') +
-              '</span>',
-            money(l.monthly) + ' · ' + money(l.annual) + '/yr',
-          ),
-        )
-        .join('') +
-      (dead.length
-        ? '<div class="an-legend">' +
-          dead.length +
-          ' lines with no money this year: ' +
-          dead.map((l) => esc(l.label)).join(', ') +
-          '</div>'
-        : '') +
-      '<div class="an-legend">₪ this month · ₪ across ' +
-      state.currentYear +
-      ', largest first</div></div></details>';
-    return say + list + atFloorBlock + linesBlock;
+      row(
+        'Net above the floor',
+        money(s.aboveFloor) +
+          (Math.abs(net - s.aboveFloor) < 1
+            ? ' <span class="an-ok">adds up ✓</span>'
+            : ' <span class="an-short">' +
+              money(Math.abs(net - s.aboveFloor)) +
+              ' from months you left out of single lines</span>'),
+        'ym-row-bold',
+      ) +
+      '</div>';
+    const goBills =
+      '<button type="button" class="an-go" onclick="setAnalyzeSub(\'bills\')">every bill, line by line ›</button>';
+    return say + list + goBills;
   };
 
   // ── 5 · If it goes wrong ──────────────────────────────────────────────
@@ -11876,10 +12102,11 @@ function renderAnalyzeTab(): string {
           : '') +
         '</p>'
       );
-    const real = s.realAvg;
+    const real = mNow ? mNow.total : s.realAvg;
     const nowIncome = avgOf((m) => m.income);
+    const order = ['all', 'petgan', 'school', 'pet2', 'pet'];
     const scen = [
-      ...SAFE_SCENARIOS,
+      ...[...SAFE_SCENARIOS].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)),
       ...(none
         ? []
         : [
@@ -11891,13 +12118,25 @@ function renderAnalyzeTab(): string {
           ]),
     ];
     const say =
-      '<p class="an-say">On Petachya only, a month comes out ' +
+      '<p class="an-say">Your plan after Feb 7 — ' +
+      esc(plan.label) +
+      ', about ' +
+      money(plan.income) +
+      ' a month — against a month now (' +
+      money(real) +
+      '): ' +
+      (planNow ? margin(planNow.margin) : '—') +
+      '.</p>' +
+      '<p class="an-say an-say-sm">If it goes wrong — Petachya only: ' +
+      (petNow ? margin(petNow.margin) : '—') +
+      ' against a month now, ' +
       margin(petFloor.margin) +
-      ' at your floor' +
-      (none ? '' : ' and ' + margin(petReal.margin) + ' at your real spend') +
-      '.' +
-      (petFloor.months !== null
-        ? ' At the floor, your cash covers that for about <b>' + petFloor.months + ' months</b>.'
+      ' at your floor.' +
+      (petNow && petNow.months !== null
+        ? ' Cash covers that for about <b>' + petNow.months + ' months</b>.'
+        : '') +
+      (oneOffsMo
+        ? ' Trips and one-offs (your plan, ~' + money(oneOffsMo) + ' a month) come on top.'
         : '') +
       '</p>';
     // What if: a one-off comes out of cash first (egg freezing ≈ ₪8,000,
@@ -11923,21 +12162,27 @@ function renderAnalyzeTab(): string {
       const rw = runway(cashLeft, inc, spend);
       return (
         margin(rw.margin) +
-        (rw.months !== null ? '<span class="an-runway">cash lasts ' + rw.months + ' mo</span>' : '')
+        (rw.months !== null
+          ? '<span class="an-runway">' +
+            (rw.months > 60
+              ? 'a small gap — cash covers it for years'
+              : 'cash lasts ' + rw.months + ' mo') +
+            '</span>'
+          : '')
       );
     };
     const table =
       '<div class="an-block"><div class="an-stable">' +
       '<div class="an-srow an-shead"><span>Income a month</span><span>At your floor<br>' +
       money(s.floorTotal) +
-      '</span><span>At real spend<br>' +
+      '</span><span>A month now<br>' +
       (none ? '—' : money(real)) +
       '</span></div>' +
       scen
         .map(
           (x) =>
             '<div class="an-srow' +
-            (x.key === 'now' ? ' an-snow' : '') +
+            (x.key === 'now' ? ' an-snow' : x.key === plan.key ? ' an-splan' : '') +
             '"><span><span class="an-slabel">' +
             esc(x.label) +
             '</span><span class="an-sinc">' +
@@ -12369,25 +12614,29 @@ function renderAnalyzeTab(): string {
   const sectionHtml =
     sub === 'real'
       ? realSection()
-      : sub === 'why'
-        ? whySection()
-        : sub === 'floor'
-          ? floorSection()
-          : sub === 'cut'
-            ? cutSection()
-            : sub === 'income'
-              ? incomeSection()
-              : sub === 'bills'
-                ? billsSection()
-                : sub === 'pots'
-                  ? potsSection()
-                  : safeSection();
+      : sub === 'now'
+        ? nowSection()
+        : sub === 'why'
+          ? whySection()
+          : sub === 'floor'
+            ? floorSection()
+            : sub === 'cut'
+              ? cutSection()
+              : sub === 'income'
+                ? incomeSection()
+                : sub === 'bills'
+                  ? billsSection()
+                  : sub === 'pots'
+                    ? potsSection()
+                    : safeSection();
+  void petReal;
   const titles: Record<AnSub, string> = {
     real: 'What do I really spend?',
+    now: 'What does a month cost now?',
     why: 'How did it get so high?',
     floor: 'What’s the least I could spend?',
     cut: 'Where can I cut?',
-    safe: 'If it goes wrong — am I OK?',
+    safe: 'After Feb 7 — am I OK?',
     income: 'Why did I make what I made?',
     bills: 'What do my bills really look like?',
     pots: 'Travel & admin — this year vs next',

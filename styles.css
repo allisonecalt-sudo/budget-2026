@@ -4624,9 +4624,9 @@ select.an-nsel {
 }
 .an-tiles {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.6rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
 }
 .an-qtile {
   display: flex;
@@ -4982,7 +4982,7 @@ select.an-nsel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .an-qtile:last-child {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
 @media (max-width: 600px) {
@@ -5090,4 +5090,96 @@ input.an-oneoff-in {
 .an-pats {
   font-size: 0.8rem;
   line-height: 1.45;
+}
+
+/* ── v63 · savings first, 6 questions, "look closer" chips ─────────────── */
+.an-score {
+  font-size: 0.95rem;
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--rl);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.an-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+.an-chips .an-closer {
+  margin-right: 0.2rem;
+}
+.an-chip {
+  min-height: 40px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.an-chip b {
+  font-family: 'DM Mono', monospace;
+  color: var(--text);
+  font-weight: 600;
+}
+.an-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.an-go {
+  display: block;
+  margin: -0.1rem 0 0.4rem 1rem;
+  padding: 0.3rem 0;
+  min-height: 32px;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.an-h2 {
+  margin-top: 0.8rem;
+}
+.an-splan {
+  background: var(--surface2);
+  border-radius: var(--r-sm);
+}
+.an-open .ym-row {
+  min-height: 44px;
+}
+.an-section {
+  max-width: 1100px;
+}
+@media (max-width: 900px) {
+  .an-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .an-qn {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .an-score {
+    font-size: 0.88rem;
+  }
+}
+
+.an-warn {
+  color: var(--amber);
+  font-weight: 600;
+}
+@media (max-width: 600px) {
+  .an-chips .an-closer {
+    display: none;
+  }
 }
