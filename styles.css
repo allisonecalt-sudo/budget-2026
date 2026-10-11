@@ -5192,3 +5192,65 @@ input.an-oneoff-in {
 .an-srow > span {
   min-width: 0;
 }
+
+/* ── v66 · four questions + "Which week?" cards ───────────────────────── */
+.an-tiles.an-tiles4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.an-cards2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.6rem;
+}
+.an-card2 {
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 0.7rem 0.8rem;
+  background: var(--surface);
+  min-width: 0;
+}
+.an-card2-plan {
+  border: 2px solid var(--accent);
+  padding: calc(0.7rem - 1px) calc(0.8rem - 1px);
+}
+.an-card2-now {
+  background: var(--surface2);
+}
+.an-c2-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.3rem;
+}
+.an-c2-label {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.an-c2-net {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+.an-c2-unit {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--dim);
+}
+.an-c2-lines {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0.3rem 0 0.4rem;
+  overflow-wrap: anywhere;
+}
+.an-c2-save {
+  font-size: 0.82rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--border);
+}
+@media (max-width: 900px) {
+  .an-tiles.an-tiles4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

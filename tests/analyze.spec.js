@@ -91,16 +91,11 @@ test.describe('Analysis section', () => {
   }) => {
     await openAnalyze(page, 'real');
     const qs = await page.locator('.an-qtile .an-q').allTextContents();
-    expect(qs).toEqual([
-      'Real spend',
-      'A month now',
-      'Why so high',
-      'Floor',
-      'Where to cut',
-      'After Feb 7',
-    ]);
+    expect(qs).toEqual(['Did I save?', 'What does a month cost?', 'My ladder', 'Which week?']);
     const chips = await page.locator('.an-chip').allTextContents();
-    expect(chips.map((t) => t.replace(/\s*₪.*$/, '').trim())).toEqual([
+    expect(chips.map((t) => t.replace(/\s*[+\u2212-]?\u20aa.*$/, '').trim())).toEqual([
+      'Why so high',
+      'Where to cut',
       'Income',
       'Bills',
       'Travel & admin',
@@ -132,9 +127,10 @@ test.describe('Analysis section', () => {
     await openAnalyze(page, 'real');
     const r = await page.evaluate(() => ({
       avg: window.computeAnalyze().summary.realAvg,
-      tile: document.querySelector('.an-qtile .an-a').textContent,
+      note: document.querySelector('.an-qtile .an-qn').textContent,
     }));
-    expect(r.tile.replace(/[^\d]/g, '')).toBe(String(Math.round(r.avg)));
+    // "Did I save?" leads with savings; its note carries the real spend.
+    expect(r.note.replace(/,/g, '')).toContain(String(Math.round(r.avg)));
     expect(await page.locator('.an-table thead th').count()).toBe(1 + 12 + 2);
   });
 
@@ -213,7 +209,7 @@ test.describe('Analysis section', () => {
       return {
         sum: a.cats.reduce((s, c) => s + c.floor, 0),
         floorTotal: a.summary.floorTotal,
-        tile: document.querySelectorAll('.an-qtile .an-a')[3].textContent,
+        tile: document.querySelectorAll('.an-qtile .an-a')[2].textContent,
         above: a.summary.aboveFloor,
         real: a.summary.realAvg,
       };
@@ -294,13 +290,13 @@ test.describe('Analysis section', () => {
         mean,
         n: a.summary.avgMonths.length,
         stamp: document.querySelector('.an-stamp').textContent,
-        tile: document.querySelector('.an-qtile .an-a').textContent,
+        tile: document.querySelector('.an-qtile .an-qn').textContent,
       };
     });
     expect(r.n).toBe(12);
     expect(Math.abs(r.avg - r.mean)).toBeLessThan(0.01);
     expect(r.stamp).toContain('budgeted');
-    expect(r.tile.replace(/[^\d]/g, '')).toBe(String(Math.round(r.avg)));
+    expect(r.tile.replace(/,/g, '')).toContain(String(Math.round(r.avg)));
     // Why so high in whole-year mode compares against the year's last months.
     await openSub(page, 'why');
     await expect(page.locator('.an-section')).toContainText('(budgeted)');
@@ -384,8 +380,8 @@ test.describe('Analysis section', () => {
     await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
     await page.waitForSelector('.an-tiles', { timeout: 30000 });
     const vals = await page.locator('.an-qtile .an-a').allTextContents();
-    // Real spend, A month now, Floor, Where to cut, After Feb 7: no number at all.
-    for (const i of [0, 1, 3, 4, 5]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
+    // Did I save?, What does a month cost?, My ladder, Which week?: no number at all.
+    for (const i of [0, 1, 2, 3]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
     await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
     await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
   });

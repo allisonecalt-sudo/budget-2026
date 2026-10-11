@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v65';
-const BUILD_DATE = 'Oct 11, 2026 20:35';
+const APP_VERSION = 'v66';
+const BUILD_DATE = 'Oct 11, 2026 20:44';
 
 const MONTHS = [
   'January',
@@ -10559,6 +10559,105 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
 // her on Oct 11 (lean-floor-walkthrough-2026-10-11.md). LEAN is also her
 // live floor (spend_floors), so the app reads Lean from the table and these
 // three from here until the floors table gets a level column (her go).
+// "Which week?" — one card per way 2027 could look (consultant pass, Oct 11
+// 20:42; her numbers 20:19–20:30). Net a month incl. havra'a; hours a week:
+// real (in the room) and paid, her words — Clalit 22 + Petachya 12.5, school
+// 14 real for 20 paid, gan 2 ~5 real for 8 paid, a private session ~1¼ h.
+// Driving ≈ Pisgat Ze'ev 30–40 min each way ×3, Rehovot ~50 min ×2, Neve
+// Yaakov ~30 min ×2, home visits ~1.5 h/wk (ESTIMATES). sure = a payslip
+// today · likely = agreed, not started · maybe = not offered / cancellations.
+const CHOICES: {
+  key: string;
+  label: string;
+  note: string;
+  net: number;
+  realHrs: number;
+  paidHrs: number;
+  driveHrs: number;
+  sure: number;
+  likely: number;
+  maybe: number;
+  august: string;
+}[] = [
+  {
+    key: 'clalit',
+    label: 'Clalit + Petachya — as it is now',
+    note: 'no extra hours, grants spread · ends Feb 7',
+    net: 14960,
+    realHrs: 34.5,
+    paidHrs: 44,
+    driveHrs: 6.8,
+    sure: 14960,
+    likely: 0,
+    maybe: 0,
+    august: 'both paid',
+  },
+  {
+    key: 'school',
+    label: 'Petachya + the school',
+    note: 'not offered yet · with KH (your belief): ₪16,000 net, more into funds',
+    net: 16280,
+    realHrs: 26.5,
+    paidHrs: 42,
+    driveHrs: 5.5,
+    sure: 9860,
+    likely: 0,
+    maybe: 6420,
+    august: 'both paid',
+  },
+  {
+    key: 'school2',
+    label: 'Petachya + school + 2 clients',
+    note: 'the school not offered yet',
+    net: 17280,
+    realHrs: 29,
+    paidHrs: 44.5,
+    driveHrs: 7,
+    sure: 9860,
+    likely: 0,
+    maybe: 7420,
+    august: 'clients stop',
+  },
+  {
+    key: 'all',
+    label: 'Petachya + gan 2 (Tue) + 2 clients',
+    note: 'your plan today',
+    net: 13975,
+    realHrs: 20,
+    paidHrs: 32.5,
+    driveHrs: 5.3,
+    sure: 9860,
+    likely: 3115,
+    maybe: 1000,
+    august: 'gan 2 and clients stop',
+  },
+  {
+    key: 'petgan',
+    label: 'Petachya + gan 2 (Tue, 8 hrs)',
+    note: '',
+    net: 12975,
+    realHrs: 17.5,
+    paidHrs: 30,
+    driveHrs: 3.8,
+    sure: 9860,
+    likely: 3115,
+    maybe: 0,
+    august: 'gan 2 stops',
+  },
+  {
+    key: 'pet',
+    label: 'Petachya only',
+    note: 'if it goes wrong',
+    net: 9860,
+    realHrs: 12.5,
+    paidHrs: 22,
+    driveHrs: 3.3,
+    sure: 9860,
+    likely: 0,
+    maybe: 0,
+    august: 'paid',
+  },
+];
 type LevelKey = 'temp' | 'lean' | 'middle' | 'normal';
 const LEVEL_ORDER: LevelKey[] = ['temp', 'lean', 'middle', 'normal'];
 const LEVEL_NAME: Record<LevelKey, string> = {
@@ -11272,8 +11371,6 @@ function renderAnalyzeTab(): string {
   const cashLeft = cash.liquid - _anOneOff;
   const petReal = runway(cashLeft, pet.income, s.realAvg);
   const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
-  const petNow = mNow ? runway(cashLeft, pet.income, mNow.total) : null;
-  const marginTxt = (v: number): string => (v >= 0 ? '+' + money(v) : 'short ' + money(-v));
   const margin = (v: number): string =>
     v >= 0
       ? '<span class="an-pos">+' + money(v) + '</span>'
@@ -11366,47 +11463,42 @@ function renderAnalyzeTab(): string {
     label +
     (val ? ' <b>' + val + '</b>' : '') +
     '</button>';
+  const choiceFit = (c: { net: number }): number => c.net - levelSpend;
+  const fitting = CHOICES.filter((c) => choiceFit(c) >= 0).length;
   const tiles =
-    '<div class="an-tiles">' +
-    tile('real', 'Real spend', none ? '—' : money(s.realAvg), 'a month, ' + avgSpan) +
+    '<div class="an-tiles an-tiles4">' +
     tile(
-      'now',
-      'A month now',
-      mNow ? money(mNow.total) : '—',
-      mNow ? 'bills + everyday + charity, from here on' : 'needs a complete month',
+      'real',
+      'Did I save?',
+      none ? '—' : money(savingsAvg),
+      none
+        ? 'nothing has happened yet'
+        : 'a month · real spend ' + money(s.realAvg) + ', ' + avgSpan,
     ) +
     tile(
-      'why',
-      'Why so high',
-      why ? signed(why.delta) : '—',
-      why ? wspan(why.recent) + ' vs ' + wspan(why.early) : 'needs 4 complete months',
+      'now',
+      'What does a month cost?',
+      mNow ? money(mNow.total + oneOffsLeanMo) : '—',
+      mNow ? money(mNow.total) + ' + trips & one-offs (lean plan)' : 'needs a complete month',
     ) +
     tile(
       'floor',
-      'Floor',
+      'My ladder',
       floorsLoading ? LOADING : none ? '—' : money(s.floorTotal),
-      floorsLoading
-        ? 'on its way'
-        : none
-          ? 'nothing has happened yet'
-          : 'the least a month could cost',
-    ) +
-    tile(
-      'cut',
-      'Where to cut',
-      floorsLoading || none ? '—' : money(Math.max(0, s.aboveFloor)),
-      'a month above your floor',
+      floorsLoading || none
+        ? ''
+        : 'Lean · Temp ' + money(levelTotal('temp')) + ' · Normal ' + money(levelTotal('normal')),
     ) +
     tile(
       'safe',
-      'After Feb 7',
-      floorsLoading ? LOADING : planNow ? marginTxt(planNow.margin) : '—',
-      planNow && petNow
-        ? 'your plan vs a month now · Petachya only: ' + marginTxt(petNow.margin)
-        : 'needs a complete month',
+      'Which week?',
+      floorsLoading || none ? '—' : fitting + ' of ' + CHOICES.length,
+      floorsLoading || none ? '' : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
     ) +
     '</div>' +
     '<div class="an-chips"><span class="an-closer">Look closer</span>' +
+    chip('why', 'Why so high', why ? signed(why.delta) : '') +
+    chip('cut', 'Where to cut', floorsLoading || none ? '' : money(Math.max(0, s.aboveFloor))) +
     chip('income', 'Income', none ? '' : money(avgOf((m) => m.income)) + '/mo') +
     chip(
       'bills',
@@ -12312,11 +12404,15 @@ function renderAnalyzeTab(): string {
       '</div>';
     const say =
       levelPills +
-      '<p class="an-say">At <b>' +
+      '<p class="an-say">' +
+      fitting +
+      ' of ' +
+      CHOICES.length +
+      ' ways your week could look cover <b>' +
       lvName +
       '</b> (' +
       money(levelSpend) +
-      ' a month): ' +
+      ' a month). ' +
       (fit(lowest) >= 0
         ? 'every mix covers it — even ' + esc(lowest.label) + ' (' + margin(fit(lowest)) + ').'
         : esc(lowest.label) +
@@ -12444,7 +12540,66 @@ function renderAnalyzeTab(): string {
           '</b></span></div>',
       ).join('') +
       '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ₪16,280, net + funds ₪18,360.</div></div>';
-    return say + table + jobs + oneOff + cashLine + notes;
+    const card = (c: (typeof CHOICES)[number]): string => {
+      const hrs = c.realHrs + c.driveHrs;
+      const perHr = c.net / (hrs * 4.33);
+      const rw = runway(cashLeft, c.net, levelSpend);
+      return (
+        '<div class="an-card2' +
+        (c.key === 'all' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
+        '"><div class="an-c2-head"><span class="an-c2-label">' +
+        esc(c.label) +
+        '</span>' +
+        (c.note ? '<span class="an-sublbl">' + esc(c.note) + '</span>' : '') +
+        '</div><div class="an-c2-net">' +
+        money(c.net) +
+        '<span class="an-c2-unit"> a month</span></div>' +
+        '<div class="an-c2-lines">' +
+        '<div>⏱ <b>' +
+        Math.round(hrs) +
+        ' h</b> of your week · ' +
+        c.realHrs +
+        ' working + ~' +
+        c.driveHrs +
+        ' driving (' +
+        c.paidHrs +
+        ' paid)</div>' +
+        '<div>₪ <b>' +
+        money(perHr) +
+        '</b> per hour of your week</div>' +
+        '<div>✓ sure ' +
+        money(c.sure) +
+        (c.likely ? ' · likely ' + money(c.likely) : '') +
+        (c.maybe ? ' · maybe ' + money(c.maybe) : '') +
+        '</div>' +
+        '<div>☀️ August: ' +
+        esc(c.august) +
+        '</div>' +
+        '</div><div class="an-c2-save">At ' +
+        lvName +
+        ': ' +
+        (rw.margin >= 0
+          ? '<span class="an-pos">save ' + money(rw.margin) + ' a month</span>'
+          : '<span class="an-short">short ' +
+            money(-rw.margin) +
+            '</span>' +
+            (rw.months !== null
+              ? ' · cash lasts ' + (rw.months > 60 ? 'years' : rw.months + ' mo')
+              : '')) +
+        '</div></div>'
+      );
+    };
+    const cards =
+      '<div class="an-block"><div class="an-h">Which week? · after Feb 7 · net a month</div><div class="an-cards2">' +
+      CHOICES.map(card).join('') +
+      '</div><div class="an-legend">Hours and driving are your words + estimates; the school and gan 2 aren’t signed. Nothing here writes to your budget.</div></div>';
+    const allMixes =
+      '<details class="an-how"><summary>Every mix vs ' +
+      lvName +
+      ', with months of cash</summary><div>' +
+      table +
+      '</div></details>';
+    return say + cards + allMixes + jobs + oneOff + cashLine + notes;
   };
 
   // ── 6 · Income — why each month was what it was ───────────────────────
@@ -12842,12 +12997,12 @@ function renderAnalyzeTab(): string {
                     : safeSection();
   void petReal;
   const titles: Record<AnSub, string> = {
-    real: 'What do I really spend?',
-    now: 'What does a month cost now?',
+    real: 'Did I save?',
+    now: 'What does a month cost?',
     why: 'How did it get so high?',
-    floor: 'What’s the least I could spend?',
+    floor: 'My ladder — what could a month cost?',
     cut: 'Where can I cut?',
-    safe: 'After Feb 7 — am I OK?',
+    safe: 'Which week? — after Feb 7',
     income: 'Why did I make what I made?',
     bills: 'What do my bills really look like?',
     pots: 'Travel & admin — this year vs next',
