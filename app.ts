@@ -57,8 +57,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v58';
-const BUILD_DATE = 'Oct 11, 2026 16:59';
+const APP_VERSION = 'v59';
+const BUILD_DATE = 'Oct 11, 2026 17:01';
 
 const MONTHS = [
   'January',
@@ -10622,7 +10622,166 @@ const TAG_LABEL: Record<string, string> = {
 // 2026-10-11/5-income-why.md, Oct 11). Keyed by year → month. A month with
 // no entry shows the app's numbers only, never a guessed reason.
 type IncomeWhy = { clalit?: string[]; petachya?: string[]; private?: string[]; other?: string[] };
-const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {};
+const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
+  2026: {
+    1: {
+      clalit: [
+        'Floor month: Dec-2025 slip, base + Oct premium',
+        'No extra hours yet (they started in March)',
+        'Old travel rate (re-set Jan 2026); rest of gap unknown',
+      ],
+      petachya: ['December salary at ₪112/hr, fixed monthly pay'],
+      private: ['2 cash-family sessions in Dec 2025 = ₪714', 'minus the accountant ₪200'],
+      other: ['Old job ₪409 (ended) + family ₪410', 'What each was for: unknown'],
+    },
+    2: {
+      clalit: [
+        'Jan salary carries מענק קליטה ושימור ₪5,292 gross',
+        'Likely also the ₪1,972 travel retro (slip unknown)',
+        'No extra hours',
+      ],
+      petachya: ['January salary at ₪112/hr'],
+      private: ['2 Jan sessions (1 cash, 1 bank) = ₪739.50', 'minus the accountant ₪200'],
+    },
+    3: {
+      clalit: [
+        'Feb slip: ₪8,471 gross → ₪4,428 net',
+        'Base ₪5,113 + Dec premium + travel, no extra hrs',
+        "The cleanest 'base month' on file",
+      ],
+      petachya: ['Feb slip: ₪11,477 gross → ₪9,254 net'],
+      private: [
+        '6 Feb sessions (2 cash, 4 bank) = ₪2,244 − ₪200',
+        'Last full month before the war (Feb 28)',
+      ],
+    },
+    4: {
+      clalit: [
+        'Floor month: March slip, base + Jan premium',
+        '15 sick hrs in Jan cut premium ₪486 (lands here?)',
+        'Pesach שי לחג may be taxed here (no cash)',
+      ],
+      petachya: ['March salary; no war dip = fixed salary'],
+      private: ['War (Feb 28 – Apr 9): 1 session in March = ₪357', 'minus the accountant ₪200'],
+    },
+    5: {
+      clalit: [
+        'April salary: היקף משרה ~₪10,000 gross',
+        '= ₪6,000 April half + ~₪4K catch-up for Jun–Dec 2025',
+        '+ March extra hours: 4 hrs ≈ ₪800 gross',
+        "Catch-up won't repeat; without it ≈ ₪8,500 net",
+      ],
+      petachya: ["April salary, year's low", 'Guess: all of Pesach off → fewer travel days'],
+      private: [
+        'War + Pesach: 2 April sessions = ₪765 (+₪12 edit)',
+        'minus the accountant ₪200, minus ₪100 biz spending',
+      ],
+    },
+    6: {
+      clalit: [
+        'May slip: April extra hours 24 hrs = ₪4,960 gross',
+        '+ March premium ₪3,022.83 + base ₪5,113',
+        'First full extra-hours month (~₪3,400 over floor)',
+      ],
+      petachya: ['May salary at ₪112/hr'],
+      private: [
+        '7 May sessions (2 cash, 5 bank) = ₪2,626.50',
+        'minus the accountant ₪200, minus ₪254 biz spending',
+      ],
+    },
+    7: {
+      clalit: [
+        'June slip: May extra hours 20 hrs = ₪4,040 gross',
+        '+ דמי הבראה (June, ~₪1,400 est.)',
+        '+ השתלמות ₪390 one-off, the only tax-free line',
+        'Below June: 4 fewer extra hours',
+      ],
+      petachya: ['June salary at ₪112/hr'],
+      private: ['Peak: 8 June sessions (2 cash, 6 bank) = ₪3,009', 'minus the accountant ₪200'],
+    },
+    8: {
+      clalit: [
+        'July slip: ₪14,570 gross → ₪7,580 net (48% off)',
+        'Carries קצובת ביגוד (~₪1,340, inferred)',
+        '+ June extra hours (~22 planned, not read)',
+      ],
+      petachya: ['July salary at ₪112/hr'],
+      private: [
+        '5 July sessions (1 cash, 4 bank) = ₪1,887 (+₪60 edit)',
+        'minus the accountant ₪200; trips from Jul 24',
+      ],
+    },
+    9: {
+      clalit: [
+        'Aug slip: base + June premium + July extra hours',
+        'July hours count unknown (trips from Jul 24)',
+        'תיקון פנסיה −₪143 · ועד ₪148 · expenses ₪663',
+        '~₪960 below Aug: no ביגוד',
+      ],
+      petachya: [
+        'August salary, ₪1,730 over her ₪9,300 estimate',
+        "Why: unknown — havra'a? ₪120 retro? (Sep 9 tlush)",
+      ],
+      private: ['No August sessions (Salzburg + USA, Aug 5–23)', "Only the accountant's ₪200 fee"],
+      other: ['₪22 entered Oct 2; source unknown'],
+    },
+    10: {
+      clalit: [
+        'Sep slip: base + July premium + Aug extra hours',
+        'Aug: 20 hrs scheduled; Aug 26 evals unconfirmed',
+        '₪490 below Sep: RH שי לחג tax? fewer Aug hrs?',
+      ],
+      petachya: [
+        'September salary, entered Oct 8',
+        'First month of ₪120 terms but looks like ₪112',
+        'Raise not on it yet, or chag travel days? Unknown',
+      ],
+      private: [
+        'Sep sessions to Sep 17 (1 cash, 4 bank) = ₪1,887',
+        'minus the accountant ₪200; Sep 24 session not in it',
+      ],
+    },
+    11: {
+      clalit: [
+        'Oct salary carries מענק היקף ₪6,000 gross',
+        '+ base + Aug premium (vacation month, still paid)',
+        'Few/no Sep extra hours: stopped Sep 6–7',
+        'Her estimate: 9,000 → 7,100 on Sep 6',
+      ],
+      petachya: [
+        'October salary, her Oct 8 estimate',
+        "Above the ₪9,700 '₪120' figure — why unknown",
+      ],
+      private: [
+        'October sessions booked so far ₪1,700 − the accountant ₪200',
+        'Sukkot to Oct 3; month not over',
+      ],
+      other: ['Gan 2 not in the app until its first slip (her rule)'],
+    },
+    12: {
+      clalit: [
+        'Nov salary: base + Sep premium, zero extra hours',
+        'A floor month; she set 5,600 → 4,200 on Sep 6',
+        'Nov 9 day off = vacation, free (still earns premium)',
+      ],
+      petachya: ['November salary at ₪120/hr, her estimate'],
+      private: ['₪200 placeholder − the accountant ₪200 = 0 (her convention)'],
+      other: ['Gan 2 not in the app until its first slip (her rule)'],
+    },
+  },
+};
+// What the year shows, from the same read.
+const INCOME_PATTERNS: Record<number, string[]> = {
+  2026: [
+    'A plain Clalit month (no extra hours, no grant) nets about ₪4,100 — Jan, Mar, Apr. Gross ≈ ₪8,500; about 52% reaches the bank.',
+    'Extra hours added about ₪2,500–3,400 net a month. They show in the Jun–Oct budgets (Apr–Aug work) and stopped Sep 6–7.',
+    'Grant months: Feb (קליטה ₪5,292) · May (היקף ₪6,000 + a one-off ~₪4K catch-up = the year’s top, ₪11,694) · Nov (היקף ₪6,000). Smaller: Jul (הבראה) · Aug (ביגוד).',
+    'Premiot never explain a swing — they sit at the ceiling every month (~₪2,800–2,970 gross).',
+    'Petachya is flat (₪8,845–9,253) except September (₪11,030 — why is still unknown).',
+    'Private follows your calendar: the war (Apr, May) and the USA trip (Sep) are the near-zero months. The Biz tab books a month late.',
+    'Timing: a budget month holds last month’s salary; Clalit extra hours land one more month later, premiot two.',
+  ],
+};
 
 // Her 2027 plan for the pots (second-brain projects/budget-app/2027-
 // spending-plan-2026-09-04.md §3), her words beside each. Not in the app yet
@@ -10767,6 +10926,10 @@ function renderAnalyzeTab(): string {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/"/g, '&quot;');
+  // Hebrew words inside an English line keep their own direction (קליטה,
+  // היקף) — without <bdi> the bidi algorithm reorders the shekels around them.
+  const bidi = (t: unknown): string =>
+    esc(t).replace(/[֐-׿][֐-׿\s"'׳״-]*[֐-׿]|[֐-׿]/g, '<bdi>$&</bdi>');
   // Whole year (v57): every month, the ones still ahead counted as budgeted —
   // and every label says which months are budgeted, never passed off as real.
   const whole = win === WHOLE_YEAR;
@@ -11764,7 +11927,7 @@ function renderAnalyzeTab(): string {
     const avgSrc = (p: (m: MonthRow) => number): number =>
       inWin.length ? inWin.reduce((a, m) => a + p(m), 0) / inWin.length : 0;
     const total = (m: MonthRow): number => srcs.reduce((a, x) => a + x.pick(m), 0);
-    const whyYear = INCOME_WHY[state.currentYear] || {};
+    const whyYear: Record<number, IncomeWhy> = INCOME_WHY[state.currentYear] || {};
     const say =
       '<p class="an-say"><b>' +
       money(avgOf((m) => m.income)) +
@@ -11813,7 +11976,7 @@ function renderAnalyzeTab(): string {
                 (x) =>
                   row(x.label, money(x.pick(m)), 'ym-row-sub') +
                   (w[x.key] || [])
-                    .map((t) => '<div class="an-why an-why-in">' + esc(t) + '</div>')
+                    .map((t) => '<div class="an-why an-why-in">' + bidi(t) + '</div>')
                     .join(''),
               )
               .join('') || '<div class="an-why">Nothing entered for this month yet.</div>';
@@ -11828,9 +11991,16 @@ function renderAnalyzeTab(): string {
         .join('') +
       '<div class="an-legend">italic = expected, not landed yet · ◉ this month · private here is net of the accountant, before tax</div></div>';
     const hasWhy = Object.keys(whyYear).length > 0;
+    const pats = INCOME_PATTERNS[state.currentYear] || [];
+    const patBlock = pats.length
+      ? '<div class="an-block"><div class="an-h">What the year shows</div><ul class="an-ul an-pats">' +
+        pats.map((t) => '<li>' + bidi(t) + '</li>').join('') +
+        '</ul></div>'
+      : '';
     return (
       say +
       range +
+      patBlock +
       list +
       (hasWhy
         ? how(

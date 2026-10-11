@@ -5086,3 +5086,8 @@ input.an-oneoff-in {
     display: none;
   }
 }
+
+.an-pats {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
