@@ -785,3 +785,190 @@ export function runway(
   const c = Math.max(0, n(cash));
   return { margin, months: Math.round((c / -margin) * 10) / 10 };
 }
+
+// ── v58: Bills, line by line (her ask 2026-10-11: "a better grasp on recurring") ──
+
+/**
+ * One housing/recurring bill across the year. Renamed lines are ONE bill:
+ * lines in the same category that share a first word are merged ("Claude
+ * Pro" → "Claude Code Max" → "Claude Max"), labelled by the newest name.
+ */
+export interface BillLine {
+  key: string;
+  label: string;
+  category: string;
+  /** Every name it went by this year, oldest first. */
+  names: string[];
+  /** Amount per month_num 1–12 (0 = no line that month). */
+  byMonth: number[];
+  /** Amount in the reference month (current, else the last month). */
+  now: number;
+  /** First month with money, and its amount. */
+  firstMonth: number | null;
+  first: number;
+  /** Last month with money. */
+  lastMonth: number | null;
+  annual: number;
+  /**
+   * ended   — money before the reference month, none from it on
+   * new     — first money after January
+   * changed — the amount moved during the year (by more than ₪1)
+   * steady  — the same every month it ran
+   */
+  status: 'ended' | 'new' | 'changed' | 'steady';
+  /** Month-to-month moves: from → to, starting that month. */
+  changes: { month: number; from: number; to: number }[];
+}
+export function billLines(
+  budgetItems: AnalyzeBudgetItem[],
+  months: { id: string; month_num: number }[],
+  fixedKeys: string[],
+  refMonth: number,
+): BillLine[] {
+  const numById: Record<string, number> = {};
+  for (const m of months) numById[m.id] = m.month_num;
+  const first = (label: unknown): string => lineKey(label).split(/[\s\-–(]/)[0] || '(unnamed)';
+  const map: Record<string, BillLine & { lastSeen: number }> = {};
+  for (const b of budgetItems) {
+    if (!fixedKeys.includes(b.category)) continue;
+    const mn = numById[b.month_id];
+    if (!mn) continue;
+    const k = b.category + '|' + first(b.label);
+    const line = (map[k] ||= {
+      key: k,
+      label: String(b.label || '').trim() || '(unnamed)',
+      category: b.category,
+      names: [],
+      byMonth: Array(12).fill(0),
+      now: 0,
+      firstMonth: null,
+      first: 0,
+      lastMonth: null,
+      annual: 0,
+      status: 'steady',
+      changes: [],
+      lastSeen: 0,
+    });
+    const name = String(b.label || '').trim();
+    if (name && !line.names.includes(name)) line.names.push(name);
+    if (mn >= line.lastSeen && name) {
+      line.label = name.replace(/\s*\(?\d+\s*\/\s*\d+\)?\s*$/, '');
+      line.lastSeen = mn;
+    }
+    line.byMonth[mn - 1] += n(b.amount);
+  }
+  const out: BillLine[] = [];
+  for (const k of Object.keys(map)) {
+    const { lastSeen: _ls, ...line } = map[k];
+    void _ls;
+    line.byMonth = line.byMonth.map((v) => ag(v));
+    const withMoney = line.byMonth
+      .map((v, i) => ({ v, m: i + 1 }))
+      .filter((x) => Math.round(x.v) !== 0);
+    line.annual = ag(line.byMonth.reduce((s, v) => s + v, 0));
+    line.now = line.byMonth[refMonth - 1] || 0;
+    line.firstMonth = withMoney.length ? withMoney[0].m : null;
+    line.first = withMoney.length ? withMoney[0].v : 0;
+    line.lastMonth = withMoney.length ? withMoney[withMoney.length - 1].m : null;
+    for (let i = 1; i < withMoney.length; i++) {
+      const a = withMoney[i - 1];
+      const b = withMoney[i];
+      if (Math.abs(b.v - a.v) > 1) line.changes.push({ month: b.m, from: a.v, to: b.v });
+    }
+    const endedLine =
+      line.lastMonth !== null &&
+      line.lastMonth < refMonth &&
+      line.byMonth.slice(refMonth - 1).every((v) => Math.round(v) === 0);
+    line.status = endedLine
+      ? 'ended'
+      : line.firstMonth !== null && line.firstMonth > 1
+        ? 'new'
+        : line.changes.length
+          ? 'changed'
+          : 'steady';
+    if (line.firstMonth !== null) out.push(line);
+  }
+  out.sort((a, b) => b.annual - a.annual || a.label.localeCompare(b.label));
+  return out;
+}
+
+// ── v58: Travel & admin, this year vs next (her ask 2026-10-11) ───────────
+
+export interface PotItemIn {
+  id: string;
+  year: number;
+  label: string;
+  projected_amount: unknown;
+  category?: string | null;
+  is_estimate?: boolean | null;
+}
+export interface PotPaidIn {
+  /** travel: the trip label (travel_payments.destination); admin: the item id. */
+  ref: string;
+  year: number;
+  amount: unknown;
+  paid: boolean;
+}
+export interface PotRow {
+  label: string;
+  group: string;
+  planned: number;
+  paid: number;
+  estimate: boolean;
+}
+export interface PotYear {
+  year: number;
+  rows: PotRow[];
+  planned: number;
+  paid: number;
+  byGroup: { group: string; planned: number; paid: number }[];
+}
+/**
+ * One pot (travel or admin) for one year: each item's plan and what has been
+ * paid against it, grouped (admin by its category; travel all "Trips").
+ * Payments that match no item are kept as their own row, never dropped.
+ */
+export function potYear(
+  year: number,
+  items: PotItemIn[],
+  paid: PotPaidIn[],
+  matchBy: 'label' | 'id',
+): PotYear {
+  const its = items.filter((i) => i.year === year);
+  const pays = paid.filter((p) => p.year === year && p.paid);
+  const used = new Set<PotPaidIn>();
+  const rows: PotRow[] = its.map((i) => {
+    const mine = pays.filter((p) => (matchBy === 'id' ? p.ref === i.id : p.ref === i.label));
+    mine.forEach((p) => used.add(p));
+    return {
+      label: i.label,
+      group: matchBy === 'label' ? 'Trips' : String(i.category || 'Other'),
+      planned: ag(n(i.projected_amount)),
+      paid: ag(mine.reduce((s, p) => s + n(p.amount), 0)),
+      estimate: !!i.is_estimate,
+    };
+  });
+  const loose = pays.filter((p) => !used.has(p));
+  if (loose.length)
+    rows.push({
+      label: 'Paid, not tied to an item',
+      group: matchBy === 'label' ? 'Trips' : 'Other',
+      planned: 0,
+      paid: ag(loose.reduce((s, p) => s + n(p.amount), 0)),
+      estimate: false,
+    });
+  rows.sort((a, b) => Math.max(b.planned, b.paid) - Math.max(a.planned, a.paid));
+  const groups: Record<string, { group: string; planned: number; paid: number }> = {};
+  for (const r of rows) {
+    const g = (groups[r.group] ||= { group: r.group, planned: 0, paid: 0 });
+    g.planned = ag(g.planned + r.planned);
+    g.paid = ag(g.paid + r.paid);
+  }
+  return {
+    year,
+    rows,
+    planned: ag(rows.reduce((s, r) => s + r.planned, 0)),
+    paid: ag(rows.reduce((s, r) => s + r.paid, 0)),
+    byGroup: Object.values(groups).sort((a, b) => b.planned - a.planned),
+  };
+}

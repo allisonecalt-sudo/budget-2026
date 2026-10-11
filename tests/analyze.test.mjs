@@ -29,6 +29,8 @@ const {
   runway,
   isRentLabel,
   WHOLE_YEAR,
+  billLines,
+  potYear,
 } = await import(pathToFileURL(compiled).href);
 
 // A stored floor row as the math sees it.
@@ -546,4 +548,56 @@ test('whyBridge whole year: first months vs the LAST months of the year, budgete
   assert.equal(whyBridge(r, ['rent']), null);
   // A year with nothing complete has nothing real to compare against.
   assert.equal(whyBridge(run({ todayMonth: 0 }), [], true), null);
+});
+
+// ── v58: Bills line by line · Travel & admin this year vs next ───────────
+
+test('billLines: renamed lines merge, ended / new / changed are read from the months', () => {
+  const ms = [1, 2, 3, 4].map((n) => ({ id: 'm' + n, month_num: n }));
+  const items = [
+    { month_id: 'm1', category: 'recurring', amount: 290, label: 'Claude Pro' },
+    { month_id: 'm3', category: 'recurring', amount: 610, label: 'Claude Max' },
+    { month_id: 'm4', category: 'recurring', amount: 310, label: 'Claude Max' },
+    { month_id: 'm1', category: 'recurring', amount: 456, label: 'Mattress (6/12)' },
+    { month_id: 'm2', category: 'recurring', amount: 456, label: 'Mattress (7/12)' },
+    { month_id: 'm2', category: 'housing', amount: 22, label: 'Rental insurance' },
+    { month_id: 'm3', category: 'housing', amount: 22, label: 'Rental insurance' },
+    { month_id: 'm1', category: 'housing', amount: 2125, label: 'Rent' },
+    { month_id: 'm3', category: 'housing', amount: 3200, label: 'Rent' },
+    { month_id: 'm1', category: 'groceries', amount: 999, label: 'not a bill' },
+  ];
+  const bl = billLines(items, ms, ['housing', 'recurring'], 3);
+  const by = Object.fromEntries(bl.map((l) => [l.label, l]));
+  assert.equal(by['Claude Max'].names.length, 2); // one bill, two names
+  assert.equal(by['Claude Max'].annual, 1210);
+  assert.equal(by['Claude Max'].now, 610);
+  assert.equal(by['Mattress'].status, 'ended');
+  assert.equal(by['Rental insurance'].status, 'new');
+  assert.equal(by['Rent'].status, 'changed');
+  assert.deepEqual(by['Rent'].changes, [{ month: 3, from: 2125, to: 3200 }]);
+  assert.ok(!bl.some((l) => l.label === 'not a bill'));
+  assert.equal(bl[0].label, 'Rent'); // largest year first
+});
+
+test('potYear: items with what was paid, grouped; unmatched payments are kept, never dropped', () => {
+  const items = [
+    { id: 'a', year: 2026, label: 'Austria', projected_amount: 9000 },
+    { id: 'b', year: 2027, label: 'Next trip', projected_amount: 3000 },
+  ];
+  const paid = [
+    { ref: 'Austria', year: 2026, amount: 9500, paid: true },
+    { ref: 'Austria', year: 2026, amount: 400, paid: false }, // not paid → not counted
+    { ref: 'Somewhere', year: 2026, amount: 120, paid: true }, // no item → own row
+  ];
+  const t = potYear(2026, items, paid, 'label');
+  assert.equal(t.planned, 9000);
+  assert.equal(t.paid, 9620);
+  assert.ok(t.rows.some((r) => r.label === 'Paid, not tied to an item' && r.paid === 120));
+  const admin = potYear(
+    2026,
+    [{ id: 'x', year: 2026, label: 'Garage', projected_amount: 3500, category: 'Car' }],
+    [{ ref: 'x', year: 2026, amount: 2333, paid: true }],
+    'id',
+  );
+  assert.deepEqual(admin.byGroup, [{ group: 'Car', planned: 3500, paid: 2333 }]);
 });

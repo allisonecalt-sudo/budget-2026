@@ -10,7 +10,7 @@ const { test, expect } = require('@playwright/test');
 
 test.use({ serviceWorkers: 'block' });
 
-const SUBS = ['real', 'why', 'floor', 'cut', 'safe'];
+const SUBS = ['real', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
 
 async function openApp(page) {
   await page.route('**/rest/v1/**', (route) =>
@@ -89,7 +89,16 @@ test.describe('Analysis section', () => {
   }) => {
     await openAnalyze(page, 'real');
     const qs = await page.locator('.an-qtile .an-q').allTextContents();
-    expect(qs).toEqual(['Real spend', 'Why so high', 'Floor', 'Where to cut', 'If it goes wrong']);
+    expect(qs).toEqual([
+      'Real spend',
+      'Why so high',
+      'Floor',
+      'Where to cut',
+      'If it goes wrong',
+      'Income',
+      'Bills',
+      'Travel & admin',
+    ]);
     for (const [i, sub] of SUBS.entries()) {
       await page.locator('.an-qtile').nth(i).click();
       await expect(page.locator('.an-section')).toHaveAttribute('data-sub', sub);
@@ -106,7 +115,7 @@ test.describe('Analysis section', () => {
       expect(red, `red text in ${sub}`).toBe(false);
     }
     // The choice is remembered per device.
-    expect(await page.evaluate(() => localStorage.getItem('analyzeSub'))).toBe('safe');
+    expect(await page.evaluate(() => localStorage.getItem('analyzeSub'))).toBe('pots');
   });
 
   test('Real spend: tile = summary average; desktop grid has 12 months + Avg + Year', async ({
@@ -288,6 +297,59 @@ test.describe('Analysis section', () => {
     await page.locator('.an-qtile').nth(1).click();
     await expect(page.locator('.an-section')).toContainText('(budgeted)');
     await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
+  });
+
+  test('Bills: the tile is this month’s bills, and every line adds up to it', async ({ page }) => {
+    await openAnalyze(page, 'bills');
+    const r = await page.evaluate(() => {
+      const a = window.computeAnalyze();
+      const ref = a.summary.referenceMonth || 12;
+      const keys = window.CATEGORIES.filter((c) => c.hasLines && !c.hasTab).map((c) => c.key);
+      const bl = window.billLines(
+        window.state.yearData.budgetItems,
+        window.state.months,
+        keys,
+        ref,
+      );
+      return {
+        linesNow: bl.reduce((s, l) => s + l.now, 0),
+        linesYear: bl.reduce((s, l) => s + l.annual, 0),
+        fixedNow: a.months.find((m) => m.month_num === ref).fixed,
+        tile: document.querySelectorAll('.an-qtile .an-a')[6].textContent,
+        rows: document.querySelectorAll('.an-section .an-open').length,
+      };
+    });
+    // Bills = the lines; the month's fixed can only be higher when a payment beat its line.
+    expect(r.fixedNow + 0.01).toBeGreaterThanOrEqual(r.linesNow);
+    expect(r.tile.replace(/[^\d]/g, '')).toBe(String(Math.round(r.fixedNow)));
+    expect(r.rows).toBeGreaterThan(5);
+  });
+
+  test('Travel & admin: this year matches the Travel and Admin tabs’ items', async ({ page }) => {
+    await openAnalyze(page, 'pots');
+    await page.waitForFunction(() => !!window.state.potsCmp, null, { timeout: 30000 });
+    const r = await page.evaluate(() => {
+      const pc = window.state.potsCmp;
+      return {
+        years: pc.years,
+        year: window.state.currentYear,
+        travelPlanned: pc.travel[0].planned,
+        travelItems: (window.state.travel.items || []).reduce(
+          (s, i) => s + (Number(i.projected_amount) || 0),
+          0,
+        ),
+        adminPlanned: pc.admin[0].planned,
+        adminItems: (window.state.admin.items || []).reduce(
+          (s, i) => s + (Number(i.projected_amount) || 0),
+          0,
+        ),
+        text: document.querySelector('.an-section').textContent,
+      };
+    });
+    expect(r.years).toEqual([r.year, r.year + 1]);
+    if (r.travelItems) expect(Math.abs(r.travelPlanned - r.travelItems)).toBeLessThan(1);
+    if (r.adminItems) expect(Math.abs(r.adminPlanned - r.adminItems)).toBeLessThan(1);
+    expect(r.text).toContain(String(r.year + 1));
   });
 
   test('phone width: no sideways scroll on any section, tiles two across', async ({ page }) => {

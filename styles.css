@@ -5039,3 +5039,50 @@ input.an-oneoff-in {
     line-height: 1.25;
   }
 }
+
+/* v58 · "Look closer" — Income · Bills · Travel & admin, a quieter row */
+.an-tiles2 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: -0.4rem 0 1rem;
+  align-items: stretch;
+}
+.an-closer {
+  grid-column: 1 / -1;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+.an-tiles2 .an-qtile {
+  background: var(--surface);
+  box-shadow: none;
+  padding: 0.55rem 0.7rem;
+}
+.an-tiles2 .an-qtile.active {
+  padding: calc(0.55rem - 1px) calc(0.7rem - 1px);
+}
+.an-tiles2 .an-a {
+  font-size: 1rem;
+}
+.an-why-in {
+  margin: -0.1rem 0 0.3rem 1.2rem;
+}
+@media (max-width: 900px) {
+  .an-tiles2 .an-qtile:last-child {
+    grid-column: auto;
+  }
+}
+@media (max-width: 600px) {
+  .an-tiles2 {
+    gap: 0.4rem;
+  }
+  .an-tiles2 .an-a {
+    font-size: 0.9rem;
+  }
+  .an-tiles2 .an-qn {
+    display: none;
+  }
+}
