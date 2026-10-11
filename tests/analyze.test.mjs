@@ -16,8 +16,19 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const compiled = resolve(here, '..', 'dist', 'lib', 'analyze.js');
 assert.ok(existsSync(compiled), 'dist/lib/analyze.js is missing — run `npm run build` first.');
-const { analyzeYear, pickAvgMonths, lineKey, monthStatus, catKind, clampAvgN, cleanExcluded } =
-  await import(pathToFileURL(compiled).href);
+const {
+  analyzeYear,
+  pickAvgMonths,
+  lineKey,
+  monthStatus,
+  catKind,
+  clampAvgN,
+  cleanExcluded,
+  yearTabGap,
+  whyBridge,
+  runway,
+  isRentLabel,
+} = await import(pathToFileURL(compiled).href);
 
 // A stored floor row as the math sees it.
 const F = (amount, avgN = 3, excluded = []) => ({ amount, avgN, excluded });
@@ -433,4 +444,77 @@ test('fixed lines: annual = sum across the year, dead lines flagged, sorted by a
   assert.equal(mattress.subcategory, 'tashlumim');
   const tennis = lines[3];
   assert.equal(tennis.dead, true);
+});
+
+// ── v56: the Analysis section ────────────────────────────────────────────
+
+test('parts: the why-so-high drivers sum to real in every month', () => {
+  for (const m of run().months) {
+    const sum = Object.values(m.parts).reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(sum - m.real) < 0.01, `month ${m.month_num}: ${sum} vs ${m.real}`);
+  }
+});
+
+test('parts: rent is its own driver; a line with no money from the reference month on has ENDED', () => {
+  const [jan, , mar] = run().months;
+  assert.equal(jan.parts.rent, 2000);
+  assert.equal(jan.parts.housing, 100); // water: the rest of housing
+  // Mattress 300 in Jan–Feb, 0 from Mar (the reference month) → ended.
+  // Recurring in Jan counts the ₪350 payment; 300 of it is the ended line.
+  assert.equal(jan.parts.ended, 300);
+  assert.equal(jan.parts.recurring, 50);
+  assert.equal(mar.parts.ended || 0, 0);
+  assert.equal(isRentLabel('Rent'), true);
+  assert.equal(isRentLabel('Rent (Sep)'), true);
+  assert.equal(isRentLabel('Rental insurance'), false);
+});
+
+test('parts: a renamed line is not ended (Claude Pro → Claude Max is one bill)', () => {
+  const lines = [
+    { month_id: 'm1', category: 'recurring', amount: 290, label: 'Claude Pro' },
+    { month_id: 'm3', category: 'recurring', amount: 610, label: 'Claude Max' },
+    { month_id: 'm4', category: 'recurring', amount: 310, label: 'Claude Max' },
+  ];
+  const [jan] = run({ budgetItems: lines, txns: [] }).months;
+  assert.equal(jan.parts.ended || 0, 0);
+  assert.equal(jan.parts.recurring, 290);
+});
+
+test('yearTabGap: the Year tab ÷12 average, and the three effects that bridge to it exactly', () => {
+  for (const avgWindow of [0, 1]) {
+    const r = run({ avgWindow });
+    const g = yearTabGap(r, 4);
+    // Direct: complete months at real, open months with envelopes as logged.
+    const direct =
+      r.months.reduce(
+        (s, m) =>
+          s + (m.status === 'past' ? m.real : m.fixed + m.envelopeActual + m.pots + m.charity),
+        0,
+      ) / 4;
+    assert.ok(Math.abs(g.yearTabAvg - direct) < 0.01);
+    const bridged = g.windowAvg + g.windowEffect + g.envEffect + g.otherEffect;
+    assert.ok(Math.abs(bridged - g.yearTabAvg) < 0.02, `${bridged} vs ${g.yearTabAvg}`);
+    assert.deepEqual(g.openMonths, [3, 4]);
+  }
+  // A year with nothing complete has no gap to explain.
+  assert.equal(yearTabGap(run({ todayMonth: 0 })), null);
+});
+
+test('whyBridge: early vs recent, rows sum to the difference; needs 4+ complete months', () => {
+  assert.equal(whyBridge(run(), []), null); // 2 complete months
+  const r = run({ todayMonth: 13 });
+  const w = whyBridge(r, ['rent', 'ended']);
+  assert.deepEqual(w.early, [1, 2]);
+  assert.deepEqual(w.recent, [3, 4]);
+  assert.equal(w.rows[0].key, 'rent'); // her order first, then the rest
+  const sum = w.rows.reduce((s, x) => s + x.delta, 0);
+  assert.ok(Math.abs(sum - w.delta) < 0.05, `${sum} vs ${w.delta}`);
+  assert.ok(w.earlySavingsRate > 0);
+});
+
+test('runway: covered → no drawdown; short → months of cash; no cash → 0', () => {
+  assert.deepEqual(runway(10000, 12000, 9000), { margin: 3000, months: null });
+  assert.deepEqual(runway(10000, 8000, 10000), { margin: -2000, months: 5 });
+  assert.deepEqual(runway(-500, 8000, 10000), { margin: -2000, months: 0 });
+  assert.deepEqual(runway(10000, 'x', 3000), { margin: -3000, months: 3.3 });
 });

@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
 import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
-import { analyzeYear } from './lib/analyze.js';
+import { analyzeYear, yearTabGap, whyBridge, runway } from './lib/analyze.js';
 import type { AnalyzeCatStat, AnalyzeFloorIn, AnalyzeMonth, AnalyzeResult } from './lib/analyze.js';
 
 declare global {
@@ -39,8 +39,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v55';
-const BUILD_DATE = 'Sep 24, 2026 15:45';
+const APP_VERSION = 'v56';
+const BUILD_DATE = 'Oct 11, 2026 16:20';
 
 const MONTHS = [
   'January',
@@ -8762,11 +8762,14 @@ function renderCashTab(): string {
   const holdings = accounts.filter((a) => !a.is_owed && !a.is_debt);
   const owed = accounts.filter((a) => a.is_owed && !a.is_debt);
   const debts = accounts.filter((a) => a.is_debt);
-  const totalHoldings = ag(holdings.reduce((s, a) => s + cashILS(a), 0));
-  const totalOwed = ag(owed.reduce((s, a) => s + cashILS(a), 0));
-  // Debts are stored POSITIVE and subtracted exactly once, here.
-  const totalDebt = ag(debts.reduce((s, a) => s + cashILS(a), 0));
-  const totalLiquid = ag(totalHoldings + totalOwed - totalDebt);
+  // Debts are stored POSITIVE and subtracted exactly once, in cashTotals —
+  // the one meaning of "liquid", shared with the Analysis section.
+  const {
+    holdings: totalHoldings,
+    owed: totalOwed,
+    debt: totalDebt,
+    liquid: totalLiquid,
+  } = cashTotals();
 
   const renderRow = (a: CashAccountRow): string => {
     const ilsVal = cashILS(a);
@@ -10070,7 +10073,12 @@ async function loadFloors(): Promise<void> {
 }
 
 async function loadAnalyzeData(): Promise<void> {
-  await Promise.all([loadYearData(), loadFloors()]);
+  // Cash feeds "If it goes wrong" (Total Liquid); usually loaded at start.
+  await Promise.all([
+    loadYearData(),
+    loadFloors(),
+    state.cashAccounts && state.cashAccounts.length ? Promise.resolve() : loadCashData(),
+  ]);
 }
 
 // Averaging window: 0 = every complete month, 3 / 6 = the last N. Per device;
@@ -10408,264 +10416,722 @@ async function setFloorAvgN(catKey: string, nRaw: string | number): Promise<void
   }
 }
 
+// ── The Analysis section (v56) ─────────────────────────────────────────
+// What this is: the Analyze tab as five of HER questions, each a tile that
+//   carries its answer; tap one and that section opens below. Her words,
+//   2026-10-11: "make a sophisticated analysis section it can have multiple
+//   tabs… have the different sections I need". The 44 lines she wrote about
+//   her budget (Jun 30 → Oct 9) reduce to these five.
+// Why tiles, not a tab bar: the tiles ARE the overview (five answers on one
+//   screen, no new chrome), and the desktop header already overflows.
+// What's decided (plan: second-brain projects/budget-app/
+//   analysis-section-plan-2026-10-11.md, v2.1): one sentence answer → one
+//   list → tap a row to see what it is made of; no red anywhere (short =
+//   amber, covered = forest); every average says its months; tags in "Why so
+//   high" are PROPOSED from her own words until she confirms them in chat;
+//   scenario incomes come from the Sep 4 money model, labelled as such; cash
+//   = the Cash tab's Total Liquid (cashTotals), never a third meaning.
+// What's next: a cross-year view for January 2027; scenario incomes she can
+//   edit (needs a table — her go).
+type AnSub = 'real' | 'why' | 'floor' | 'cut' | 'safe';
+const AN_SUBS: AnSub[] = ['real', 'why', 'floor', 'cut', 'safe'];
+function analyzeSub(): AnSub {
+  let v = '';
+  try {
+    v = localStorage.getItem('analyzeSub') || '';
+  } catch {
+    v = '';
+  }
+  return (AN_SUBS as string[]).includes(v) ? (v as AnSub) : 'real';
+}
+function setAnalyzeSub(s: string): void {
+  if (!(AN_SUBS as string[]).includes(s)) return;
+  try {
+    localStorage.setItem('analyzeSub', s);
+  } catch {
+    /* view state only */
+  }
+  renderApp();
+  requestAnimationFrame(() => {
+    const el = document.querySelector('.an-section');
+    if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6)
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+function analyzeToTop(): void {
+  document.querySelector('.an-tiles')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// Which rows are opened ("what is this made of"). View state, never stored.
+const _anOpen = new Set<string>();
+// "What if" one-off (her: "but eggfreezing is 8000", Oct 9). Held in memory
+// only — a what-if never writes to her budget and is gone on reload.
+let _anOneOff = 0;
+function setAnalyzeOneOff(raw: string): void {
+  const v = parseFloat(String(raw).replace(/[^\d.-]/g, ''));
+  _anOneOff = Number.isFinite(v) && v > 0 ? v : 0;
+  renderApp();
+}
+function toggleAnRow(key: string): void {
+  if (_anOpen.has(key)) _anOpen.delete(key);
+  else _anOpen.add(key);
+  renderApp();
+}
+
+// The Cash tab's own totals — the ONE meaning of "liquid" (holdings + owed to
+// her − what she owes). renderCashTab and the Analysis section both read this.
+function cashTotals(): {
+  holdings: number;
+  owed: number;
+  debt: number;
+  liquid: number;
+  oldest: Date | null;
+} {
+  const accounts = state.cashAccounts || [];
+  const holdings = ag(
+    accounts.filter((a) => !a.is_owed && !a.is_debt).reduce((s, a) => s + cashILS(a), 0),
+  );
+  const owed = ag(
+    accounts.filter((a) => a.is_owed && !a.is_debt).reduce((s, a) => s + cashILS(a), 0),
+  );
+  const debt = ag(accounts.filter((a) => a.is_debt).reduce((s, a) => s + cashILS(a), 0));
+  let oldest: Date | null = null;
+  for (const a of accounts) {
+    const d = a.updated_at ? new Date(String(a.updated_at)) : null;
+    if (d && !isNaN(d.getTime()) && (!oldest || d < oldest)) oldest = d;
+  }
+  return { holdings, owed, debt, liquid: ag(holdings + owed - debt), oldest };
+}
+
+// "If it goes wrong": income mixes from her Sep 4 money model
+// (second-brain projects/leaving-clalit/money-model-2026-09-04-1002.md), net
+// a month after tax, ב.ל. and her pension/KH share. Petachya at ₪120 as her
+// only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
+// cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
+// The model predates gan 2 starting and the Feb 7 last day — labelled so.
+const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
+  { key: 'pet', label: 'Petachya only', income: 9780 },
+  { key: 'pet2', label: 'Petachya + 2 private clients', income: 10780 },
+  { key: 'petgan', label: 'Petachya + gan 2', income: 12895 },
+  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13895 },
+];
+
+// "Why so high" — the drivers in her order, and the PROPOSED tag on each,
+// with where the tag came from. She changes a tag by saying so in chat.
+const WHY_ROWS: { key: string; label: string; tag: string; why: string }[] = [
+  { key: 'rent', label: '🏠 Rent', tag: 'ongoing', why: 'Your rent line, month by month.' },
+  {
+    key: 'housing',
+    label: '🏠 Other housing',
+    tag: 'ongoing',
+    why: 'Arnona, electric, utilities.',
+  },
+  {
+    key: 'recurring',
+    label: '🔄 Recurring bills',
+    tag: 'ongoing',
+    why: 'Bills still running this month.',
+  },
+  {
+    key: 'ended',
+    label: '🔄 Bills that ended',
+    tag: 'ended',
+    why: 'Bills with money in a past month and none from this month on (mattress, tennis…).',
+  },
+  { key: 'groceries', label: '🛒 Groceries', tag: 'ongoing', why: '' },
+  { key: 'transport', label: '🚗 Transport', tag: 'ongoing', why: '' },
+  {
+    key: 'health',
+    label: '🏥 Health',
+    tag: 'ongoing',
+    why: 'Mounjaro stopped in late August — your words Oct 9: “no more mujaro”. The months below show when.',
+  },
+  {
+    key: 'therapy',
+    label: '🧠 Therapy',
+    tag: 'choice',
+    why: 'Therapy comes and goes with your call — your words Oct 9: “I might do therapy”.',
+  },
+  {
+    key: 'lifestyle',
+    label: '🛍️ Lifestyle',
+    tag: 'ongoing',
+    why: 'Take out, eating out, entertainment, retail, gifts, holiday, household.',
+  },
+  {
+    key: 'travel',
+    label: '✈️ Travel pot',
+    tag: 'one-off',
+    why: 'What was set aside in the travel pot each month.',
+  },
+  {
+    key: 'admin',
+    label: '📋 Admin pot',
+    tag: 'one-off',
+    why: 'What was set aside in the admin pot each month — one-off payments.',
+  },
+  {
+    key: 'charity',
+    label: '💚 Charity',
+    tag: 'choice',
+    why: 'Your words Oct 9: “its flex… can evn be 0 if needed”.',
+  },
+];
+const TAG_LABEL: Record<string, string> = {
+  ended: 'ended',
+  'one-off': 'one-off',
+  choice: 'your choice',
+  ongoing: 'ongoing',
+};
+
 function renderAnalyzeTab(): string {
   const r = computeAnalyze();
   if (!r) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
   const { months, cats, lines, summary: s } = r;
-  const todayMonth = todayMonthForYear();
+  const sub = analyzeSub();
   const win = analyzeAvgWindow();
   // Floors not loaded for this year yet: the math above ran on none, so every
   // floor-derived number is a placeholder — say so, never show a default as hers.
   const floorsLoading = !state.floors;
   const LOADING = '<span class="an-loading">loading…</span>';
   const money = (v: number): string => shekels(v || 0);
-  // A negative "above floor" reads as −₪x, never ₪-x.
-  const signed = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v));
+  // A negative reads as −₪x, never ₪-x.
+  const signed = (v: number): string =>
+    roundZ(v) < 0 ? '−' + shekels(-v) : roundZ(v) > 0 ? '+' + shekels(v) : shekels(0);
   const pctStr = (v: number): string => Math.round((v || 0) * 100) + '%';
   const abbr = (mn: number | null): string => (mn ? MONTH_ABBR[mn - 1] || '?' : '?');
+  const span = (ms: number[]): string =>
+    !ms.length
+      ? 'no complete months yet'
+      : ms.length === 1
+        ? abbr(ms[0])
+        : abbr(ms[0]) + '–' + abbr(ms[ms.length - 1]);
   const esc = (t: unknown): string =>
     String(t ?? '')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/"/g, '&quot;');
-  const avgSpan = s.avgMonths.length
-    ? s.avgMonths.length === 1
-      ? abbr(s.avgMonths[0])
-      : abbr(s.avgMonths[0]) + '–' + abbr(s.avgMonths[s.avgMonths.length - 1])
-    : 'no complete months yet';
+  const avgSpan = span(s.avgMonths);
   const nSet = cats.filter((c) => c.floorSet).length;
+  const avgSet = new Set(s.avgMonths);
+  const inAvg = months.filter((m) => avgSet.has(m.month_num));
   const mean = (xs: number[]): number =>
     xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-  const avgSet = new Set(s.avgMonths);
-  const avgOf = (pick: (m: AnalyzeMonth) => number): number =>
-    mean(months.filter((m) => avgSet.has(m.month_num)).map(pick));
-  const sumOf = (pick: (m: AnalyzeMonth) => number): number =>
-    months.reduce((a, m) => a + pick(m), 0);
-
-  // ── Head: title + averaging window ────────────────────────────────────
-  const pill = (n: number, text: string): string =>
-    '<button class="yr-pillbtn an-winbtn' +
-    (win === n ? ' active' : '') +
-    '" onclick="setAnalyzeAvgWindow(' +
-    n +
-    ')">' +
-    text +
-    '</button>';
-  const head =
-    '<div class="an-head">' +
-    '<div class="an-title">Analyze ' +
-    state.currentYear +
-    ' <span class="an-tag">yearly view</span></div>' +
-    '<div class="an-win"><span class="an-winlbl">Average over</span>' +
-    pill(0, 'all complete months') +
-    pill(3, 'last 3') +
-    pill(6, 'last 6') +
-    '</div></div>';
-
-  // ── KPI row ───────────────────────────────────────────────────────────
-  const kpi = (label: string, val: string, sub: string): string =>
-    '<div class="year-sum-card"><div class="year-sum-label">' +
+  const avgOf = (pick: (m: AnalyzeMonth) => number): number => mean(inAvg.map(pick));
+  const row = (label: string, val: string, cls = ''): string =>
+    '<div class="ym-row' +
+    (cls ? ' ' + cls : '') +
+    '"><span class="ym-label">' +
     label +
-    '</div><div class="year-sum-val">' +
+    '</span><span class="ym-dots"></span><span class="ym-val">' +
     val +
-    '</div><div class="an-sub">' +
-    sub +
-    '</div></div>';
-  // "Spent through Sep": the last month that is not still ahead.
-  const lastYtd = [...months].reverse().find((m) => m.status !== 'future');
-  const soFar = lastYtd
-    ? money(s.yearRealActual) + ' spent through ' + abbr(lastYtd.month_num)
-    : money(0) + ' spent';
-  const kpis =
-    '<div class="an-kpis">' +
-    kpi('Real spend / mo', money(s.realAvg), 'average of ' + avgSpan + ', savings not counted') +
-    (floorsLoading
-      ? kpi('Floor / mo', LOADING, 'your floors are on their way')
-      : kpi(
-          'Floor / mo',
-          money(s.floorTotal),
-          nSet + ' of ' + cats.length + ' floors set by you',
-        )) +
-    (floorsLoading
-      ? kpi('Above floor / mo', LOADING, 'real spend minus floor')
-      : kpi('Above floor / mo', signed(s.aboveFloor), 'real spend minus floor')) +
-    kpi(
-      'Savings rate',
-      pctStr(s.savingsRate),
-      money(s.ytdSavings) + ' of ' + money(s.ytdIncome) + ' income so far',
-    ) +
-    kpi(
-      'Year real spend',
-      money(s.yearReal),
-      soFar + ' + ' + money(s.yearRealProjected) + ' projected',
-    ) +
-    '</div>';
-
-  // ── By month: behaviour × month ───────────────────────────────────────
-  const colCls = (m: AnalyzeMonth): string =>
-    'year-cell' +
-    (m.status === 'future' ? ' future' : '') +
-    (m.status === 'current' ? ' current-col' : '');
-  const thead =
-    '<thead><tr><th class="year-th-label">By month</th>' +
-    months
+    '</span></div>';
+  // A row that opens to show what it is made of (her "is that true").
+  const openRow = (key: string, label: string, val: string, body: string, cls = ''): string => {
+    const open = _anOpen.has(key);
+    return (
+      '<button type="button" class="an-open' +
+      (open ? ' open' : '') +
+      '" aria-expanded="' +
+      open +
+      '" onclick="toggleAnRow(\'' +
+      key +
+      '\')">' +
+      row('<span class="an-caret">' + (open ? '▾' : '▸') + '</span>' + label, val, cls) +
+      '</button>' +
+      (open ? '<div class="an-detail">' + body + '</div>' : '')
+    );
+  };
+  const monthChips = (pick: (m: AnalyzeMonth) => number, ms: AnalyzeMonth[]): string =>
+    '<div class="an-mlist">' +
+    ms
       .map(
         (m) =>
-          '<th class="year-th-month' +
-          (m.status === 'current'
-            ? ' current-month'
-            : m.status === 'future'
-              ? ' future-month'
-              : '') +
+          '<span class="an-mchip an-mchip-ro' +
+          (m.status !== 'past' ? ' proj' : '') +
           '">' +
-          m.name +
-          (m.status === 'current' ? ' ◉' : '') +
-          '</th>',
+          abbr(m.month_num) +
+          ' ' +
+          money(pick(m)) +
+          '</span>',
       )
       .join('') +
-    '<th class="year-th-extra">Avg</th><th class="year-th-extra">Year</th></tr></thead>';
-  const rowDefs: {
-    label: string;
-    pick: (m: AnalyzeMonth) => number;
-    cls?: string;
-    count?: boolean;
-  }[] = [
-    { label: '\u{1F4C8} Income', pick: (m) => m.income },
-    { label: '\u{1F3E0} Fixed', pick: (m) => m.fixed, cls: 'year-row-sub' },
-    { label: '\u{1F6D2} Envelopes', pick: (m) => m.envelope, cls: 'year-row-sub' },
-    { label: '✈️\u{1F4CB} Pots', pick: (m) => m.pots, cls: 'year-row-sub' },
-    { label: '\u{1F49A} Charity', pick: (m) => m.charity, cls: 'year-row-sub' },
-    { label: 'Real spend', pick: (m) => m.real, cls: 'year-row-bold' },
-    { label: '\u{1F3E6} Savings', pick: (m) => m.savings },
-    { label: 'Used', pick: (m) => m.used, cls: 'year-row-net' },
-    { label: 'Entries logged', pick: (m) => m.entries, cls: 'year-row-sub', count: true },
-  ];
-  const fmtCell = (v: number, count?: boolean): string =>
-    count ? String(Math.round(v)) : money(v);
-  // A month still ahead has no entries to count — a dash, not an italic 0.
-  const monthCell = (d: (typeof rowDefs)[number], m: AnalyzeMonth): string =>
-    d.count && m.status === 'future' ? '—' : fmtCell(d.pick(m), d.count);
-  const tbody =
-    '<tbody>' +
-    rowDefs
-      .map(
-        (d) =>
-          '<tr class="' +
-          (d.cls || 'year-row') +
-          '"><td class="year-col-label">' +
-          d.label +
-          '</td>' +
-          months.map((m) => '<td class="' + colCls(m) + '">' + monthCell(d, m) + '</td>').join('') +
-          '<td class="year-cell-avg">' +
-          fmtCell(avgOf(d.pick), d.count) +
-          '</td><td class="year-cell-extra">' +
-          fmtCell(sumOf(d.pick), d.count) +
-          '</td></tr>',
-      )
-      .join('') +
-    '</tbody>';
-  const byMonth =
-    '<div class="card an-card"><div class="card-title">By month</div>' +
-    '<div class="an-intro">What each month cost, by behaviour. Complete months are what happened; the months still ahead are the budget.</div>' +
-    '<div class="year-table-wrap"><table class="year-table an-table">' +
-    thead +
-    tbody +
-    '</table></div>' +
-    '<div class="an-legend">italics = projected from budget · ◉ ' +
-    abbr(s.referenceMonth) +
-    ' in progress: envelopes count the higher of spent-so-far and budget; pots and charity count the allocation · Avg = ' +
-    avgSpan +
-    ' · Real spend = fixed + envelopes + pots + charity · Used = real spend + savings — the Year tab’s Total Used on complete months</div>' +
+    '</div>';
+  const back =
+    '<button type="button" class="an-back" onclick="analyzeToTop()">↑ the five questions</button>';
+  const how = (text: string): string =>
+    '<details class="an-how"><summary>How this is figured</summary><div>' +
+    text +
+    '</div></details>';
+  const none = s.avgMonths.length === 0;
+  const noneNote =
+    '<p class="an-say">Nothing in ' +
+    state.currentYear +
+    ' is complete yet, so there is no real spend to read here. ' +
+    (state.currentYear > 2026
+      ? 'Switch to ' + (state.currentYear - 1) + ' for the year that happened.'
+      : 'Budgets fill the months ahead.') +
+    '</p>';
+
+  // ── Shared numbers ────────────────────────────────────────────────────
+  const savingsAvg = avgOf((m) => m.savings);
+  const incomeSum = inAvg.reduce((a, m) => a + m.income, 0);
+  const savingsRate = incomeSum ? inAvg.reduce((a, m) => a + m.savings, 0) / incomeSum : 0;
+  const gap = yearTabGap(r);
+  const why = whyBridge(
+    r,
+    WHY_ROWS.map((w) => w.key),
+  );
+  const cash = cashTotals();
+  const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
+  const pet = SAFE_SCENARIOS[0];
+  const cashLeft = cash.liquid - _anOneOff;
+  const petFloor = runway(cashLeft, pet.income, s.floorTotal);
+  const petReal = runway(cashLeft, pet.income, s.realAvg);
+  const marginTxt = (v: number): string => (v >= 0 ? '+' + money(v) : 'short ' + money(-v));
+  const margin = (v: number): string =>
+    v >= 0
+      ? '<span class="an-pos">+' + money(v) + '</span>'
+      : '<span class="an-short">short ' + money(-v) + '</span>';
+
+  // ── Head: the year + the averaging window, named by its months ───────
+  const pastNums = months.filter((m) => m.status === 'past').map((m) => m.month_num);
+  const winSpan = (n: number): string =>
+    span(n > 0 && pastNums.length > n ? pastNums.slice(pastNums.length - n) : pastNums);
+  const pills: string[] = [];
+  const seen = new Set<string>();
+  for (const n of [0, 3, 6]) {
+    const label = winSpan(n);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    pills.push(
+      '<button class="yr-pillbtn an-winbtn' +
+        (win === n ? ' active' : '') +
+        '" onclick="setAnalyzeAvgWindow(' +
+        n +
+        ')" title="Average over ' +
+        label +
+        '">' +
+        label +
+        '</button>',
+    );
+  }
+  const head =
+    '<div class="an-head"><div class="an-stamp">' +
+    state.currentYear +
+    (sub === 'why' && why
+      ? ' · compares <b>' + span(why.early) + '</b> with <b>' + span(why.recent) + '</b>'
+      : ' · averages over <b>' + avgSpan + '</b>') +
+    '</div>' +
+    (sub !== 'why' && pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
     '</div>';
 
-  // ── Floor: real vs the least, per category ────────────────────────────
+  // ── The five question tiles ───────────────────────────────────────────
+  const tile = (key: AnSub, q: string, val: string, note: string): string =>
+    '<button type="button" class="an-qtile' +
+    (sub === key ? ' active' : '') +
+    '" aria-pressed="' +
+    (sub === key) +
+    '" onclick="setAnalyzeSub(\'' +
+    key +
+    '\')"><span class="an-q">' +
+    q +
+    '</span><span class="an-a">' +
+    val +
+    '</span><span class="an-qn">' +
+    note +
+    '</span></button>';
+  const tiles =
+    '<div class="an-tiles">' +
+    tile('real', 'Real spend', none ? '—' : money(s.realAvg), 'a month, ' + avgSpan) +
+    tile(
+      'why',
+      'Why so high',
+      why ? signed(why.delta) : '—',
+      why ? span(why.recent) + ' vs ' + span(why.early) : 'needs 4 complete months',
+    ) +
+    tile(
+      'floor',
+      'Floor',
+      floorsLoading ? LOADING : money(s.floorTotal),
+      floorsLoading ? 'on its way' : 'the least a month could cost',
+    ) +
+    tile(
+      'cut',
+      'Where to cut',
+      floorsLoading || none ? '—' : money(Math.max(0, s.aboveFloor)),
+      'a month above your floor',
+    ) +
+    tile(
+      'safe',
+      'If it goes wrong',
+      floorsLoading ? LOADING : none ? '—' : marginTxt(petFloor.margin),
+      none
+        ? 'needs a complete month and a floor for ' + state.currentYear
+        : 'Petachya only, at your floor · ' + marginTxt(petReal.margin) + ' at real spend',
+    ) +
+    '</div>';
+
+  // ── 1 · Real spend ────────────────────────────────────────────────────
+  const realSection = (): string => {
+    if (none) return noneNote;
+    // Savings leads — it is the score (her words, Sep 4).
+    const say =
+      '<p class="an-say">You saved <b>' +
+      money(savingsAvg) +
+      '</b> a month — ' +
+      pctStr(savingsRate) +
+      ' of what came in. <b>' +
+      money(s.realAvg) +
+      '</b> a month went to living (' +
+      avgSpan +
+      ').</p>';
+    // Her own way of working it out (Sep 7, Oct 9): income − savings.
+    const incomeAvg = avgOf((m) => m.income);
+    const herWay = incomeAvg - savingsAvg;
+    const herDiff = herWay - s.realAvg;
+    const herLine =
+      '<p class="an-say an-say-sm">Your way: ' +
+      money(incomeAvg) +
+      ' came in − ' +
+      money(savingsAvg) +
+      ' saved = <b>' +
+      money(herWay) +
+      '</b>' +
+      (Math.abs(herDiff) < 1
+        ? ' — the same as this tab <span class="an-ok">✓</span>'
+        : ' — ' +
+          money(Math.abs(herDiff)) +
+          (herDiff > 0
+            ? ' more than this tab: income that hasn’t been given a job.'
+            : ' less than this tab: spending beyond what came in.')) +
+      '</p>';
+    let gapBlock = '';
+    if (gap && Math.abs(gap.yearTabAvg - gap.windowAvg) >= 1) {
+      const bridged = gap.windowAvg + gap.windowEffect + gap.envEffect + gap.otherEffect;
+      const unexplained = gap.yearTabAvg - bridged;
+      const open = gap.openMonths.length ? span(gap.openMonths) : '';
+      const body =
+        row('This tab · ' + avgSpan + ' ÷ ' + s.avgMonths.length, money(gap.windowAvg)) +
+        (Math.abs(gap.windowEffect) >= 1
+          ? row('Every complete month instead', signed(gap.windowEffect), 'ym-row-sub')
+          : '') +
+        (open
+          ? row(
+              open + ' everyday spending — only what’s logged so far',
+              signed(gap.envEffect),
+              'ym-row-sub',
+            ) +
+            row(
+              open + ' bills, pots and charity — counted in full',
+              signed(gap.otherEffect),
+              'ym-row-sub',
+            )
+          : '') +
+        row(
+          'Year tab · all 12 months ÷ 12',
+          money(gap.yearTabAvg) +
+            (Math.abs(unexplained) < 1
+              ? ' <span class="an-ok">adds up ✓</span>'
+              : ' <span class="an-short">' +
+                money(Math.abs(unexplained)) +
+                ' not explained</span>'),
+          'ym-row-bold',
+        );
+      gapBlock =
+        '<div class="an-block">' +
+        openRow(
+          'real:gap',
+          'The Year tab says ' + money(gap.yearTabAvg) + ' — same money, different months',
+          '',
+          body,
+          'an-gaprow',
+        ) +
+        '</div>';
+    }
+    const parts: { key: string; label: string; pick: (m: AnalyzeMonth) => number; cls?: string }[] =
+      [
+        { key: 'fixed', label: '🏠 Bills (housing + recurring)', pick: (m) => m.fixed },
+        { key: 'envelope', label: '🛒 Everyday (envelopes)', pick: (m) => m.envelope },
+        { key: 'pots', label: '✈️📋 Pots (travel + admin)', pick: (m) => m.pots },
+        { key: 'charity', label: '💚 Charity', pick: (m) => m.charity },
+      ];
+    const where =
+      '<div class="an-block"><div class="an-h">Where it went · a month, ' +
+      avgSpan +
+      '</div>' +
+      parts
+        .map((p) =>
+          openRow('real:' + p.key, p.label, money(avgOf(p.pick)), monthChips(p.pick, inAvg)),
+        )
+        .join('') +
+      row('Real spend', money(s.realAvg), 'ym-row-bold') +
+      openRow(
+        'real:savings',
+        '🏦 Savings — the score',
+        money(savingsAvg),
+        monthChips((m) => m.savings, inAvg),
+      ) +
+      '</div>';
+    // Month by month: one row per month on the phone, the full grid on desktop.
+    const phoneMonths =
+      '<div class="an-block an-phone"><div class="an-h">Month by month · real spend · savings</div>' +
+      months
+        .map((m) =>
+          row(
+            abbr(m.month_num) + (m.status === 'current' ? ' ◉' : ''),
+            '<span class="' +
+              (m.status === 'past' ? '' : 'an-proj') +
+              '">' +
+              money(m.real) +
+              ' · ' +
+              money(m.savings) +
+              '</span>',
+          ),
+        )
+        .join('') +
+      '<div class="an-legend">italic = from the budget, not yet happened · ◉ this month</div></div>';
+    const colCls = (m: AnalyzeMonth): string =>
+      'year-cell' +
+      (m.status === 'future' ? ' future' : '') +
+      (m.status === 'current' ? ' current-col' : '');
+    const rowDefs: { label: string; pick: (m: AnalyzeMonth) => number; cls?: string }[] = [
+      { label: '\u{1F4C8} Income', pick: (m) => m.income },
+      { label: '\u{1F3E0} Bills', pick: (m) => m.fixed, cls: 'year-row-sub' },
+      { label: '\u{1F6D2} Everyday', pick: (m) => m.envelope, cls: 'year-row-sub' },
+      { label: '✈️\u{1F4CB} Pots', pick: (m) => m.pots, cls: 'year-row-sub' },
+      { label: '\u{1F49A} Charity', pick: (m) => m.charity, cls: 'year-row-sub' },
+      { label: 'Real spend', pick: (m) => m.real, cls: 'year-row-bold' },
+      { label: '\u{1F3E6} Savings', pick: (m) => m.savings },
+    ];
+    const grid =
+      '<div class="an-block an-desk"><div class="an-h">Month by month</div>' +
+      '<div class="year-table-wrap"><table class="year-table an-table"><thead><tr><th class="year-th-label">₪ / month</th>' +
+      months
+        .map(
+          (m) =>
+            '<th class="year-th-month' +
+            (m.status === 'current'
+              ? ' current-month'
+              : m.status === 'future'
+                ? ' future-month'
+                : '') +
+            '">' +
+            m.name +
+            (m.status === 'current' ? ' ◉' : '') +
+            '</th>',
+        )
+        .join('') +
+      '<th class="year-th-extra">Avg</th><th class="year-th-extra">Year</th></tr></thead><tbody>' +
+      rowDefs
+        .map(
+          (d) =>
+            '<tr class="' +
+            (d.cls || 'year-row') +
+            '"><td class="year-col-label">' +
+            d.label +
+            '</td>' +
+            months
+              .map((m) => '<td class="' + colCls(m) + '">' + money(d.pick(m)) + '</td>')
+              .join('') +
+            '<td class="year-cell-avg">' +
+            money(avgOf(d.pick)) +
+            '</td><td class="year-cell-extra">' +
+            money(months.reduce((a, m) => a + d.pick(m), 0)) +
+            '</td></tr>',
+        )
+        .join('') +
+      '</tbody></table></div>' +
+      '<div class="an-legend">italics = from the budget, not yet happened · ◉ ' +
+      abbr(s.referenceMonth) +
+      ' in progress · Avg = ' +
+      avgSpan +
+      ' · Year = ' +
+      money(s.yearRealActual) +
+      ' spent so far + ' +
+      money(s.yearRealProjected) +
+      ' still budgeted</div></div>';
+    return (
+      say +
+      herLine +
+      gapBlock +
+      where +
+      phoneMonths +
+      grid +
+      how(
+        'Real spend = bills + everyday + pots + charity. Savings is not spend — it is the score. Averages use complete months only; the month in progress is half-logged by definition. Bills count the higher of the line and what was paid; pots and charity count what was set aside.',
+      )
+    );
+  };
+
+  // ── 2 · Why so high ───────────────────────────────────────────────────
+  const whySection = (): string => {
+    if (!why)
+      return '<p class="an-say">This compares your first months with your latest ones, so it needs at least 4 complete months.</p>';
+    const meta = (k: string): (typeof WHY_ROWS)[number] =>
+      WHY_ROWS.find((w) => w.key === k) || { key: k, label: k, tag: 'ongoing', why: '' };
+    const rows = why.rows.filter((x) => Math.round(x.early) !== 0 || Math.round(x.recent) !== 0);
+    const byTag: Record<string, number> = {};
+    for (const x of rows) byTag[meta(x.key).tag] = (byTag[meta(x.key).tag] || 0) + x.delta;
+    const pastMonths = months.filter((m) => m.status === 'past');
+    const rowsSum = why.rows.reduce((a, x) => a + x.delta, 0);
+    const tagLine = ['one-off', 'ended', 'choice', 'ongoing']
+      .filter((t) => byTag[t] !== undefined && Math.round(byTag[t]) !== 0)
+      .map((t) => TAG_LABEL[t] + ' <b>' + signed(byTag[t]) + '</b>')
+      .join(' · ');
+    const say =
+      '<p class="an-say">' +
+      span(why.recent) +
+      ' cost <b>' +
+      money(why.recentReal) +
+      '</b> a month; ' +
+      span(why.early) +
+      ' cost <b>' +
+      money(why.earlyReal) +
+      '</b> — ' +
+      (why.delta >= 0 ? money(why.delta) + ' more' : money(-why.delta) + ' less') +
+      '. By kind: ' +
+      tagLine +
+      '.</p>';
+    const thin = why.thin.length
+      ? '<p class="an-flag">' +
+        why.thin.map(abbr).join(', ') +
+        ' had fewer entries than your usual month — away, or not everything logged. Their everyday numbers read low; when you’re abroad, food can sit in the travel pot instead.</p>'
+      : '';
+    const bridge =
+      '<div class="an-block"><div class="an-h">' +
+      span(why.early) +
+      ' → ' +
+      span(why.recent) +
+      ', driver by driver · a month</div>' +
+      row(span(why.early) + ' average', money(why.earlyReal), 'ym-row-bold') +
+      rows
+        .map((x) => {
+          const m = meta(x.key);
+          const body =
+            (m.why ? '<div class="an-why">' + esc(m.why) + '</div>' : '') +
+            '<div class="an-why">' +
+            money(x.early) +
+            ' → ' +
+            money(x.recent) +
+            '</div>' +
+            monthChips((mm) => mm.parts[x.key] || 0, pastMonths);
+          return openRow(
+            'why:' + x.key,
+            m.label +
+              ' <span class="an-tagchip t-' +
+              m.tag.replace(/[^a-z]/g, '') +
+              '">' +
+              TAG_LABEL[m.tag] +
+              '</span>',
+            signed(x.delta),
+            body,
+            m.tag === 'ended' ? 'an-dim' : '',
+          );
+        })
+        .join('') +
+      row(
+        span(why.recent) + ' average',
+        money(why.recentReal) +
+          (Math.abs(rowsSum - why.delta) < 1
+            ? ' <span class="an-ok">adds up ✓</span>'
+            : ' <span class="an-short">' +
+              money(Math.abs(rowsSum - why.delta)) +
+              ' not explained</span>'),
+        'ym-row-bold',
+      ) +
+      '<div class="an-legend">Tags are a proposal from your own words and your data — say so in chat and I’ll change one.</div></div>';
+    const ref = months.find((m) => m.status === 'current');
+    // Everyday two ways: this month's budget, and what everyday really cost
+    // on average — a budget can sit far under real, so both are shown.
+    const realEveryday = mean(pastMonths.map((m) => m.envelope));
+    const running = ref
+      ? '<div class="an-block"><div class="an-h">Running now, without trips and one-offs · a month</div>' +
+        row('🏠 Bills · ' + abbr(ref.month_num), money(ref.fixed), 'ym-row-sub') +
+        row('🛒 Everyday · ' + abbr(ref.month_num) + ' budget', money(ref.envelope), 'ym-row-sub') +
+        row(
+          '🛒 Everyday · your real average ' + span(pastMonths.map((m) => m.month_num)),
+          money(realEveryday),
+          'ym-row-sub',
+        ) +
+        row('💚 Charity · ' + abbr(ref.month_num), money(ref.charity), 'ym-row-sub') +
+        row(
+          'Still running a month',
+          money(ref.fixed + ref.envelope + ref.charity) +
+            ' – ' +
+            money(ref.fixed + realEveryday + ref.charity),
+          'ym-row-bold',
+        ) +
+        '<div class="an-legend">Low end = everyday at this month’s budget; high end = everyday at what it really cost. The pots (trips, one-offs) are left out because they come and go; ended bills are already gone.</div></div>'
+      : '';
+    const rate =
+      '<p class="an-say an-say-sm">Savings rate: <b>' +
+      pctStr(why.earlySavingsRate) +
+      '</b> of income in ' +
+      span(why.early) +
+      ' → <b>' +
+      pctStr(why.recentSavingsRate) +
+      '</b> in ' +
+      span(why.recent) +
+      '.</p>';
+    return (
+      say +
+      thin +
+      bridge +
+      rate +
+      running +
+      how(
+        'Each row is that driver’s monthly average in your latest ' +
+          why.recent.length +
+          ' complete months minus your first ' +
+          why.early.length +
+          '. The rows add up to the difference exactly. A bill has “ended” when it had money in a past month and has none from this month on; a renamed bill (Claude Pro → Claude Max) still counts as running.',
+      )
+    );
+  };
+
+  // ── 3 · Floor ─────────────────────────────────────────────────────────
   const kindOrder: { kind: AnalyzeCatStat['kind']; title: string; note: string }[] = [
     {
       kind: 'envelope',
-      title: 'Envelopes',
-      note: 'suggested floor = average of your lowest normal months',
+      title: 'Everyday',
+      note: 'suggestion = average of your lowest normal months',
     },
-    {
-      kind: 'fixed',
-      title: 'Fixed',
-      note: 'suggested floor = this month’s lines (or what’s paid, if more)',
-    },
-    { kind: 'pot', title: 'Pots', note: 'suggested floor = 0 — your call' },
-    { kind: 'charity', title: 'Charity', note: 'suggested floor = your average' },
+    { kind: 'fixed', title: 'Bills', note: 'suggestion = this month’s lines' },
+    { kind: 'pot', title: 'Pots', note: 'suggestion = 0 — your call' },
+    { kind: 'charity', title: 'Charity', note: 'suggestion = your average' },
   ];
-  // Amount + month in ONE span: on the phone the cell is a flex row (label ·
-  // value) and two loose nodes would split into three items.
-  const lowHigh = (x: AnalyzeCatStat['low']): string =>
-    x
-      ? '<span class="an-lh">' +
-        money(x.amount) +
-        ' <span class="an-mon">' +
-        abbr(x.month_num) +
-        '</span></span>'
-      : '—';
-  // The months behind an envelope's suggestion, as chips she can tap out —
-  // then the vetoed ones, struck through, tap again to count them. Plus how
-  // many lowest months to average. Envelopes only: fixed and pots average
-  // nothing, and charity follows income.
   const monthAmount = (c: AnalyzeCatStat, mn: number): number => {
     const m = months.find((x) => x.month_num === mn);
     return m ? m.actualByCat[c.key] || 0 : 0;
   };
-  const chip = (c: AnalyzeCatStat, mn: number, amt: number, out: boolean): string =>
-    '<button type="button" class="an-mchip' +
-    (out ? ' out' : '') +
-    '"' +
-    (floorsLoading ? ' disabled' : '') +
-    ' onclick="event.stopPropagation();toggleFloorMonth(\'' +
-    c.key +
-    "', " +
-    mn +
-    ')" title="' +
-    (out ? 'Tap to count this month again' : 'Tap to leave this month out') +
-    '" aria-label="' +
-    esc(c.label) +
-    ' ' +
-    abbr(mn) +
-    (out ? ': left out, tap to count it again' : ': tap to leave it out') +
-    '">' +
-    abbr(mn) +
-    ' ' +
-    money(amt) +
-    '</button>';
-  const floorMonths = (c: AnalyzeCatStat): string => {
-    if (c.kind !== 'envelope') return '';
-    const used = c.floorMonths.map((x) => chip(c, x.month_num, x.amount, false)).join('');
-    const out = c.excluded
-      .filter((mn) => months.some((m) => m.month_num === mn))
-      .map((mn) => chip(c, mn, monthAmount(c, mn), true))
-      .join('');
-    const nOpts = [3, 4, 5, 6];
-    if (!nOpts.includes(c.avgN)) nOpts.push(c.avgN);
-    const nSel =
-      '<label class="an-nlbl" onclick="event.stopPropagation()">lowest <select class="an-nsel" aria-label="How many lowest months to average for ' +
-      esc(c.label) +
+  const vetoChip = (c: AnalyzeCatStat, mn: number, amt: number, out: boolean): string => {
+    const thin = why && why.thin.includes(mn);
+    return (
+      '<button type="button" class="an-mchip' +
+      (out ? ' out' : '') +
       '"' +
       (floorsLoading ? ' disabled' : '') +
-      ' onchange="setFloorAvgN(\'' +
+      ' onclick="event.stopPropagation();toggleFloorMonth(\'' +
       c.key +
-      '\', this.value)">' +
-      nOpts
-        .sort((a, b) => a - b)
-        .map(
-          (n) =>
-            '<option value="' + n + '"' + (n === c.avgN ? ' selected' : '') + '>' + n + '</option>',
-        )
-        .join('') +
-      '</select></label>';
-    return (
-      '<span class="an-fmonths">' +
-      (used || out ? used + out : '<span class="an-suggested">no complete months yet</span>') +
-      nSel +
-      '</span>'
+      "', " +
+      mn +
+      ')" title="' +
+      (out ? 'Tap to count this month again' : 'Tap to leave this month out') +
+      '" aria-label="' +
+      esc(c.label) +
+      ' ' +
+      abbr(mn) +
+      (out ? ': left out, tap to count it again' : ': tap to leave it out') +
+      '">' +
+      abbr(mn) +
+      ' ' +
+      money(amt) +
+      (thin && !out ? ' · few entries' : '') +
+      '</button>'
     );
   };
-  const floorCell = (c: AnalyzeCatStat): string =>
-    '<div class="an-floorcell"><span class="an-floorwrap"><input type="number" class="budget-inline an-floor' +
+  const floorInput = (c: AnalyzeCatStat): string =>
+    '<input type="number" class="budget-inline an-floor' +
     (c.floorSet && !floorsLoading ? ' set' : '') +
     '" value="' +
     (c.floorSet && !floorsLoading ? roundZ(c.floor) : '') +
@@ -10679,132 +11145,415 @@ function renderAnalyzeTab(): string {
     (floorsLoading ? ' disabled' : '') +
     ' onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
     c.key +
-    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
-    (floorsLoading ? LOADING : c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
-    '</span>' +
-    (floorsLoading ? '' : floorMonths(c)) +
-    '</div>';
-  const catRow = (c: AnalyzeCatStat): string =>
-    '<tr class="sn-cat"><td>' +
-    c.emoji +
-    ' ' +
-    esc(c.label) +
-    '</td>' +
-    '<td data-label="Avg / mo">' +
-    money(c.avg) +
-    '</td>' +
-    '<td data-label="Low">' +
-    lowHigh(c.low) +
-    '</td>' +
-    '<td data-label="High">' +
-    lowHigh(c.high) +
-    '</td>' +
-    '<td data-label="Share">' +
-    pctStr(c.share) +
-    '</td>' +
-    '<td data-label="Floor">' +
-    floorCell(c) +
-    '</td>' +
-    '<td data-label="Above floor">' +
-    (floorsLoading ? LOADING : signed(c.aboveFloor)) +
-    '</td></tr>';
-  const floorBody = kindOrder
-    .map((k) => {
-      const rows = cats.filter((c) => c.kind === k.kind);
-      if (!rows.length) return '';
-      return (
-        '<tr class="sn-section"><td colspan="7">' +
-        k.title +
-        ' <span class="an-note">' +
-        k.note +
-        '</span></td></tr>' +
-        rows.map(catRow).join('')
+    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">';
+  const floorDetail = (c: AnalyzeCatStat): string => {
+    const lowHigh =
+      '<div class="an-why">' +
+      (c.low
+        ? 'Low ' + money(c.low.amount) + ' ' + abbr(c.low.month_num)
+        : 'No complete months yet') +
+      (c.high ? ' · high ' + money(c.high.amount) + ' ' + abbr(c.high.month_num) : '') +
+      (c.floorSet ? ' · suggestion ' + money(c.floorDefault) : '') +
+      '</div>';
+    if (c.kind !== 'envelope') return lowHigh;
+    const seg =
+      '<div class="an-seg" role="group" aria-label="How many lowest months to average">' +
+      '<span class="an-seglbl">Suggestion = average of the lowest</span>' +
+      [3, 4, 5, 6]
+        .map(
+          (n) =>
+            '<button type="button" class="an-segbtn' +
+            (c.avgN === n ? ' active' : '') +
+            '"' +
+            (floorsLoading ? ' disabled' : '') +
+            ' onclick="setFloorAvgN(\'' +
+            c.key +
+            "', " +
+            n +
+            ')">' +
+            n +
+            '</button>',
+        )
+        .join('') +
+      '</div>';
+    const used = c.floorMonths.map((x) => vetoChip(c, x.month_num, x.amount, false)).join('');
+    const out = c.excluded
+      .filter((mn) => months.some((m) => m.month_num === mn))
+      .map((mn) => vetoChip(c, mn, monthAmount(c, mn), true))
+      .join('');
+    return (
+      lowHigh +
+      seg +
+      '<div class="an-why">The months it averages — tap one that wasn’t a normal month to leave it out:</div>' +
+      '<div class="an-mlist">' +
+      (used || out ? used + out : '<span class="an-suggested">no complete months yet</span>') +
+      '</div>'
+    );
+  };
+  const floorRow = (c: AnalyzeCatStat): string => {
+    const key = 'floor:' + c.key;
+    const open = _anOpen.has(key);
+    return (
+      '<div class="an-frow' +
+      (open ? ' open' : '') +
+      '"><button type="button" class="an-flabel" aria-expanded="' +
+      open +
+      '" onclick="toggleAnRow(\'' +
+      key +
+      '\')"><span class="an-caret">' +
+      (open ? '▾' : '▸') +
+      '</span>' +
+      c.emoji +
+      ' ' +
+      esc(c.label) +
+      '</button><span class="an-fin">' +
+      floorInput(c) +
+      (floorsLoading ? '' : c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
+      '</span><span class="an-favg">' +
+      money(c.avg) +
+      '</span></div>' +
+      (open ? '<div class="an-detail">' + floorDetail(c) + '</div>' : '')
+    );
+  };
+  const floorSection = (): string => {
+    const say =
+      '<p class="an-say">The least a month could cost: <b>' +
+      (floorsLoading ? LOADING : money(s.floorTotal)) +
+      '</b>. ' +
+      (floorsLoading
+        ? ''
+        : nSet + ' of ' + cats.length + ' lines are your numbers, the rest are suggestions.') +
+      '</p>';
+    const groups = kindOrder
+      .map((k) => {
+        const rows = cats.filter((c) => c.kind === k.kind);
+        if (!rows.length) return '';
+        return (
+          '<div class="an-fgroup"><div class="an-h">' +
+          k.title +
+          ' <span class="an-note">' +
+          k.note +
+          '</span></div>' +
+          rows.map(floorRow).join('') +
+          '</div>'
+        );
+      })
+      .join('');
+    return (
+      say +
+      '<div class="an-block"><div class="an-fhead"><span>Line</span><span>Floor</span><span>Avg ' +
+      avgSpan +
+      '</span></div>' +
+      groups +
+      '<div class="an-frow an-ftotal"><span class="an-flabel">Total</span><span class="an-fin">' +
+      (floorsLoading ? LOADING : money(s.floorTotal)) +
+      '</span><span class="an-favg">' +
+      money(s.realAvg) +
+      '</span></div></div>' +
+      how(
+        'Type a floor to set your own; clear it to go back to the suggestion. An everyday line’s suggestion is the average of its lowest normal months (3 unless you pick more) — tap a line to see those months and leave out one that was cheap for other reasons (August: America). Bills suggest this month’s lines, pots suggest 0, charity suggests its average.',
+      )
+    );
+  };
+
+  // ── 4 · Where to cut ──────────────────────────────────────────────────
+  const cutSection = (): string => {
+    if (none) return noneNote;
+    if (floorsLoading) return '<p class="an-say">' + LOADING + '</p>';
+    const above = cats
+      .filter((c) => roundZ(c.aboveFloor) > 0)
+      .sort((a, b) =>
+        a.kind === 'charity' ? 1 : b.kind === 'charity' ? -1 : b.aboveFloor - a.aboveFloor,
       );
-    })
-    .join('');
-  const floorTotal =
-    '<tr class="sn-group an-total"><td>Total</td>' +
-    '<td data-label="Avg / mo">' +
-    money(s.realAvg) +
-    '</td><td data-label="Low"></td><td data-label="High"></td><td data-label="Share">100%</td>' +
-    '<td data-label="Floor">' +
-    (floorsLoading ? LOADING : money(s.floorTotal)) +
-    '</td><td data-label="Above floor">' +
-    (floorsLoading ? LOADING : signed(s.aboveFloor)) +
-    '</td></tr>';
-  const floorTable =
-    '<div class="card an-card"><div class="card-title">The floor</div>' +
-    '<div class="an-intro">The least each line would cost. An envelope’s suggestion is the average of its lowest normal months (3 by default — pick per line); tap a month to leave it out, because a month that was cheap for other reasons is not a floor. Type a floor to set your own; clear it to go back to the suggestion. Avg, low and high are your complete months (' +
-    avgSpan +
-    ' for the average).</div>' +
-    '<div class="an-tablewrap"><table class="sn-table an-floortable">' +
-    '<thead><tr><th>Category</th><th>Avg / mo</th><th>Low</th><th>High</th><th>Share</th><th>Floor</th><th>Above floor</th></tr></thead>' +
-    '<tbody>' +
-    floorBody +
-    floorTotal +
-    '</tbody></table></div></div>';
+    const top = above.filter((c) => c.kind !== 'charity').slice(0, 3);
+    const under = cats.filter((c) => roundZ(c.aboveFloor) < 0);
+    const aboveSum = above.reduce((a, c) => a + c.aboveFloor, 0);
+    const underSum = under.reduce((a, c) => a + c.aboveFloor, 0);
+    // The headline and the list must add up on screen: lines above their
+    // floor, minus lines already UNDER theirs (e.g. rent rose past the
+    // average), = the net figure on the tile.
+    const say =
+      '<p class="an-say">Lines above their floor add up to <b>' +
+      money(aboveSum) +
+      '</b> a month (' +
+      avgSpan +
+      ').' +
+      (under.length
+        ? ' ' +
+          under.map((c) => esc(c.label)).join(', ') +
+          ' sit' +
+          (under.length === 1 ? 's' : '') +
+          ' ' +
+          money(-underSum) +
+          ' under ' +
+          (under.length === 1 ? 'its' : 'their') +
+          ' floor, so overall <b>' +
+          money(Math.max(0, s.aboveFloor)) +
+          '</b> sits above.'
+        : '') +
+      (top.length
+        ? ' Most room: ' +
+          top.map((c) => esc(c.label) + ' ' + money(c.aboveFloor)).join(' · ') +
+          '.'
+        : '') +
+      '</p>';
+    const list =
+      '<div class="an-block"><div class="an-h">Above the floor, most first · a month</div>' +
+      above
+        .map((c) =>
+          openRow(
+            'cut:' + c.key,
+            c.emoji + ' ' + esc(c.label),
+            money(c.aboveFloor),
+            '<div class="an-why">Average ' +
+              money(c.avg) +
+              ' → your floor ' +
+              money(c.floor) +
+              (c.floorSet ? '' : ' (suggested)') +
+              '</div>' +
+              (c.kind === 'charity'
+                ? '<div class="an-why">Your words Oct 9: “its flex… can evn be 0 if needed”.</div>'
+                : '') +
+              monthChips((m) => m.byCat[c.key] || 0, inAvg),
+          ),
+        )
+        .join('') +
+      '</div>';
+    const atFloorBlock =
+      (under.length
+        ? '<div class="an-block"><div class="an-h">Under the floor · a month</div>' +
+          under
+            .map((c) =>
+              openRow(
+                'cut:' + c.key,
+                c.emoji + ' ' + esc(c.label),
+                signed(c.aboveFloor),
+                '<div class="an-why">Average ' +
+                  money(c.avg) +
+                  ' → your floor ' +
+                  money(c.floor) +
+                  '. The floor is higher than the average — usually a bill that went up during the year.</div>' +
+                  monthChips((m) => m.byCat[c.key] || 0, inAvg),
+              ),
+            )
+            .join('') +
+          row(
+            'Net above the floor',
+            money(s.aboveFloor) +
+              (Math.abs(aboveSum + underSum - s.aboveFloor) < 1
+                ? ' <span class="an-ok">adds up ✓</span>'
+                : ''),
+            'ym-row-bold',
+          ) +
+          '</div>'
+        : '') +
+      (() => {
+        const atFloor = cats.filter((c) => roundZ(c.aboveFloor) === 0);
+        return atFloor.length
+          ? '<details class="an-how"><summary>' +
+              atFloor.length +
+              (atFloor.length === 1 ? ' line' : ' lines') +
+              ' right at the floor</summary><div>' +
+              atFloor
+                .map((c) =>
+                  row(c.emoji + ' ' + esc(c.label), money(c.avg) + ' · floor ' + money(c.floor)),
+                )
+                .join('') +
+              '</div></details>'
+          : '';
+      })();
+    const live = lines.filter((l) => !l.dead);
+    const dead = lines.filter((l) => l.dead);
+    const linesTotal = lines.reduce((a, l) => a + l.annual, 0);
+    const linesBlock =
+      '<details class="an-how an-lines"><summary>Every bill over the year — ' +
+      money(linesTotal) +
+      '</summary><div>' +
+      live
+        .map((l) =>
+          row(
+            esc(l.label) +
+              '<span class="an-sublbl">' +
+              esc(l.category === 'housing' ? 'housing' : 'recurring') +
+              (l.subcategory ? ' · ' + esc(l.subcategory) : '') +
+              '</span>',
+            money(l.monthly) + ' · ' + money(l.annual) + '/yr',
+          ),
+        )
+        .join('') +
+      (dead.length
+        ? '<div class="an-legend">' +
+          dead.length +
+          ' lines with no money this year: ' +
+          dead.map((l) => esc(l.label)).join(', ') +
+          '</div>'
+        : '') +
+      '<div class="an-legend">₪ this month · ₪ across ' +
+      state.currentYear +
+      ', largest first</div></div></details>';
+    return say + list + atFloorBlock + linesBlock;
+  };
 
-  // ── Fixed lines, annualized ───────────────────────────────────────────
-  const lineRow = (l: (typeof lines)[number]): string =>
-    '<tr class="sn-cat' +
-    (l.dead ? ' an-dead' : '') +
-    '"><td>' +
-    esc(l.label) +
-    (l.dead ? ' <span class="an-note">no money this year</span>' : '') +
-    '</td>' +
-    '<td data-label="Type">' +
-    esc(l.category === 'housing' ? 'housing' : 'recurring') +
-    (l.subcategory ? ' · ' + esc(l.subcategory) : '') +
-    '</td>' +
-    '<td data-label="' +
-    abbr(s.referenceMonth) +
-    '">' +
-    money(l.monthly) +
-    '</td>' +
-    '<td data-label="Year">' +
-    money(l.annual) +
-    '</td>' +
-    '<td data-label="Months">' +
-    l.monthsPresent +
-    '</td></tr>';
-  const linesTotal = lines.reduce((a, l) => a + l.annual, 0);
-  const linesTable =
-    '<div class="card an-card"><div class="card-title">Fixed lines</div>' +
-    '<div class="an-intro">Every housing and recurring line over the year, ' +
-    abbr(s.referenceMonth) +
-    '’s amount and what it adds up to across ' +
-    state.currentYear +
-    '. Largest first.</div>' +
-    '<div class="an-tablewrap"><table class="sn-table an-linestable">' +
-    '<thead><tr><th>Line</th><th>Type</th><th>' +
-    abbr(s.referenceMonth) +
-    '</th><th>Year</th><th>Months</th></tr></thead><tbody>' +
-    lines.map(lineRow).join('') +
-    '<tr class="sn-group an-total"><td>Total</td><td data-label="Type"></td><td data-label="' +
-    abbr(s.referenceMonth) +
-    '">' +
-    money(lines.reduce((a, l) => a + l.monthly, 0)) +
-    '</td><td data-label="Year">' +
-    money(linesTotal) +
-    '</td><td data-label="Months"></td></tr>' +
-    '</tbody></table></div></div>';
-
-  const emptyNote =
-    todayMonth === 0
-      ? '<div class="an-intro">Every month of ' +
+  // ── 5 · If it goes wrong ──────────────────────────────────────────────
+  const safeSection = (): string => {
+    if (floorsLoading) return '<p class="an-say">' + LOADING + '</p>';
+    // A year with nothing complete (January 2027) has no real spend and only
+    // bills in its floor — a confident "+₪X" there would be a number with
+    // nothing under it. Say so instead.
+    if (none)
+      return (
+        '<p class="an-say">Nothing in ' +
         state.currentYear +
-        ' is still ahead, so averages and floors are empty here. Budgets fill the projected columns.</div>'
-      : '';
+        ' has happened yet, so there’s no real spend here, and the floor holds only this year’s bills until you set the rest. ' +
+        (state.currentYear > 2026
+          ? 'Switch to ' + (state.currentYear - 1) + ' for the numbers that happened.'
+          : '') +
+        '</p>'
+      );
+    const real = s.realAvg;
+    const nowIncome = avgOf((m) => m.income);
+    const scen = [
+      ...SAFE_SCENARIOS,
+      ...(none
+        ? []
+        : [
+            {
+              key: 'now',
+              label: 'Now — all your jobs (' + avgSpan + ' average)',
+              income: nowIncome,
+            },
+          ]),
+    ];
+    const say =
+      '<p class="an-say">On Petachya only, a month comes out ' +
+      margin(petFloor.margin) +
+      ' at your floor' +
+      (none ? '' : ' and ' + margin(petReal.margin) + ' at your real spend') +
+      '.' +
+      (petFloor.months !== null
+        ? ' At the floor, your cash covers that for about <b>' + petFloor.months + ' months</b>.'
+        : '') +
+      '</p>';
+    // What if: a one-off comes out of cash first (egg freezing ≈ ₪8,000,
+    // her Oct 9). Nothing is written — the box is gone on reload.
+    const oneOff =
+      '<div class="an-block an-oneoff"><label class="an-h" for="an-oneoff">What if a one-off comes out of cash first?</label>' +
+      '<div class="an-oneoff-row"><span>₪</span><input id="an-oneoff" type="number" min="0" step="100" inputmode="decimal" class="an-oneoff-in" placeholder="e.g. 8000" value="' +
+      (_anOneOff ? roundZ(_anOneOff) : '') +
+      '" onchange="setAnalyzeOneOff(this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
+      (_anOneOff
+        ? '<button type="button" class="an-back" onclick="setAnalyzeOneOff(\'\')">clear</button>'
+        : '') +
+      '</div><div class="an-legend">' +
+      (_anOneOff
+        ? 'Showing cash after ' +
+          money(_anOneOff) +
+          ' goes out: ' +
+          money(cashLeft) +
+          '. Nothing is saved — it’s a what-if.'
+        : 'Type an amount to see “cash lasts” move. Nothing is saved — it’s a what-if.') +
+      '</div></div>';
+    const cell = (inc: number, spend: number): string => {
+      const rw = runway(cashLeft, inc, spend);
+      return (
+        margin(rw.margin) +
+        (rw.months !== null ? '<span class="an-runway">cash lasts ' + rw.months + ' mo</span>' : '')
+      );
+    };
+    const table =
+      '<div class="an-block"><div class="an-stable">' +
+      '<div class="an-srow an-shead"><span>Income a month</span><span>At your floor<br>' +
+      money(s.floorTotal) +
+      '</span><span>At real spend<br>' +
+      (none ? '—' : money(real)) +
+      '</span></div>' +
+      scen
+        .map(
+          (x) =>
+            '<div class="an-srow' +
+            (x.key === 'now' ? ' an-snow' : '') +
+            '"><span><span class="an-slabel">' +
+            esc(x.label) +
+            '</span><span class="an-sinc">' +
+            money(x.income) +
+            '</span></span><span>' +
+            cell(x.income, s.floorTotal) +
+            '</span><span>' +
+            (none ? '—' : cell(x.income, real)) +
+            '</span></div>',
+        )
+        .join('') +
+      '</div></div>';
+    const stale = cashDays !== null && cashDays > 30;
+    const cashLine =
+      '<div class="an-block">' +
+      row('Cash · Total Liquid on the Cash tab', money(cash.liquid), 'ym-row-bold') +
+      row(
+        'Holdings + owed to you − what you owe',
+        money(cash.holdings) + ' + ' + money(cash.owed) + ' − ' + money(cash.debt),
+        'ym-row-sub',
+      ) +
+      (state.cashAccounts || [])
+        .filter((a) => a.is_debt)
+        .map((a) => row('owe · ' + esc(a.name), '−' + money(cashILS(a)), 'ym-row-sub an-dim'))
+        .join('') +
+      (_anOneOff ? row('What-if one-off', '−' + money(_anOneOff), 'ym-row-sub') : '') +
+      '<p class="' +
+      (stale ? 'an-flag' : 'an-legend') +
+      '">' +
+      (cash.oldest
+        ? 'Balances as of ' +
+          cash.oldest.toLocaleDateString('en-IL', { day: 'numeric', month: 'short' }) +
+          ' (' +
+          cashDays +
+          ' days ago)' +
+          (stale
+            ? ' — update them on the Cash tab and every “cash lasts” here moves with them.'
+            : '.')
+        : 'No balances set on the Cash tab yet.') +
+      '</p></div>';
+    const notes =
+      '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
+      '<li>The incomes are from your Sep 4 money model: Petachya at ₪120 an hour as your only payslip ≈ ₪9,780; gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12; 2 weekly private clients ≈ ₪1,000 after OPS, tax and Bituach Leumi, with a quarter of sessions cancelled. It predates gan 2 starting and the Feb 7 last day; real payslips can replace these numbers whenever you want.</li>' +
+      '<li>“Now” is this app’s income, where private is before tax.</li>' +
+      '<li>August: gan 2 and private stop — Petachya only that month.</li>' +
+      '<li>Clalit money that needs you on payroll that month: Nov 5 ≈ ₪6,000; the January grant ≈ ₪5,300.</li>' +
+      '<li>Not counted as cash: pikadon, keren hishtalmut (tax-free only after 6 years), Harel. The tenant deposit isn’t yours.</li>' +
+      '<li>Your floor mixes lean lines and bare-minimum lines — the “at your floor” column is exactly as strict as the floor you set.</li>' +
+      '</ul></div></details>';
+    return say + table + oneOff + cashLine + notes;
+  };
+
+  const sectionHtml =
+    sub === 'real'
+      ? realSection()
+      : sub === 'why'
+        ? whySection()
+        : sub === 'floor'
+          ? floorSection()
+          : sub === 'cut'
+            ? cutSection()
+            : safeSection();
+  const titles: Record<AnSub, string> = {
+    real: 'What do I really spend?',
+    why: 'How did it get so high?',
+    floor: 'What’s the least I could spend?',
+    cut: 'Where can I cut?',
+    safe: 'If it goes wrong — am I OK?',
+  };
 
   return (
     '<div class="year-tab-wrap ym-full an-wrap">' +
     head +
-    kpis +
-    emptyNote +
-    byMonth +
-    floorTable +
-    linesTable +
-    '</div>'
+    tiles +
+    '<section class="card an-card an-section" data-sub="' +
+    sub +
+    '"><div class="card-title">' +
+    titles[sub] +
+    '</div>' +
+    sectionHtml +
+    back +
+    '</section></div>'
   );
 }
 
@@ -12888,6 +13637,13 @@ Object.assign(window as unknown as Record<string, unknown>, {
   toggleFloorMonth,
   setFloorAvgN,
   setAnalyzeAvgWindow,
+  setAnalyzeSub,
+  setAnalyzeOneOff,
+  toggleAnRow,
+  analyzeToTop,
+  cashTotals,
+  yearTabGap,
+  whyBridge,
   computeAnalyze,
   analyzeYear,
   restoreCache,

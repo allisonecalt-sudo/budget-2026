@@ -38,7 +38,15 @@
 // What's built: analyzeYear (everything), plus the small helpers it uses —
 //   catKind, monthStatus, pickAvgMonths, lineKey, and clampAvgN / cleanExcluded
 //   (stored avg_n / excluded_months are cleaned, never trusted raw).
-// What's next: runway (liquid ÷ floor) once "liquid" has one agreed meaning.
+//   v56 (2026-10-11, the Analysis section): per-month `parts` (the "why so
+//   high" drivers: rent / ended fixed lines / each fixed category / own
+//   envelopes / lifestyle / each pot / charity — they sum to real),
+//   `envelopeActual`, and three helpers: yearTabGap (why the Year tab's ÷12
+//   average differs from this one), whyBridge (early vs recent months, driver
+//   by driver, thin months flagged) and runway (one income mix vs one spend).
+//   Runway's cash = the Cash tab's Total Liquid, passed in — never a third
+//   meaning of "liquid".
+// What's next: a cross-year view so January 2027 can read 2026's months.
 // Links: consumed by app.ts renderAnalyzeTab; pinned by tests/analyze.test.mjs.
 
 import { ag } from './budget-math.js';
@@ -135,6 +143,14 @@ export interface AnalyzeMonth {
   byCat: Record<string, number>;
   /** Transactions only, per category — what low/high months are read from. */
   actualByCat: Record<string, number>;
+  /** Envelopes at what is actually logged (transactions only), any status. */
+  envelopeActual: number;
+  /**
+   * real split into the "why so high" drivers (keys: BUCKETS). Sums to real.
+   * Fixed money is split three ways: rent, lines that have ENDED (money in a
+   * past month, none in the reference month or after), and the rest.
+   */
+  parts: Record<string, number>;
   /** How many transactions were logged. Thin months show here, unjudged. */
   entries: number;
 }
@@ -211,6 +227,25 @@ export interface AnalyzeResult {
 
 const n = (v: unknown): number => Number(v) || 0;
 
+/**
+ * The "why so high" drivers, in display order. Envelopes in OWN_ENVELOPES get
+ * their own row; every other envelope is "lifestyle". Each pot is its own row
+ * (travel, admin). Fixed money splits into rent / ended lines / the rest of
+ * its category.
+ */
+export const OWN_ENVELOPES = ['groceries', 'transport', 'health', 'therapy'];
+export function bucketOf(c: AnalyzeCategory): string {
+  const kind = catKind(c);
+  if (kind === 'charity') return 'charity';
+  if (kind === 'pot') return c.key;
+  if (kind === 'fixed') return c.key;
+  return OWN_ENVELOPES.includes(c.key) ? c.key : 'lifestyle';
+}
+/** "Rent" and "Rent (Sep)" are rent; "Rental insurance" is not. */
+export function isRentLabel(label: unknown): boolean {
+  return /^rent\b/.test(lineKey(label));
+}
+
 export function catKind(c: AnalyzeCategory): CatKind {
   if (c.key === 'charity') return 'charity';
   if (c.hasTab) return 'pot';
@@ -283,6 +318,57 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
   for (const i of input.incomeItems)
     incItems[i.month_id] = (incItems[i.month_id] || 0) + n(i.amount);
 
+  // ── Fixed lines: rent, and lines that have ended ───────────────────────
+  // A line has ENDED when it carried money in some past month and carries
+  // none in the reference month (current, else the last month) or any month
+  // after it. Read from her own budget_items, nothing inferred from labels
+  // except "rent".
+  const statusById: Record<string, MonthStatus> = {};
+  for (const m of months) statusById[m.id] = monthStatus(m.month_num, today);
+  const refIn = months.find((m) => m.month_num === today) || months[months.length - 1] || null;
+  const fixedKeys = new Set(cats.filter((c) => catKind(c) === 'fixed').map((c) => c.key));
+  const lineMoney: Record<string, { past: number; refOn: number }> = {};
+  for (const b of input.budgetItems) {
+    if (!fixedKeys.has(b.category)) continue;
+    const k = b.category + '|' + lineKey(b.label);
+    const rec = (lineMoney[k] ||= { past: 0, refOn: 0 });
+    const st = statusById[b.month_id];
+    const mn = months.find((m) => m.id === b.month_id)?.month_num ?? 0;
+    if (st === 'past' && (!refIn || mn < refIn.month_num)) rec.past += Math.abs(n(b.amount));
+    if (refIn && mn >= refIn.month_num) rec.refOn += Math.abs(n(b.amount));
+  }
+  // Renamed lines are not ended: "Claude Pro" → "Claude Code Max" → "Claude
+  // Max" is one bill under five labels (2026). A line only counts as ended
+  // when no line still carrying money in the same category starts with the
+  // same first word.
+  const firstWord = (k: string): string => (k.split('|')[1] || '').split(/[\s\-–(]/)[0];
+  const liveFirst = new Set(
+    Object.keys(lineMoney)
+      .filter((k) => Math.round(lineMoney[k].refOn) !== 0)
+      .map((k) => k.split('|')[0] + '|' + firstWord(k)),
+  );
+  const endedKeys = new Set(
+    Object.keys(lineMoney).filter(
+      (k) =>
+        lineMoney[k].past > 0 &&
+        Math.round(lineMoney[k].refOn) === 0 &&
+        !isRentLabel(k.split('|')[1]) &&
+        !liveFirst.has(k.split('|')[0] + '|' + firstWord(k)),
+    ),
+  );
+  const rentByMonthCat: Record<string, Record<string, number>> = {};
+  const endedByMonthCat: Record<string, Record<string, number>> = {};
+  for (const b of input.budgetItems) {
+    if (!fixedKeys.has(b.category)) continue;
+    if (isRentLabel(b.label)) {
+      const r = (rentByMonthCat[b.month_id] ||= {});
+      r[b.category] = (r[b.category] || 0) + n(b.amount);
+    } else if (endedKeys.has(b.category + '|' + lineKey(b.label))) {
+      const e = (endedByMonthCat[b.month_id] ||= {});
+      e[b.category] = (e[b.category] || 0) + n(b.amount);
+    }
+  }
+
   const tx = (mid: string, key: string): number => txByMonthCat[mid]?.[key] || 0;
   const bi = (mid: string, key: string): number => biByMonthCat[mid]?.[key] || 0;
   const hasBi = (mid: string, key: string): boolean => biByMonthCat[mid]?.[key] !== undefined;
@@ -313,6 +399,10 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
     const status = monthStatus(m.month_num, today);
     const byCat: Record<string, number> = {};
     const actualByCat: Record<string, number> = {};
+    const parts: Record<string, number> = {};
+    const addPart = (k: string, v: number): void => {
+      parts[k] = (parts[k] || 0) + v;
+    };
     let fixed = 0,
       envelope = 0,
       envelopeActual = 0,
@@ -328,18 +418,29 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
         v = status === 'past' ? actual : status === 'future' ? budget : Math.max(actual, budget);
         envelope += v;
         envelopeActual += actual;
+        addPart(bucketOf(c), v);
       } else if (kind === 'fixed') {
         v = Math.max(bi(m.id, c.key), actual);
         fixed += v;
+        // Rent first, then ended lines, each capped by what is left of v, so
+        // the three parts always sum to exactly what fixed counts.
+        const rentP = Math.min(Math.max(0, rentByMonthCat[m.id]?.[c.key] || 0), v);
+        const endedP = Math.min(Math.max(0, endedByMonthCat[m.id]?.[c.key] || 0), v - rentP);
+        addPart('rent', rentP);
+        addPart('ended', endedP);
+        addPart(c.key, v - rentP - endedP);
       } else if (kind === 'pot') {
         v = catBudget(m, c.key);
         pots += v;
+        addPart(bucketOf(c), v);
       } else {
         v = catBudget(m, c.key);
         charity += v;
+        addPart('charity', v);
       }
       byCat[c.key] = ag(v);
     }
+    for (const k of Object.keys(parts)) parts[k] = ag(parts[k]);
     const savings = bud(m.id, 'savings_bank') + bud(m.id, 'savings_invested');
     const real = fixed + envelope + pots + charity;
     // Only envelopes differ at actual: fixed is already max(lines, paid) and
@@ -361,6 +462,8 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
       used: ag(real + savings),
       byCat,
       actualByCat,
+      envelopeActual: ag(envelopeActual),
+      parts,
       entries: txCount[m.id] || 0,
     };
   });
@@ -536,4 +639,135 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
       yearSavings: ag(out.reduce((s, m) => s + m.savings, 0)),
     },
   };
+}
+
+// ── Analysis section helpers (v56) ───────────────────────────────────────
+
+/**
+ * Why the Year tab's average and this tab's differ (her ₪13,910 vs ₪14,580,
+ * 2026-10-09). The Year tab divides the whole year by 12: complete months at
+ * real, the current and future months with ONLY what is logged in the
+ * envelopes but bills, pots and charity in full (totalSpentFor). This tab
+ * averages complete months. The difference is exactly:
+ *   windowEffect  — this tab's window (e.g. last 3) vs every complete month
+ *   envEffect     — the not-yet-complete months' envelopes, logged only
+ *   otherEffect   — the not-yet-complete months' bills, pots, charity in full
+ * windowAvg + windowEffect + envEffect + otherEffect = yearTabAvg, always.
+ */
+export interface YearTabGap {
+  yearTabAvg: number;
+  allCompleteAvg: number;
+  windowAvg: number;
+  windowEffect: number;
+  envEffect: number;
+  otherEffect: number;
+  /** month_nums that are not complete (current + future). */
+  openMonths: number[];
+}
+export function yearTabGap(r: AnalyzeResult, divideBy = 12): YearTabGap | null {
+  const past = r.months.filter((m) => m.status === 'past');
+  if (!past.length) return null;
+  const open = r.months.filter((m) => m.status !== 'past');
+  const mean = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / xs.length;
+  const allAvg = mean(past.map((m) => m.real));
+  const allEnv = mean(past.map((m) => m.envelope));
+  const allOther = allAvg - allEnv;
+  let envEffect = 0;
+  let otherEffect = 0;
+  for (const m of open) {
+    envEffect += (m.envelopeActual - allEnv) / divideBy;
+    otherEffect += (m.fixed + m.pots + m.charity - allOther) / divideBy;
+  }
+  const windowAvg = r.summary.realAvg;
+  const yearTab =
+    (past.reduce((s, m) => s + m.real, 0) +
+      open.reduce((s, m) => s + m.fixed + m.envelopeActual + m.pots + m.charity, 0)) /
+    divideBy;
+  return {
+    yearTabAvg: ag(yearTab),
+    allCompleteAvg: ag(allAvg),
+    windowAvg,
+    windowEffect: ag(allAvg - windowAvg),
+    envEffect: ag(envEffect),
+    otherEffect: ag(otherEffect),
+    openMonths: open.map((m) => m.month_num),
+  };
+}
+
+/**
+ * "How did it get so high" — early months vs recent months, driver by driver.
+ * early = the first n complete months, recent = the last n, n = 3 (fewer when
+ * there are fewer than 6 complete months; never overlapping; needs 4+).
+ * Each row is avg(recent) − avg(early) of one bucket; rows sum to the real
+ * difference exactly. Thin months (entries well under the usual) are flagged
+ * so an away month is never read as a cheaper life.
+ */
+export interface WhyRow {
+  key: string;
+  early: number;
+  recent: number;
+  delta: number;
+}
+export interface WhyBridge {
+  early: number[];
+  recent: number[];
+  earlyReal: number;
+  recentReal: number;
+  delta: number;
+  rows: WhyRow[];
+  earlySavingsRate: number;
+  recentSavingsRate: number;
+  /** Complete months with under 60% of the usual (median) number of entries. */
+  thin: number[];
+}
+export function whyBridge(r: AnalyzeResult, order: string[]): WhyBridge | null {
+  const past = r.months.filter((m) => m.status === 'past');
+  const n = Math.min(3, Math.floor(past.length / 2));
+  if (n < 2) return null;
+  const early = past.slice(0, n);
+  const recent = past.slice(past.length - n);
+  const avg = (ms: AnalyzeMonth[], pick: (m: AnalyzeMonth) => number): number =>
+    ms.reduce((s, m) => s + pick(m), 0) / ms.length;
+  const keys = [...order];
+  for (const m of past) for (const k of Object.keys(m.parts)) if (!keys.includes(k)) keys.push(k);
+  const rows: WhyRow[] = keys.map((k) => {
+    const e = avg(early, (m) => m.parts[k] || 0);
+    const rc = avg(recent, (m) => m.parts[k] || 0);
+    return { key: k, early: ag(e), recent: ag(rc), delta: ag(rc - e) };
+  });
+  const rate = (ms: AnalyzeMonth[]): number => {
+    const inc = ms.reduce((s, m) => s + m.income, 0);
+    return inc ? ms.reduce((s, m) => s + m.savings, 0) / inc : 0;
+  };
+  const counts = past.map((m) => m.entries).sort((a, b) => a - b);
+  const median = counts[Math.floor(counts.length / 2)] || 0;
+  const earlyReal = avg(early, (m) => m.real);
+  const recentReal = avg(recent, (m) => m.real);
+  return {
+    early: early.map((m) => m.month_num),
+    recent: recent.map((m) => m.month_num),
+    earlyReal: ag(earlyReal),
+    recentReal: ag(recentReal),
+    delta: ag(recentReal - earlyReal),
+    rows,
+    earlySavingsRate: rate(early),
+    recentSavingsRate: rate(recent),
+    thin: past.filter((m) => median > 0 && m.entries < 0.6 * median).map((m) => m.month_num),
+  };
+}
+
+/**
+ * One income mix against one spend level. margin = income − spend. When it is
+ * short, months = how long cash covers the shortfall (0 when there is no
+ * cash). When it is covered, months = null — nothing is being drawn down.
+ */
+export function runway(
+  cash: number,
+  income: number,
+  spend: number,
+): { margin: number; months: number | null } {
+  const margin = ag(n(income) - n(spend));
+  if (margin >= 0) return { margin, months: null };
+  const c = Math.max(0, n(cash));
+  return { margin, months: Math.round((c / -margin) * 10) / 10 };
 }

@@ -4614,3 +4614,428 @@ select.an-nsel {
     min-height: 32px;
   }
 }
+
+/* ── v56 · the Analysis section: five question tiles ─────────────────────
+   Her questions as tiles carrying their answers; tap one → its section.
+   No red anywhere: short = amber, covered = forest, stale = amber line. */
+.an-stamp {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.an-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.an-qtile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--gradient-card-wash);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  padding: 0.75rem 0.85rem;
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+  min-height: 44px;
+}
+.an-qtile:hover {
+  border-color: var(--accent);
+}
+.an-qtile.active {
+  border: 2px solid var(--accent);
+  padding: calc(0.75rem - 1px) calc(0.85rem - 1px);
+}
+.an-q {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.an-qtile.active .an-q {
+  color: var(--accent);
+}
+.an-a {
+  font-family: 'DM Mono', monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.an-qn {
+  font-size: 0.62rem;
+  color: var(--dim);
+  line-height: 1.3;
+}
+.an-section {
+  scroll-margin-top: 4rem;
+  max-width: 820px;
+}
+.an-say {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0 0 0.9rem;
+}
+.an-say-sm {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.an-flag {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--amber);
+  background: var(--ambersoft);
+  border-radius: var(--r-sm);
+  padding: 0.45rem 0.6rem;
+  margin: 0 0 0.9rem;
+}
+.an-block {
+  margin: 0 0 1rem;
+}
+.an-h {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+.an-open {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.an-open:hover {
+  background: var(--surface2);
+}
+.an-open .ym-row {
+  min-height: 36px;
+  align-items: center;
+}
+.an-caret {
+  display: inline-block;
+  width: 1rem;
+  color: var(--dim);
+  font-size: 0.7rem;
+}
+.an-detail {
+  margin: 0.1rem 0 0.6rem 1rem;
+  padding: 0.45rem 0.6rem;
+  border-left: 2px solid var(--border);
+}
+.an-why {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-bottom: 0.35rem;
+}
+.an-mlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.an-mchip-ro {
+  cursor: default;
+}
+.an-mchip-ro:hover {
+  border-color: var(--border);
+  color: var(--muted);
+}
+.an-mchip.proj {
+  font-style: italic;
+  color: var(--dim);
+}
+.an-proj {
+  font-style: italic;
+  color: var(--dim);
+}
+.an-ok {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 0.3rem;
+}
+.an-pos {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.an-short {
+  color: var(--amber);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.an-dim .ym-label,
+.an-dim .ym-val {
+  color: var(--dim);
+}
+.an-tagchip {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--muted);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.an-tagchip.t-ended {
+  border-style: dashed;
+}
+.an-back {
+  display: inline-block;
+  margin-top: 0.6rem;
+  background: none;
+  border: none;
+  padding: 0.5rem 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--accent);
+  cursor: pointer;
+}
+.an-how {
+  margin: 0.4rem 0 0.6rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.an-how summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  padding: 0.4rem 0;
+  min-height: 32px;
+}
+.an-how > div {
+  padding: 0.3rem 0 0.2rem;
+  line-height: 1.5;
+}
+.an-ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.an-ul li {
+  margin-bottom: 0.35rem;
+}
+.an-sublbl {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--dim);
+}
+.an-phone {
+  display: none;
+}
+/* Floor: one row per line — label (tap to open) · her floor · real avg */
+.an-fhead,
+.an-frow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem 5.5rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+.an-fhead {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+.an-fhead span:not(:first-child),
+.an-fin,
+.an-favg {
+  text-align: right;
+}
+.an-fgroup {
+  margin-top: 0.6rem;
+}
+.an-frow {
+  min-height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+.an-flabel {
+  background: none;
+  border: none;
+  padding: 0.35rem 0;
+  font: inherit;
+  font-size: 0.85rem;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.an-fin {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.an-favg {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.an-ftotal {
+  font-weight: 700;
+  border-bottom: none;
+  border-top: 2px solid var(--border);
+}
+.an-ftotal .an-fin {
+  font-family: 'DM Mono', monospace;
+}
+.an-seg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0.2rem 0 0.5rem;
+}
+.an-seglbl {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-right: 0.2rem;
+}
+.an-segbtn {
+  min-width: 44px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+.an-segbtn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.an-segbtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* If it goes wrong: one row per income mix — income · at floor · at real */
+.an-srow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+  font-size: 0.82rem;
+}
+.an-srow > span:not(:first-child) {
+  text-align: right;
+}
+.an-shead {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+.an-slabel {
+  display: block;
+}
+.an-sinc {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.an-snow {
+  color: var(--muted);
+}
+.an-runway {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+@media (max-width: 900px) {
+  .an-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .an-qtile:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 600px) {
+  .an-tiles {
+    gap: 0.45rem;
+  }
+  .an-qtile {
+    padding: 0.55rem 0.65rem;
+  }
+  .an-qtile.active {
+    padding: calc(0.55rem - 1px) calc(0.65rem - 1px);
+  }
+  .an-a {
+    font-size: 1.05rem;
+  }
+  .an-phone {
+    display: block;
+  }
+  .an-desk {
+    display: none;
+  }
+  .an-fhead,
+  .an-frow {
+    grid-template-columns: minmax(0, 1fr) 5.4rem 4.4rem;
+    gap: 0.3rem;
+  }
+  input.an-floor {
+    width: 72px;
+  }
+  .an-mchip {
+    min-height: 36px;
+  }
+  .an-srow {
+    font-size: 0.78rem;
+  }
+}
+
+.an-oneoff-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+input.an-oneoff-in {
+  width: 150px;
+  min-height: 44px;
+  font-family: 'DM Mono', monospace;
+}
+.an-runway {
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .an-flabel {
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
