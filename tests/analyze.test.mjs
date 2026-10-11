@@ -28,6 +28,7 @@ const {
   whyBridge,
   runway,
   isRentLabel,
+  WHOLE_YEAR,
 } = await import(pathToFileURL(compiled).href);
 
 // A stored floor row as the math sees it.
@@ -517,4 +518,32 @@ test('runway: covered → no drawdown; short → months of cash; no cash → 0',
   assert.deepEqual(runway(10000, 8000, 10000), { margin: -2000, months: 5 });
   assert.deepEqual(runway(-500, 8000, 10000), { margin: -2000, months: 0 });
   assert.deepEqual(runway(10000, 'x', 3000), { margin: -3000, months: 3.3 });
+});
+
+// ── v57: the whole year, months ahead as budgeted ────────────────────────
+
+test('WHOLE_YEAR window: all 12 months, the ones ahead counted as budgeted', () => {
+  assert.deepEqual(pickAvgMonths([3, 1, 2, 4], 3, WHOLE_YEAR), [1, 2, 3, 4]);
+  const r = run({ avgWindow: WHOLE_YEAR });
+  assert.deepEqual(r.summary.avgMonths, [1, 2, 3, 4]);
+  const mean = r.months.reduce((s, m) => s + m.real, 0) / r.months.length;
+  assert.ok(Math.abs(r.summary.realAvg - mean) < 0.01);
+  // The Year-tab bridge still closes exactly from a whole-year average.
+  const g = yearTabGap(r, 4);
+  const bridged = g.windowAvg + g.windowEffect + g.envEffect + g.otherEffect;
+  assert.ok(Math.abs(bridged - g.yearTabAvg) < 0.02);
+});
+
+test('whyBridge whole year: first months vs the LAST months of the year, budgeted ones named', () => {
+  const r = run({ avgWindow: WHOLE_YEAR }); // 2 complete, 2 ahead
+  const w = whyBridge(r, ['rent'], true);
+  assert.deepEqual(w.early, [1, 2]);
+  assert.deepEqual(w.recent, [3, 4]);
+  assert.deepEqual(w.projected, [3, 4]);
+  const sum = w.rows.reduce((s, x) => s + x.delta, 0);
+  assert.ok(Math.abs(sum - w.delta) < 0.05);
+  // Without the whole year, 2 complete months are not enough to compare.
+  assert.equal(whyBridge(r, ['rent']), null);
+  // A year with nothing complete has nothing real to compare against.
+  assert.equal(whyBridge(run({ todayMonth: 0 }), [], true), null);
 });

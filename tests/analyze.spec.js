@@ -262,6 +262,34 @@ test.describe('Analysis section', () => {
     expect(writes).toEqual([]);
   });
 
+  test('Whole year: the pill averages all 12 months and says which are budgeted', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'real');
+    const pill = page.locator('.an-winbtn', { hasText: 'Whole year' });
+    if (!(await pill.count())) test.skip(true, 'no months ahead this year');
+    await pill.click();
+    const r = await page.evaluate(() => {
+      const a = window.computeAnalyze();
+      const mean = a.months.reduce((s, m) => s + m.real, 0) / a.months.length;
+      return {
+        avg: a.summary.realAvg,
+        mean,
+        n: a.summary.avgMonths.length,
+        stamp: document.querySelector('.an-stamp').textContent,
+        tile: document.querySelector('.an-qtile .an-a').textContent,
+      };
+    });
+    expect(r.n).toBe(12);
+    expect(Math.abs(r.avg - r.mean)).toBeLessThan(0.01);
+    expect(r.stamp).toContain('budgeted');
+    expect(r.tile.replace(/[^\d]/g, '')).toBe(String(Math.round(r.avg)));
+    // Why so high in whole-year mode compares against the year's last months.
+    await page.locator('.an-qtile').nth(1).click();
+    await expect(page.locator('.an-section')).toContainText('(budgeted)');
+    await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
+  });
+
   test('phone width: no sideways scroll on any section, tiles two across', async ({ page }) => {
     await page.setViewportSize({ width: 412, height: 892 });
     await openAnalyze(page, 'real');

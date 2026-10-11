@@ -46,6 +46,9 @@
 //   by driver, thin months flagged) and runway (one income mix vs one spend).
 //   Runway's cash = the Cash tab's Total Liquid, passed in — never a third
 //   meaning of "liquid".
+//   v57: WHOLE_YEAR window — averages over all 12 months, the ones ahead as
+//   budgeted; whyBridge(…, wholeYear) compares the first months with the
+//   last months of the year.
 // What's next: a cross-year view so January 2027 can read 2026's months.
 // Links: consumed by app.ts renderAnalyzeTab; pinned by tests/analyze.test.mjs.
 
@@ -260,7 +263,12 @@ export function monthStatus(monthNum: number, todayMonth: number): MonthStatus {
 }
 
 /** The complete months an average is taken over: all past months, or the last N of them. */
+/** window = WHOLE_YEAR: every month of the year — the complete ones as they
+ *  happened, the current and future ones as budgeted (her ask 2026-10-11:
+ *  "do this with the projection with the whole year as well"). */
+export const WHOLE_YEAR = -1;
 export function pickAvgMonths(monthNums: number[], todayMonth: number, window: number): number[] {
+  if (window === WHOLE_YEAR) return [...monthNums].sort((a, b) => a - b);
   const past = [...monthNums].filter((m) => m < todayMonth).sort((a, b) => a - b);
   if (window > 0 && past.length > window) return past.slice(past.length - window);
   return past;
@@ -719,13 +727,18 @@ export interface WhyBridge {
   recentSavingsRate: number;
   /** Complete months with under 60% of the usual (median) number of entries. */
   thin: number[];
+  /** month_nums in early/recent that have not happened yet (counted as budgeted). */
+  projected: number[];
 }
-export function whyBridge(r: AnalyzeResult, order: string[]): WhyBridge | null {
+export function whyBridge(r: AnalyzeResult, order: string[], wholeYear = false): WhyBridge | null {
   const past = r.months.filter((m) => m.status === 'past');
-  const n = Math.min(3, Math.floor(past.length / 2));
-  if (n < 2) return null;
-  const early = past.slice(0, n);
-  const recent = past.slice(past.length - n);
+  // Whole year: the first months against the LAST months of the year, the
+  // ones still ahead counted as budgeted — "where is the plan taking me".
+  const pool = wholeYear ? r.months : past;
+  const n = Math.min(3, Math.floor(pool.length / 2));
+  if (n < 2 || (wholeYear && !past.length)) return null;
+  const early = pool.slice(0, n);
+  const recent = pool.slice(pool.length - n);
   const avg = (ms: AnalyzeMonth[], pick: (m: AnalyzeMonth) => number): number =>
     ms.reduce((s, m) => s + pick(m), 0) / ms.length;
   const keys = [...order];
@@ -753,6 +766,7 @@ export function whyBridge(r: AnalyzeResult, order: string[]): WhyBridge | null {
     earlySavingsRate: rate(early),
     recentSavingsRate: rate(recent),
     thin: past.filter((m) => median > 0 && m.entries < 0.6 * median).map((m) => m.month_num),
+    projected: [...early, ...recent].filter((m) => m.status !== 'past').map((m) => m.month_num),
   };
 }
 

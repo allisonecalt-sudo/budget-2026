@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
 import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
-import { analyzeYear, yearTabGap, whyBridge, runway } from './lib/analyze.js';
+import { analyzeYear, yearTabGap, whyBridge, runway, WHOLE_YEAR } from './lib/analyze.js';
 import type { AnalyzeCatStat, AnalyzeFloorIn, AnalyzeMonth, AnalyzeResult } from './lib/analyze.js';
 
 declare global {
@@ -39,8 +39,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v56';
-const BUILD_DATE = 'Oct 11, 2026 16:20';
+const APP_VERSION = 'v57';
+const BUILD_DATE = 'Oct 11, 2026 16:51';
 
 const MONTHS = [
   'January',
@@ -10085,7 +10085,8 @@ async function loadAnalyzeData(): Promise<void> {
 // it changes what she is looking at, not any stored number.
 function analyzeAvgWindow(): number {
   const v = parseInt(localStorage.getItem('analyzeAvgWindow') || '0', 10);
-  return v === 3 || v === 6 ? v : 0;
+  // -1 = the whole year, months still ahead counted as budgeted (v57).
+  return v === 3 || v === 6 || v === WHOLE_YEAR ? v : 0;
 }
 function setAnalyzeAvgWindow(n: number): void {
   localStorage.setItem('analyzeAvgWindow', String(n));
@@ -10610,7 +10611,12 @@ function renderAnalyzeTab(): string {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/"/g, '&quot;');
-  const avgSpan = span(s.avgMonths);
+  // Whole year (v57): every month, the ones still ahead counted as budgeted —
+  // and every label says which months are budgeted, never passed off as real.
+  const whole = win === WHOLE_YEAR;
+  const aheadNums = months.filter((m) => m.status !== 'past').map((m) => m.month_num);
+  const avgSpan =
+    span(s.avgMonths) + (whole && aheadNums.length ? ', ' + span(aheadNums) + ' budgeted' : '');
   const nSet = cats.filter((c) => c.floorSet).length;
   const avgSet = new Set(s.avgMonths);
   const inAvg = months.filter((m) => avgSet.has(m.month_num));
@@ -10680,7 +10686,11 @@ function renderAnalyzeTab(): string {
   const why = whyBridge(
     r,
     WHY_ROWS.map((w) => w.key),
+    whole,
   );
+  // A span in "why" that reaches into months not yet happened says so.
+  const wspan = (ms: number[]): string =>
+    span(ms) + (why && ms.some((x) => why.projected.includes(x)) ? ' (budgeted)' : '');
   const cash = cashTotals();
   const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
   const pet = SAFE_SCENARIOS[0];
@@ -10715,14 +10725,24 @@ function renderAnalyzeTab(): string {
         '</button>',
     );
   }
+  if (aheadNums.length && pastNums.length)
+    pills.push(
+      '<button class="yr-pillbtn an-winbtn' +
+        (whole ? ' active' : '') +
+        '" onclick="setAnalyzeAvgWindow(' +
+        WHOLE_YEAR +
+        ')" title="All 12 months — ' +
+        span(aheadNums) +
+        ' as budgeted">Whole year</button>',
+    );
   const head =
     '<div class="an-head"><div class="an-stamp">' +
     state.currentYear +
     (sub === 'why' && why
-      ? ' · compares <b>' + span(why.early) + '</b> with <b>' + span(why.recent) + '</b>'
+      ? ' · compares <b>' + wspan(why.early) + '</b> with <b>' + wspan(why.recent) + '</b>'
       : ' · averages over <b>' + avgSpan + '</b>') +
     '</div>' +
-    (sub !== 'why' && pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
+    (pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
     '</div>';
 
   // ── The five question tiles ───────────────────────────────────────────
@@ -10747,7 +10767,7 @@ function renderAnalyzeTab(): string {
       'why',
       'Why so high',
       why ? signed(why.delta) : '—',
-      why ? span(why.recent) + ' vs ' + span(why.early) : 'needs 4 complete months',
+      why ? wspan(why.recent) + ' vs ' + wspan(why.early) : 'needs 4 complete months',
     ) +
     tile(
       'floor',
@@ -10776,7 +10796,8 @@ function renderAnalyzeTab(): string {
     if (none) return noneNote;
     // Savings leads — it is the score (her words, Sep 4).
     const say =
-      '<p class="an-say">You saved <b>' +
+      '<p class="an-say">' +
+      (whole ? 'Across the whole year, savings come to <b>' : 'You saved <b>') +
       money(savingsAvg) +
       '</b> a month — ' +
       pctStr(savingsRate) +
@@ -10813,7 +10834,11 @@ function renderAnalyzeTab(): string {
       const body =
         row('This tab · ' + avgSpan + ' ÷ ' + s.avgMonths.length, money(gap.windowAvg)) +
         (Math.abs(gap.windowEffect) >= 1
-          ? row('Every complete month instead', signed(gap.windowEffect), 'ym-row-sub')
+          ? row(
+              'Switching to every complete month (' + span(pastNums) + ')',
+              signed(gap.windowEffect),
+              'ym-row-sub',
+            )
           : '') +
         (open
           ? row(
@@ -10980,11 +11005,11 @@ function renderAnalyzeTab(): string {
       .join(' · ');
     const say =
       '<p class="an-say">' +
-      span(why.recent) +
+      wspan(why.recent) +
       ' cost <b>' +
       money(why.recentReal) +
       '</b> a month; ' +
-      span(why.early) +
+      wspan(why.early) +
       ' cost <b>' +
       money(why.earlyReal) +
       '</b> — ' +
@@ -10999,11 +11024,11 @@ function renderAnalyzeTab(): string {
       : '';
     const bridge =
       '<div class="an-block"><div class="an-h">' +
-      span(why.early) +
+      wspan(why.early) +
       ' → ' +
-      span(why.recent) +
+      wspan(why.recent) +
       ', driver by driver · a month</div>' +
-      row(span(why.early) + ' average', money(why.earlyReal), 'ym-row-bold') +
+      row(wspan(why.early) + ' average', money(why.earlyReal), 'ym-row-bold') +
       rows
         .map((x) => {
           const m = meta(x.key);
@@ -11014,7 +11039,7 @@ function renderAnalyzeTab(): string {
             ' → ' +
             money(x.recent) +
             '</div>' +
-            monthChips((mm) => mm.parts[x.key] || 0, pastMonths);
+            monthChips((mm) => mm.parts[x.key] || 0, whole ? months : pastMonths);
           return openRow(
             'why:' + x.key,
             m.label +
@@ -11030,7 +11055,7 @@ function renderAnalyzeTab(): string {
         })
         .join('') +
       row(
-        span(why.recent) + ' average',
+        wspan(why.recent) + ' average',
         money(why.recentReal) +
           (Math.abs(rowsSum - why.delta) < 1
             ? ' <span class="an-ok">adds up ✓</span>'
@@ -11067,11 +11092,11 @@ function renderAnalyzeTab(): string {
       '<p class="an-say an-say-sm">Savings rate: <b>' +
       pctStr(why.earlySavingsRate) +
       '</b> of income in ' +
-      span(why.early) +
+      wspan(why.early) +
       ' → <b>' +
       pctStr(why.recentSavingsRate) +
       '</b> in ' +
-      span(why.recent) +
+      wspan(why.recent) +
       '.</p>';
     return (
       say +
@@ -11080,9 +11105,13 @@ function renderAnalyzeTab(): string {
       rate +
       running +
       how(
-        'Each row is that driver’s monthly average in your latest ' +
-          why.recent.length +
-          ' complete months minus your first ' +
+        'Each row is that driver’s monthly average in your ' +
+          (whole
+            ? 'last ' +
+              why.recent.length +
+              ' months of the year (as budgeted where they haven’t happened)'
+            : 'latest ' + why.recent.length + ' complete months') +
+          ' minus your first ' +
           why.early.length +
           '. The rows add up to the difference exactly. A bill has “ended” when it had money in a past month and has none from this month on; a renamed bill (Claude Pro → Claude Max) still counts as running.',
       )
