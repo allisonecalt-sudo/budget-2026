@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v64';
-const BUILD_DATE = 'Oct 11, 2026 20:21';
+const APP_VERSION = 'v65';
+const BUILD_DATE = 'Oct 11, 2026 20:35';
 
 const MONTHS = [
   'January',
@@ -10537,15 +10537,129 @@ function cashTotals(): {
 // cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
-  { key: 'pet', label: 'Petachya only', income: 9780 },
-  { key: 'pet2', label: 'Petachya + 2 private clients', income: 10780 },
-  { key: 'petgan', label: 'Petachya + gan 2', income: 12895 },
-  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13895 },
-  // The school (Shtilim), if it comes through — her formula 2026-10-11 20:20:
-  // "130*4.33*20" = ₪11,258 gross. Net with Petachya ≈ 16,200: the Sep 23
-  // model (second-brain projects/leaving-clalit/shtilim-option-2026-09-23.md,
-  // 6% pension). ESTIMATE — the school's pension / KH / travel unknown.
-  { key: 'school', label: 'Petachya + the school, if it comes through', income: 16200 },
+  // Net a month, year 1, incl. Petachya's havra'a (~₪80). Her walkthrough
+  // 2026-10-11 20:19–20:23 (second-brain projects/budget-app/
+  // lean-floor-walkthrough-2026-10-11.md): Petachya ₪120 × 22h ≈ 9,780 as
+  // the only payslip; 2 weekly private clients ≈ 1,000 (31% bracket next to
+  // two salaries ≈ 1,000 too); gan 2 on Tuesdays ≈ ₪890/day × ~42 ÷ 12 with
+  // Petachya alone, ≈ 52% kept as a third salary (8 paid hrs ≈ 2,200/mo,
+  // 5 paid hrs ≈ 1,370/mo); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
+  // ≈ 16,200 net with Petachya (Sep 23 model). ESTIMATES.
+  { key: 'pet', label: 'Petachya only', income: 9860 },
+  { key: 'pet2', label: 'Petachya + 2 private clients', income: 10860 },
+  { key: 'petgan', label: 'Petachya + gan 2 (Tue, 8 hrs)', income: 12975 },
+  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13975 },
+  { key: 'school', label: 'Petachya + the school', income: 16280 },
+  { key: 'school2', label: 'Petachya + school + 2 clients', income: 17280 },
+  { key: 'schoolgan5', label: 'Petachya + school + gan 2 (5 hrs)', income: 17650 },
+  { key: 'schoolgan8', label: 'Petachya + school + gan 2 (8 hrs)', income: 18480 },
+];
+
+// Her four spending levels for 2027, ₪ a month — built line by line with
+// her on Oct 11 (lean-floor-walkthrough-2026-10-11.md). LEAN is also her
+// live floor (spend_floors), so the app reads Lean from the table and these
+// three from here until the floors table gets a level column (her go).
+type LevelKey = 'temp' | 'lean' | 'middle' | 'normal';
+const LEVEL_ORDER: LevelKey[] = ['temp', 'lean', 'middle', 'normal'];
+const LEVEL_NAME: Record<LevelKey, string> = {
+  temp: 'Temp',
+  lean: 'Lean',
+  middle: 'Middle',
+  normal: 'Normal',
+};
+const LEVEL_NOTE: Record<LevelKey, string> = {
+  temp: 'for a stretch — no charity, travel or therapy (your words)',
+  lean: 'lean but livable — your floor',
+  middle: 'between lean and normal',
+  normal: 'about how 2026 actually ran',
+};
+const LEVELS: Record<Exclude<LevelKey, 'lean'>, Record<string, number>> = {
+  temp: {
+    housing: 3730,
+    recurring: 1231,
+    groceries: 1405,
+    transport: 550,
+    health: 150,
+    household: 135,
+    therapy: 0,
+    retail: 400,
+    gifts: 150,
+    takeout: 0,
+    eatingout: 50,
+    entertainment: 50,
+    holiday: 50,
+    charity: 0,
+    admin: 1851,
+    travel: 0,
+  },
+  middle: {
+    housing: 3730,
+    recurring: 1278,
+    groceries: 1550,
+    transport: 725,
+    health: 200,
+    household: 135,
+    therapy: 375,
+    retail: 600,
+    gifts: 300,
+    takeout: 235,
+    eatingout: 205,
+    entertainment: 185,
+    holiday: 75,
+    charity: 600,
+    admin: 2063,
+    travel: 458,
+  },
+  normal: {
+    housing: 3730,
+    recurring: 1278,
+    groceries: 1600,
+    transport: 900,
+    health: 250,
+    household: 135,
+    therapy: 500,
+    retail: 700,
+    gifts: 350,
+    takeout: 320,
+    eatingout: 260,
+    entertainment: 285,
+    holiday: 85,
+    charity: 723,
+    admin: 2605,
+    travel: 708,
+  },
+};
+let _anLevel: LevelKey = 'lean';
+try {
+  const v = localStorage.getItem('analyzeLevel');
+  if (v === 'temp' || v === 'lean' || v === 'middle' || v === 'normal') _anLevel = v;
+} catch {
+  /* view state only */
+}
+function setAnalyzeLevel(v: string): void {
+  if (v !== 'temp' && v !== 'lean' && v !== 'middle' && v !== 'normal') return;
+  _anLevel = v;
+  try {
+    localStorage.setItem('analyzeLevel', v);
+  } catch {
+    /* view state only */
+  }
+  renderApp();
+}
+// Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
+// her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
+const JOB_COMPARE: { label: string; clalit: string; school: string; diff: string }[] = [
+  { label: 'Net a month', clalit: '₪14,960', school: '₪16,000', diff: 'school +₪1,040' },
+  { label: 'Gross a month', clalit: '₪22,700', school: '₪23,500', diff: 'school +₪800' },
+  {
+    label: 'Into pension + KH (the job)',
+    clalit: '₪2,470',
+    school: '₪3,210',
+    diff: 'school +₪740',
+  },
+  { label: 'Net + funds', clalit: '₪17,430', school: '₪19,210', diff: 'school +₪1,780' },
+  { label: 'Real hours a week', clalit: '34.5', school: '26.5', diff: 'school −8' },
+  { label: 'Net per real hour', clalit: '₪100', school: '₪139', diff: 'school +39%' },
 ];
 
 // "Why so high" — the drivers in her order, and the PROPOSED tag on each,
@@ -10890,65 +11004,88 @@ const INCOME_PATTERNS: Record<number, string[]> = {
 // — shown as her plan, never as booked money.
 const PLAN_NEXT: Record<
   number,
-  { label: string; group: string; pot: 'travel' | 'admin'; amount: number; note: string }[]
+  {
+    label: string;
+    group: string;
+    pot: 'travel' | 'admin';
+    amount: number;
+    lean?: number;
+    note: string;
+  }[]
 > = {
   2027: [
+    // Her walkthrough Oct 11 19:31–20:15 — normal amounts, lean in `lean`.
     {
       label: 'Travel',
       group: 'Trips',
       pot: 'travel',
-      amount: 3000,
-      note: '“for now 3000, not much”',
+      amount: 8500,
+      lean: 3000,
+      note: '“probably if there is money 8500”',
     },
     {
-      label: 'Car (test, license, repairs)',
+      label: 'Car (service, test, license, repairs)',
       group: 'Car',
       pot: 'admin',
       amount: 6405,
-      note: '“for sure the same”',
+      lean: 6405,
+      note: '“all car cost the same”',
     },
     {
-      label: 'Egg freezing × 2 cycles',
+      label: 'Egg freezing — one cycle',
       group: 'Health',
       pot: 'admin',
-      amount: 7000,
-      note: '“let’s assume 2” — on Oct 9 you said about ₪8,000 a cycle',
+      amount: 8000,
+      lean: 8000,
+      note: 'the second cycle in 2028',
     },
     {
       label: 'Cog-Fun course',
       group: 'Professional',
       pot: 'admin',
       amount: 5000,
-      note: '“I really do want to do learning”',
+      lean: 0,
+      note: '“out for lean… I do want to do it”',
+    },
+    {
+      label: 'Surprises (incl. home repairs)',
+      group: 'Other',
+      pot: 'admin',
+      amount: 5000,
+      lean: 2000,
+      note: 'lean = only what breaks',
     },
     {
       label: 'Carmei Gat fixes',
       group: 'Carmei Gat Apt',
       pot: 'admin',
       amount: 3000,
-      note: '“maybe 3k in fixes just to be safe”',
+      lean: 3000,
+      note: 'if the tenants stay',
     },
     {
-      label: 'Hair (rides the US trips)',
+      label: 'Hair',
       group: 'Other',
       pot: 'admin',
       amount: 2107,
-      note: '$500 summer + $200 December',
+      lean: 1054,
+      note: 'lean = your aunt’s place',
     },
     {
-      label: 'USA accountant',
+      label: 'US taxes — SimpleTax Premium',
       group: 'Admin',
       pot: 'admin',
-      amount: 1500,
-      note: 'yes — 2026’s still unpaid',
+      amount: 999,
+      lean: 999,
+      note: 'self-employed + rental',
     },
-    { label: 'Dentist', group: 'Health', pot: 'admin', amount: 750, note: 'twice a year' },
     {
-      label: 'Fitness, Jan + Feb',
-      group: 'Other',
+      label: 'Dentist',
+      group: 'Health',
       pot: 'admin',
-      amount: 458,
-      note: 'the last two payments',
+      amount: 750,
+      lean: 750,
+      note: 'twice a year',
     },
   ],
 };
@@ -11124,12 +11261,15 @@ function renderAnalyzeTab(): string {
       });
   const planNext = PLAN_NEXT[state.currentYear + 1] || [];
   const oneOffsMo = planNext.reduce((a, p) => a + p.amount, 0) / 12;
+  const oneOffsLeanMo = planNext.reduce((a, p) => a + (p.lean ?? p.amount), 0) / 12;
+  const levelTotal = (lv: LevelKey): number =>
+    lv === 'lean' ? s.floorTotal : Object.values(LEVELS[lv]).reduce((a, v) => a + v, 0);
+  const levelSpend = levelTotal(_anLevel);
   const cash = cashTotals();
   const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
   const pet = SAFE_SCENARIOS[0];
   const plan = SAFE_SCENARIOS.find((x) => x.key === 'all') || pet;
   const cashLeft = cash.liquid - _anOneOff;
-  const petFloor = runway(cashLeft, pet.income, s.floorTotal);
   const petReal = runway(cashLeft, pet.income, s.realAvg);
   const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
   const petNow = mNow ? runway(cashLeft, pet.income, mNow.total) : null;
@@ -11816,7 +11956,9 @@ function renderAnalyzeTab(): string {
           (state.currentYear + 1) +
           ' plan, about <b>' +
           money(mNow.total + oneOffsMo) +
-          '</b>.'
+          '</b> (lean plan: ' +
+          money(mNow.total + oneOffsLeanMo) +
+          ').'
         : '') +
       '</p>' +
       '<p class="an-say an-say-sm">Your ' +
@@ -11925,6 +12067,36 @@ function renderAnalyzeTab(): string {
   };
 
   // ── 3 · Floor ─────────────────────────────────────────────────────────
+  const levelsBlock = (): string => {
+    const catName = (k: string): string => {
+      const c = CATEGORIES.find((x) => x.key === k);
+      return c ? c.emoji + ' ' + esc(c.label) : esc(k);
+    };
+    return (
+      '<div class="an-block"><div class="an-h">Your four levels · a month</div>' +
+      LEVEL_ORDER.map((lv) => {
+        const by: Record<string, number> =
+          lv === 'lean' ? Object.fromEntries(cats.map((c) => [c.key, c.floor])) : LEVELS[lv];
+        const body =
+          '<div class="an-why">' +
+          LEVEL_NOTE[lv] +
+          (lv === 'lean' ? ' — edit it line by line below.' : ' — from your Oct 11 walkthrough.') +
+          '</div>' +
+          Object.keys(by)
+            .sort((a, b) => by[b] - by[a])
+            .map((k) => row(catName(k), money(by[k]), 'ym-row-sub'))
+            .join('');
+        return openRow(
+          'level:' + lv,
+          '<b>' + LEVEL_NAME[lv] + '</b><span class="an-sublbl">' + LEVEL_NOTE[lv] + '</span>',
+          money(levelTotal(lv)),
+          body,
+          lv === 'lean' ? 'ym-row-bold' : '',
+        );
+      }).join('') +
+      '</div>'
+    );
+  };
   const floorSection = (): string => {
     if (none) return noneNote;
     const lv = cats.map((c) => ({ c, lv: levelOf(c) }));
@@ -11977,6 +12149,7 @@ function renderAnalyzeTab(): string {
       .join('');
     return (
       say +
+      levelsBlock() +
       '<div class="an-block"><div class="an-fhead"><span>Line</span><span>Floor</span><span>Avg ' +
       avgSpan +
       '</span></div>' +
@@ -12103,7 +12276,7 @@ function renderAnalyzeTab(): string {
       );
     const real = mNow ? mNow.total : s.realAvg;
     const nowIncome = avgOf((m) => m.income);
-    const order = ['all', 'petgan', 'school', 'pet2', 'pet'];
+    const order = SAFE_SCENARIOS.map((x) => x.key);
     const scen = [
       ...[...SAFE_SCENARIOS].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)),
       ...(none
@@ -12116,27 +12289,50 @@ function renderAnalyzeTab(): string {
             },
           ]),
     ];
+    const lvName = LEVEL_NAME[_anLevel];
+    const fit = (x: { income: number }): number => x.income - levelSpend;
+    const lowest = [...SAFE_SCENARIOS].sort((p, q) => p.income - q.income)[0];
+    const firstFit = [...SAFE_SCENARIOS]
+      .sort((p, q) => p.income - q.income)
+      .find((x) => fit(x) >= 0);
+    const levelPills =
+      '<div class="an-win an-levelpills">' +
+      LEVEL_ORDER.map(
+        (lv) =>
+          '<button class="yr-pillbtn an-winbtn' +
+          (_anLevel === lv ? ' active' : '') +
+          '" onclick="setAnalyzeLevel(\'' +
+          lv +
+          '\')">' +
+          LEVEL_NAME[lv] +
+          ' ' +
+          money(levelTotal(lv)) +
+          '</button>',
+      ).join('') +
+      '</div>';
     const say =
-      '<p class="an-say">Your plan after Feb 7 — ' +
+      levelPills +
+      '<p class="an-say">At <b>' +
+      lvName +
+      '</b> (' +
+      money(levelSpend) +
+      ' a month): ' +
+      (fit(lowest) >= 0
+        ? 'every mix covers it — even ' + esc(lowest.label) + ' (' + margin(fit(lowest)) + ').'
+        : esc(lowest.label) +
+          ' is ' +
+          margin(fit(lowest)) +
+          (firstFit ? '; from <b>' + esc(firstFit.label) + '</b> up, every mix covers it.' : '.')) +
+      '</p>' +
+      '<p class="an-say an-say-sm">Your plan now — ' +
       esc(plan.label) +
-      ', about ' +
-      money(plan.income) +
-      ' a month — against a month now (' +
-      money(real) +
-      '): ' +
-      (planNow ? margin(planNow.margin) : '—') +
-      '.</p>' +
-      '<p class="an-say an-say-sm">If it goes wrong — Petachya only: ' +
-      (petNow ? margin(petNow.margin) : '—') +
-      ' against a month now, ' +
-      margin(petFloor.margin) +
-      ' at your floor.' +
-      (petNow && petNow.months !== null
-        ? ' Cash covers that for about <b>' + petNow.months + ' months</b>.'
-        : '') +
-      (oneOffsMo
-        ? ' Trips and one-offs (your plan, ~' + money(oneOffsMo) + ' a month) come on top.'
-        : '') +
+      ': ' +
+      margin(plan.income - levelSpend) +
+      ' at ' +
+      lvName +
+      (planNow ? ', ' + margin(planNow.margin) + ' against a month now' : '') +
+      '.' +
+      (oneOffsMo ? ' Trips and one-offs are inside the levels (admin, travel).' : '') +
       '</p>';
     // What if: a one-off comes out of cash first (egg freezing ≈ ₪8,000,
     // her Oct 9). Nothing is written — the box is gone on reload.
@@ -12170,8 +12366,10 @@ function renderAnalyzeTab(): string {
     };
     const table =
       '<div class="an-block"><div class="an-stable">' +
-      '<div class="an-srow an-shead"><span>Income a month</span><span>At your floor<br>' +
-      money(s.floorTotal) +
+      '<div class="an-srow an-shead"><span>Income a month</span><span>At ' +
+      lvName +
+      '<br>' +
+      money(levelSpend) +
       '</span><span>A month now<br>' +
       (none ? '—' : money(real)) +
       '</span></div>' +
@@ -12185,7 +12383,7 @@ function renderAnalyzeTab(): string {
             '</span><span class="an-sinc">' +
             money(x.income) +
             '</span></span><span>' +
-            cell(x.income, s.floorTotal) +
+            cell(x.income, levelSpend) +
             '</span><span>' +
             (none ? '—' : cell(x.income, real)) +
             '</span></div>',
@@ -12222,15 +12420,31 @@ function renderAnalyzeTab(): string {
       '</p></div>';
     const notes =
       '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
-      '<li>The incomes are from your Sep 4 money model: Petachya at ₪120 an hour as your only payslip ≈ ₪9,780; gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12; 2 weekly private clients ≈ ₪1,000 after OPS, tax and Bituach Leumi, with a quarter of sessions cancelled. It predates gan 2 starting and the Feb 7 last day; real payslips can replace these numbers whenever you want.</li>' +
+      '<li>The incomes are your Oct 11 walkthrough: Petachya ₪120 × 22h ≈ ₪9,780 + havra’a ≈ ₪80; 2 weekly private clients ≈ ₪1,000; gan 2 on Tuesdays (8 or 5 paid hours at ₪180); the school ₪130 × 20h. All net, estimates — real payslips can replace them.</li>' +
       '<li>The school (Shtilim): ₪130 × 20 hours × 4.33 ≈ ₪11,258 gross a month; with Petachya ≈ ₪16,200 net — your Sep 23 numbers. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
       '<li>“Now” is this app’s income, where private is before tax.</li>' +
       '<li>August: gan 2 and private stop — Petachya only that month.</li>' +
       '<li>Clalit money that needs you on payroll that month: Nov 5 ≈ ₪6,000; the January grant ≈ ₪5,300.</li>' +
       '<li>Not counted as cash: pikadon, keren hishtalmut (tax-free only after 6 years), Harel. The tenant deposit isn’t yours.</li>' +
-      '<li>Your floor mixes lean lines and bare-minimum lines — the “at your floor” column is exactly as strict as the floor you set.</li>' +
+      '<li>The four levels are yours (Oct 11): Lean is your floor in the app; Temp, Middle and Normal come from the same walkthrough. Admin and travel inside them carry the car, egg freezing (one cycle), surprises and trips.</li>' +
       '</ul></div></details>';
-    return say + table + oneOff + cashLine + notes;
+    const jobs =
+      '<div class="an-block"><div class="an-h">Petachya + Clalit (grants, no extra hours) vs Petachya + the school</div>' +
+      '<div class="an-srow an-shead"><span></span><span>Clalit</span><span>School</span></div>' +
+      JOB_COMPARE.map(
+        (j) =>
+          '<div class="an-srow"><span><span class="an-slabel">' +
+          esc(j.label) +
+          '</span><span class="an-runway">' +
+          esc(j.diff) +
+          '</span></span><span>' +
+          esc(j.clalit) +
+          '</span><span><b>' +
+          esc(j.school) +
+          '</b></span></div>',
+      ).join('') +
+      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ₪16,280, net + funds ₪18,360.</div></div>';
+    return say + table + jobs + oneOff + cashLine + notes;
   };
 
   // ── 6 · Income — why each month was what it was ───────────────────────
@@ -14735,6 +14949,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   setFloorAvgN,
   setAnalyzeAvgWindow,
   setAnalyzeSub,
+  setAnalyzeLevel,
   setAnalyzeOneOff,
   toggleAnRow,
   analyzeToTop,
