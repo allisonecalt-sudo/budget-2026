@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v63';
-const BUILD_DATE = 'Oct 11, 2026 19:20';
+const APP_VERSION = 'v64';
+const BUILD_DATE = 'Oct 11, 2026 20:21';
 
 const MONTHS = [
   'January',
@@ -10541,12 +10541,11 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   { key: 'pet2', label: 'Petachya + 2 private clients', income: 10780 },
   { key: 'petgan', label: 'Petachya + gan 2', income: 12895 },
   { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13895 },
-  // The school (Shtilim), if it comes through — her formula 2026-10-11:
-  // "130*4.33*22" = ₪12,384 gross. Net with Petachya ≈ 16,800: the Sep 23
-  // model (second-brain projects/leaving-clalit/shtilim-option-2026-09-23.md)
-  // put Petachya + Shtilim at 20 hrs ≈ 16,200 net; the 2 extra hours ≈ +585
-  // net at ~52% kept. ESTIMATE — pension / KH / travel terms unknown.
-  { key: 'school', label: 'Petachya + the school, if it comes through', income: 16800 },
+  // The school (Shtilim), if it comes through — her formula 2026-10-11 20:20:
+  // "130*4.33*20" = ₪11,258 gross. Net with Petachya ≈ 16,200: the Sep 23
+  // model (second-brain projects/leaving-clalit/shtilim-option-2026-09-23.md,
+  // 6% pension). ESTIMATE — the school's pension / KH / travel unknown.
+  { key: 'school', label: 'Petachya + the school, if it comes through', income: 16200 },
 ];
 
 // "Why so high" — the drivers in her order, and the PROPOSED tag on each,
@@ -12224,7 +12223,7 @@ function renderAnalyzeTab(): string {
     const notes =
       '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
       '<li>The incomes are from your Sep 4 money model: Petachya at ₪120 an hour as your only payslip ≈ ₪9,780; gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12; 2 weekly private clients ≈ ₪1,000 after OPS, tax and Bituach Leumi, with a quarter of sessions cancelled. It predates gan 2 starting and the Feb 7 last day; real payslips can replace these numbers whenever you want.</li>' +
-      '<li>The school (Shtilim): ₪130 × 22 hours × 4.33 ≈ ₪12,384 gross a month; with Petachya ≈ ₪16,800 net — an estimate from your Sep 23 numbers (₪16,200 at 20 hours, plus the 2 extra hours). Its pension, keren hishtalmut and travel terms aren’t known yet.</li>' +
+      '<li>The school (Shtilim): ₪130 × 20 hours × 4.33 ≈ ₪11,258 gross a month; with Petachya ≈ ₪16,200 net — your Sep 23 numbers. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
       '<li>“Now” is this app’s income, where private is before tax.</li>' +
       '<li>August: gan 2 and private stop — Petachya only that month.</li>' +
       '<li>Clalit money that needs you on payroll that month: Nov 5 ≈ ₪6,000; the January grant ≈ ₪5,300.</li>' +
