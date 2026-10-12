@@ -1178,7 +1178,19 @@ test('admin page — yearly expenses and payment log are linked', async ({ page 
 
   // Yearly Expenses section exists with items
   await expect(page.locator('text=Yearly Expenses')).toBeVisible({ timeout: 5000 });
-  const itemCount = await page.locator('[data-admin-item-id]').count();
+  let itemCount = await page.locator('[data-admin-item-id]').count();
+  // When every item is paid, they all sit in the collapsed "Completed (N)"
+  // list (Oct 12 2026: the last open item, USA Accountant, was marked paid).
+  // Open it and count those rows instead of failing on live data.
+  if (itemCount === 0) {
+    const doneToggle = page.locator('button', { hasText: /Completed \(\d+\)/ });
+    if ((await doneToggle.count()) > 0) {
+      const shown = await page.locator('[data-admin-item-id]').count();
+      if (shown === 0) await doneToggle.first().click();
+      await page.waitForTimeout(500);
+      itemCount = await page.locator('[data-admin-item-id]').count();
+    }
+  }
   expect(itemCount).toBeGreaterThan(0);
   console.log(`Admin items: ${itemCount}`);
 
