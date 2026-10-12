@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v66';
-const BUILD_DATE = 'Oct 11, 2026 20:44';
+const APP_VERSION = 'v67';
+const BUILD_DATE = 'Oct 12, 2026 08:07';
 
 const MONTHS = [
   'January',
@@ -10728,6 +10728,24 @@ const LEVELS: Record<Exclude<LevelKey, 'lean'>, Record<string, number>> = {
     travel: 708,
   },
 };
+// Driving hours in the "Which week?" cards: off by default — her words
+// 2026-10-12 08:06–08:07: "dont include driving too confusing" · "make
+// driving a toggle". View state only.
+let _anDrive = false;
+try {
+  _anDrive = localStorage.getItem('analyzeDrive') === '1';
+} catch {
+  /* view state only */
+}
+function setAnalyzeDrive(on: boolean): void {
+  _anDrive = !!on;
+  try {
+    localStorage.setItem('analyzeDrive', _anDrive ? '1' : '0');
+  } catch {
+    /* view state only */
+  }
+  renderApp();
+}
 let _anLevel: LevelKey = 'lean';
 try {
   const v = localStorage.getItem('analyzeLevel');
@@ -12541,7 +12559,7 @@ function renderAnalyzeTab(): string {
       ).join('') +
       '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ₪16,280, net + funds ₪18,360.</div></div>';
     const card = (c: (typeof CHOICES)[number]): string => {
-      const hrs = c.realHrs + c.driveHrs;
+      const hrs = c.realHrs + (_anDrive ? c.driveHrs : 0);
       const perHr = c.net / (hrs * 4.33);
       const rw = runway(cashLeft, c.net, levelSpend);
       return (
@@ -12556,17 +12574,17 @@ function renderAnalyzeTab(): string {
         '<span class="an-c2-unit"> a month</span></div>' +
         '<div class="an-c2-lines">' +
         '<div>⏱ <b>' +
-        Math.round(hrs) +
-        ' h</b> of your week · ' +
-        c.realHrs +
-        ' working + ~' +
-        c.driveHrs +
-        ' driving (' +
+        (_anDrive ? Math.round(hrs) : c.realHrs) +
+        ' h</b> a week' +
+        (_anDrive ? ' · ' + c.realHrs + ' working + ~' + c.driveHrs + ' driving' : ' working') +
+        ' (' +
         c.paidHrs +
         ' paid)</div>' +
         '<div>₪ <b>' +
         money(perHr) +
-        '</b> per hour of your week</div>' +
+        '</b> per hour ' +
+        (_anDrive ? 'of your week' : 'you work') +
+        '</div>' +
         '<div>✓ sure ' +
         money(c.sure) +
         (c.likely ? ' · likely ' + money(c.likely) : '') +
@@ -12590,9 +12608,15 @@ function renderAnalyzeTab(): string {
       );
     };
     const cards =
-      '<div class="an-block"><div class="an-h">Which week? · after Feb 7 · net a month</div><div class="an-cards2">' +
+      '<div class="an-block"><div class="an-h">Which week? · after Feb 7 · net a month</div>' +
+      '<label class="an-toggle"><input type="checkbox"' +
+      (_anDrive ? ' checked' : '') +
+      ' onchange="setAnalyzeDrive(this.checked)"> include driving time</label>' +
+      '<div class="an-cards2">' +
       CHOICES.map(card).join('') +
-      '</div><div class="an-legend">Hours and driving are your words + estimates; the school and gan 2 aren’t signed. Nothing here writes to your budget.</div></div>';
+      '</div><div class="an-legend">Hours are your words' +
+      (_anDrive ? '; driving is an estimate' : '') +
+      '. The school and gan 2 aren’t signed. Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +
@@ -15105,6 +15129,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   setAnalyzeAvgWindow,
   setAnalyzeSub,
   setAnalyzeLevel,
+  setAnalyzeDrive,
   setAnalyzeOneOff,
   toggleAnRow,
   analyzeToTop,
