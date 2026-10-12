@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v67';
-const BUILD_DATE = 'Oct 12, 2026 08:07';
+const APP_VERSION = 'v68';
+const BUILD_DATE = 'Oct 12, 2026 14:05';
 
 const MONTHS = [
   'January',
@@ -10536,6 +10536,7 @@ function cashTotals(): {
 // only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
 // cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
+// Oct 12 2026: no gan 2 right now (her words) — gan 2 mixes are what-ifs. The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // Net a month, year 1, incl. Petachya's havra'a (~₪80). Her walkthrough
   // 2026-10-11 20:19–20:23 (second-brain projects/budget-app/
@@ -10621,28 +10622,43 @@ const CHOICES: {
   {
     key: 'all',
     label: 'Petachya + gan 2 (Tue) + 2 clients',
-    note: 'your plan today',
+    note: 'what if — no gan 2 right now',
     net: 13975,
     realHrs: 20,
     paidHrs: 32.5,
     driveHrs: 5.3,
     sure: 9860,
-    likely: 3115,
-    maybe: 1000,
+    likely: 0,
+    maybe: 4115,
     august: 'gan 2 and clients stop',
   },
   {
     key: 'petgan',
     label: 'Petachya + gan 2 (Tue, 8 hrs)',
-    note: '',
+    note: 'what if — no gan 2 right now',
     net: 12975,
     realHrs: 17.5,
     paidHrs: 30,
     driveHrs: 3.8,
     sure: 9860,
-    likely: 3115,
-    maybe: 0,
+    likely: 0,
+    maybe: 3115,
     august: 'gan 2 stops',
+  },
+  // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
+  // driving (the 'all' minus 'petgan' drive difference).
+  {
+    key: 'pet2',
+    label: 'Petachya + 2 private clients',
+    note: 'your plan today',
+    net: 10860,
+    realHrs: 15,
+    paidHrs: 24.5,
+    driveHrs: 4.8,
+    sure: 9860,
+    likely: 0,
+    maybe: 1000,
+    august: 'clients stop',
   },
   {
     key: 'pet',
@@ -11061,15 +11077,15 @@ const INCOME_WHY: Record<number, Record<number, IncomeWhy>> = {
       clalit: [
         'No extra hours after that — your word, Oct 11',
         'Your 2 extra hours from Sep land here — your word, Oct 11',
-        'Oct salary carries מענק היקף ₪6,000 gross',
+        '(maybe) Oct salary may carry מענק היקף ~₪6,000 gross. ₪10K was already paid in April, so not certain',
         '+ base + Aug premium (vacation month, still paid)',
         'Few/no Sep extra hours: stopped Sep 6–7',
         'Her estimate: 9,000 → 7,100 on Sep 6',
       ],
       petachya: [
         '(expected) app ₪10,100 — slip not issued yet',
-        '(expected) ₪120 base + Oct travel ~₪800 gross',
-        '(expected) Sep travel retro ~₪800, like Sep 2025',
+        '(expected) ₪120 base + Oct travel ~₪700–800 gross',
+        '(expected) Sep travel paid late ~₪700–800 (your word Oct 12)',
         "(expected) ~₪9,720 net if the retro doesn't come",
       ],
       private: [
@@ -11385,7 +11401,7 @@ function renderAnalyzeTab(): string {
   const cash = cashTotals();
   const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
   const pet = SAFE_SCENARIOS[0];
-  const plan = SAFE_SCENARIOS.find((x) => x.key === 'all') || pet;
+  const plan = SAFE_SCENARIOS.find((x) => x.key === 'pet2') || pet;
   const cashLeft = cash.liquid - _anOneOff;
   const petReal = runway(cashLeft, pet.income, s.realAvg);
   const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
@@ -12534,11 +12550,11 @@ function renderAnalyzeTab(): string {
       '</p></div>';
     const notes =
       '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
-      '<li>The incomes are your Oct 11 walkthrough: Petachya ₪120 × 22h ≈ ₪9,780 + havra’a ≈ ₪80; 2 weekly private clients ≈ ₪1,000; gan 2 on Tuesdays (8 or 5 paid hours at ₪180); the school ₪130 × 20h. All net, estimates — real payslips can replace them.</li>' +
+      '<li>The incomes are your Oct 11 walkthrough: Petachya ₪120 × 22h ≈ ₪9,780 + havra’a ≈ ₪80; 2 weekly private clients ≈ ₪1,000; gan 2 on Tuesdays (8 or 5 paid hours at ₪180) (what if: no gan 2 right now); the school ₪130 × 20h. All net, estimates — real payslips can replace them.</li>' +
       '<li>The school (Shtilim): ₪130 × 20 hours × 4.33 ≈ ₪11,258 gross a month; with Petachya ≈ ₪16,200 net — your Sep 23 numbers. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
       '<li>“Now” is this app’s income, where private is before tax.</li>' +
-      '<li>August: gan 2 and private stop — Petachya only that month.</li>' +
-      '<li>Clalit money that needs you on payroll that month: Nov 5 ≈ ₪6,000; the January grant ≈ ₪5,300.</li>' +
+      "<li>August: private stops, so it's Petachya only that month (no travel pay in August).</li>" +
+      '<li>Clalit money that needs you on payroll that month: Nov 5 maybe ≈ ₪6,000 (not certain: ₪10K already paid in April); the January grant ≈ ₪5,300.</li>' +
       '<li>Not counted as cash: pikadon, keren hishtalmut (tax-free only after 6 years), Harel. The tenant deposit isn’t yours.</li>' +
       '<li>The four levels are yours (Oct 11): Lean is your floor in the app; Temp, Middle and Normal come from the same walkthrough. Admin and travel inside them carry the car, egg freezing (one cycle), surprises and trips.</li>' +
       '</ul></div></details>';
@@ -12564,7 +12580,7 @@ function renderAnalyzeTab(): string {
       const rw = runway(cashLeft, c.net, levelSpend);
       return (
         '<div class="an-card2' +
-        (c.key === 'all' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
+        (c.key === 'pet2' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
         '"><div class="an-c2-head"><span class="an-c2-label">' +
         esc(c.label) +
         '</span>' +
@@ -12616,7 +12632,7 @@ function renderAnalyzeTab(): string {
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
       (_anDrive ? '; driving is an estimate' : '') +
-      '. The school and gan 2 aren’t signed. Nothing here writes to your budget.</div></div>';
+      '. The school isn’t signed, and there’s no gan 2 right now. Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +

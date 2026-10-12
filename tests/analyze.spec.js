@@ -238,6 +238,22 @@ test.describe('Analysis section', () => {
     expect(r.text.replace(/,/g, '')).toContain(String(Math.round(r.liquid)));
   });
 
+  test('Which week?: the plan today is Petachya + 2 private clients; no gan 2 card says plan', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const cards = page.locator('.an-card2');
+    const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
+    await expect(planCard).toHaveCount(1);
+    await expect(planCard).toContainText('Petachya + 2 private clients');
+    await expect(planCard).toHaveClass(/an-card2-plan/);
+    const texts = await cards.allTextContents();
+    for (const t of texts.filter((x) => x.includes('gan 2'))) {
+      expect(t).not.toMatch(/your plan/);
+      expect(t).toContain('what if');
+    }
+  });
+
   test('Where to cut: lines above minus lines under = the net on the tile', async ({ page }) => {
     await openAnalyze(page, 'cut');
     const r = await page.evaluate(() => {
