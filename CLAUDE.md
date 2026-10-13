@@ -2,6 +2,8 @@
 
 **This repo is public and she is fine with that (her call, 2026-09-20: "i dont care that its public… its fine"). Third-party names are still kept out.**
 
+Her budget rules + levels live in second-brain `projects/budget-app/how-her-budget-works-2026-09-20.md` (the canonical home).
+
 Read this before touching anything. It is Allison's own model, in her words, so it never has to be re-explained. Full walkthrough with more detail: `second-brain/projects/budget-app/how-her-budget-works-2026-09-20.md`.
 
 ---
@@ -22,7 +24,7 @@ Everything is a dial. A number changing is the instrument working — never call
 | Behaviour             | Lines                                                           | How it works                                                                                                                                                                                                     |
 | --------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Estimate → Actual** | Income                                                          | She types a guess, flips **EST→ACT** when it lands. **Private is the exception** — fed from the Biz tab, always sure.                                                                                            |
-| **The dial**          | Savings                                                         | _"i change the number if needed"_ — where slack goes. Rarely invests so far.                                                                                                                                     |
+| **The dial**          | Savings                                                         | _"i change the number if needed"_ — where slack goes. She invests some months (IBKR).                                                                                                                            |
 | **Envelope**          | Groceries, Household, Transport, Health, Therapy, all 6 Leisure | Budget estimate + line items as she spends; the gap is what she watches. Sub-lines roll up to the group.                                                                                                         |
 | **Fixed**             | Housing, Recurring                                              | _"they are unchangeable and there budget is implicitly there spend."_ Counted as consumed when the month opens, so an envelope can't be spent twice. She trues up the real bill later, _"but never by so much"_. |
 | **Set-aside pot**     | Travel, Admin                                                   | Putting money in **is** the spend. The amount is still a dial: _"i cna move it around based on eneed"_.                                                                                                          |
