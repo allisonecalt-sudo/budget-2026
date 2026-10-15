@@ -158,3 +158,37 @@ test('forgot-login link asks for the live app URL, not localhost', async ({ page
   await expect.poll(() => body).toContain('redirect_to=');
   expect(decodeURIComponent(body)).toContain('https://allisonecalt-sudo.github.io/budget-2026/');
 });
+
+test('undo after a YEAR switch restores the edited month and the next edit lands in the visible month', async ({
+  page,
+  db,
+}) => {
+  await openBudget(page);
+  const { editId, original } = await page.evaluate(() => {
+    const cur = window.state.months.find((m) => m.id === window.state.currentMonthId);
+    return { editId: cur.id, original: cur.income_petachya };
+  });
+  await page.evaluate(() => window.saveIncomeField('income_petachya', '12345'));
+  await expect.poll(() => monthRow(db, editId).income_petachya).toBe(12345);
+
+  await page.evaluate(() => window.switchYear(window.state.currentYear + 1));
+  await page.waitForFunction((y) => window.state.currentYear === y && !window.state.loading, 2027);
+
+  await page.evaluate(() => window.doUndo());
+  await expect.poll(() => monthRow(db, editId).income_petachya).toBe(original);
+
+  // She is looking at the edited month again, in its own year...
+  const view = await page.evaluate(() => ({
+    id: window.state.currentMonthId,
+    year: window.state.currentYear,
+    inLoaded: window.state.months.some((m) => m.id === window.state.currentMonthId),
+  }));
+  expect(view.id).toBe(editId);
+  expect(view.year).toBe(2026);
+  expect(view.inLoaded).toBe(true);
+
+  // ...so her next ordinary edit lands in that visible month, nowhere hidden.
+  await page.evaluate(() => window.saveIncomeField('income_clalit', '4321'));
+  await expect.poll(() => monthRow(db, editId).income_clalit).toBe(4321);
+  expect(db.rowsOf('months').filter((m) => m.income_clalit === 4321)).toHaveLength(1);
+});

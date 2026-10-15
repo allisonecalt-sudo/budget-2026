@@ -193,6 +193,10 @@ function logChange(
 }
 function pushUndo(action: UndoAction): void {
   if (!action.monthId && state.currentMonthId) action.monthId = state.currentMonthId;
+  if (action.year === undefined) {
+    const mo = state.months.find((m) => m.id === action.monthId);
+    action.year = mo ? mo.year : state.currentYear;
+  }
   if (!action.entityType && lastLoggedChange && Date.now() - lastLoggedChange.at < 2000) {
     action.entityType = lastLoggedChange.entityType;
     if (lastLoggedChange.entityId) action.entityId = lastLoggedChange.entityId;
@@ -214,13 +218,28 @@ let undoBusy = false;
 // Bring the month the edit was made in onto the screen before undoing it, so
 // every undo (even the ones that read "the open month") hits the right month.
 async function runInEditMonth(a: UndoAction): Promise<void> {
-  if (!a.monthId || a.monthId === state.currentMonthId) return;
+  if (
+    !a.monthId ||
+    (a.monthId === state.currentMonthId && (a.year ?? state.currentYear) === state.currentYear)
+  )
+    return;
+  const prevYear = state.currentYear;
+  const prevMonthId = state.currentMonthId;
+  if (a.year !== undefined && a.year !== state.currentYear) await switchYear(a.year);
   if (state.months.some((m) => m.id === a.monthId)) {
-    await switchMonth(a.monthId);
-  } else {
-    // Month belongs to a year that is not loaded: point the open-month id at it.
-    state.currentMonthId = a.monthId;
+    if (state.currentMonthId !== a.monthId) await switchMonth(a.monthId);
+    return;
   }
+  // The month could not be loaded: go back to where she was and refuse. The
+  // open-month marker is never pointed at a month that is not on screen.
+  if (state.currentYear !== prevYear) await switchYear(prevYear);
+  if (
+    prevMonthId &&
+    state.months.some((m) => m.id === prevMonthId) &&
+    state.currentMonthId !== prevMonthId
+  )
+    await switchMonth(prevMonthId);
+  throw new Error("That month isn't loaded, so this can't be undone from here.");
 }
 function logUndoRedo(kind: 'undo' | 'redo', a: UndoAction): void {
   const m = state.months.find((x) => x.id === a.monthId);
@@ -248,7 +267,11 @@ async function doUndo() {
   } catch (e) {
     undoStack.push(a);
     console.warn('undo failed:', e);
-    toast('Could not undo ' + a.label);
+    toast(
+      e instanceof Error && e.message.startsWith('That month')
+        ? e.message
+        : 'Could not undo ' + a.label,
+    );
     return;
   } finally {
     undoBusy = false;
@@ -271,7 +294,11 @@ async function doRedo() {
   } catch (e) {
     redoStack.push(a);
     console.warn('redo failed:', e);
-    toast('Could not redo ' + a.label);
+    toast(
+      e instanceof Error && e.message.startsWith('That month')
+        ? e.message
+        : 'Could not redo ' + a.label,
+    );
     return;
   } finally {
     undoBusy = false;
@@ -621,6 +648,8 @@ interface UndoAction {
   // The month the edit was made in (stamped when the entry is pushed). Undo and
   // redo run against THAT month even if she has since opened another one.
   monthId?: string;
+  // The year that month belongs to (so undo can switch year as well as month).
+  year?: number;
   // What was edited, for the change_log row written on undo/redo.
   entityType?: string;
   entityId?: string;
