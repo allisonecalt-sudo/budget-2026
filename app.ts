@@ -59,7 +59,7 @@ const PT_KEY =
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v69';
-const BUILD_DATE = 'Oct 12, 2026 14:05';
+const BUILD_DATE = 'Oct 15, 2026 19:10';
 
 const MONTHS = [
   'January',
