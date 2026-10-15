@@ -161,6 +161,9 @@ const undoStack: UndoAction[] = [],
     month_id uuid
   );
 */
+// The entity of the most recent logChange, so the undo entry pushed right after
+// it knows what it edits (used for the undo/redo history row).
+let lastLoggedChange: { entityType: string; entityId: string | null; at: number } | null = null;
 function logChange(
   action: string,
   entityType: string,
@@ -170,6 +173,7 @@ function logChange(
   newValue: unknown,
   monthId?: string,
 ): void {
+  lastLoggedChange = { entityType, entityId: entityId || null, at: Date.now() };
   sb.from('change_log')
     .insert({
       action,
@@ -188,6 +192,11 @@ function logChange(
     .catch((e) => console.warn('change_log insert error:', e));
 }
 function pushUndo(action: UndoAction): void {
+  if (!action.monthId && state.currentMonthId) action.monthId = state.currentMonthId;
+  if (!action.entityType && lastLoggedChange && Date.now() - lastLoggedChange.at < 2000) {
+    action.entityType = lastLoggedChange.entityType;
+    if (lastLoggedChange.entityId) action.entityId = lastLoggedChange.entityId;
+  }
   undoStack.push(action);
   if (undoStack.length > 30) undoStack.shift();
   redoStack.length = 0;
@@ -202,13 +211,39 @@ function updateUndoButtons() {
 // One undo at a time; a failed undo goes back on the stack and says so,
 // instead of vanishing (before 2026-09-24 a throw lost the action silently).
 let undoBusy = false;
+// Bring the month the edit was made in onto the screen before undoing it, so
+// every undo (even the ones that read "the open month") hits the right month.
+async function runInEditMonth(a: UndoAction): Promise<void> {
+  if (!a.monthId || a.monthId === state.currentMonthId) return;
+  if (state.months.some((m) => m.id === a.monthId)) {
+    await switchMonth(a.monthId);
+  } else {
+    // Month belongs to a year that is not loaded: point the open-month id at it.
+    state.currentMonthId = a.monthId;
+  }
+}
+function logUndoRedo(kind: 'undo' | 'redo', a: UndoAction): void {
+  const m = state.months.find((x) => x.id === a.monthId);
+  const where = m ? ` (${m.month_name || 'month ' + m.month_num} ${m.year})` : '';
+  logChange(
+    kind,
+    a.entityType || 'app_edit',
+    a.entityId || null,
+    `[app ${kind}] ${a.label}${where}`,
+    null,
+    null,
+    a.monthId,
+  );
+}
 async function doUndo() {
   if (undoBusy) return;
   const a = undoStack.pop();
   if (!a) return;
   undoBusy = true;
   try {
+    await runInEditMonth(a);
     await a.undo();
+    logUndoRedo('undo', a);
     redoStack.push(a);
   } catch (e) {
     undoStack.push(a);
@@ -229,7 +264,9 @@ async function doRedo() {
   if (!a) return;
   undoBusy = true;
   try {
+    await runInEditMonth(a);
     await a.redo();
+    logUndoRedo('redo', a);
     undoStack.push(a);
   } catch (e) {
     redoStack.push(a);
@@ -259,6 +296,8 @@ function undoableInsert(table: string, row: Row, label: string, reload: Reload):
   const id = row.id as string;
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).delete().eq('id', id);
       if (error) throw error;
@@ -275,6 +314,8 @@ function undoableDelete(table: string, row: Row, label: string, reload: Reload):
   const id = row.id as string;
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).insert(row);
       if (error) throw error;
@@ -297,6 +338,8 @@ function undoableUpdate(
 ): void {
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).update(before).eq('id', id);
       if (error) throw error;
@@ -575,6 +618,12 @@ interface UndoAction {
   label: string;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
+  // The month the edit was made in (stamped when the entry is pushed). Undo and
+  // redo run against THAT month even if she has since opened another one.
+  monthId?: string;
+  // What was edited, for the change_log row written on undo/redo.
+  entityType?: string;
+  entityId?: string;
 }
 
 interface ToastOpts {
@@ -4641,20 +4690,22 @@ async function saveIncomeField(field: string, value: string | number): Promise<v
     { [field]: num },
     state.currentMonthId!,
   );
+  const editMonthId = state.currentMonthId!;
   pushUndo({
     label: field.replace('income_', ''),
+    monthId: editMonthId,
     undo: async () => {
       await sb
         .from('months')
         .update({ [field]: oldVal })
-        .eq('id', state.currentMonthId!);
+        .eq('id', editMonthId);
       if (month) month[field] = oldVal;
     },
     redo: async () => {
       await sb
         .from('months')
         .update({ [field]: num })
-        .eq('id', state.currentMonthId!);
+        .eq('id', editMonthId);
       if (month) month[field] = num;
     },
   });
@@ -8352,60 +8403,96 @@ async function saveBizField(field: string, value: number | string): Promise<void
     return;
   }
   const num = parseFloat(String(value)) || 0;
-  const oldVal = state.biz ? state.biz![field as keyof BizMonthRow] : 0;
+  const bizRow = state.biz;
+  // Everything the undo needs is captured NOW, at edit time, so undoing later
+  // hits this month's row even if another month is open by then.
+  const bizId = bizRow.id;
+  const bizMonthId = bizRow.month_id;
+  const oldVal = bizRow[field as keyof BizMonthRow];
+  const affectsNet =
+    field === 'confirmed_amount' || field === 'accountant_fee' || field === 'spending';
+  const monthRow = state.months.find((m) => m.id === bizMonthId);
+  const oldPrivate = monthRow ? monthRow.income_private : null;
   const { error } = await sb
     .from('biz_months')
     .update({ [field]: num })
-    .eq('id', state.biz!.id);
+    .eq('id', bizId);
   if (error) {
     toast('Error saving');
     return;
   }
-  state.biz![field as keyof BizMonthRow] = num;
+  bizRow[field as keyof BizMonthRow] = num;
   logChange(
     'edit',
     'biz_field',
-    state.biz!.id,
+    bizId,
     `Biz changed: ${field} ₪${oldVal} → ₪${num}`,
     { [field]: oldVal },
     { [field]: num },
+    bizMonthId,
   );
+
+  // Biz net (confirmed - fee - spending) is what income_private shows. Compute
+  // it from the row as it stands now (income_private is derived, never typed).
+  const newPrivate = affectsNet
+    ? (bizRow.confirmed_amount || 0) - (bizRow.accountant_fee || 0) - (bizRow.spending || 0)
+    : null;
+
+  // Keep whichever copies of this biz row are in memory in step with the database.
+  const setLocalBiz = (v: unknown): void => {
+    const rows = [state.biz, ...(state.allBiz || [])];
+    rows.forEach((r) => {
+      if (r && r.id === bizId) r[field as keyof BizMonthRow] = v as never;
+    });
+  };
+  const setLocalPrivate = (v: number | null): void => {
+    const m = state.months.find((x) => x.id === bizMonthId);
+    if (m) m.income_private = v;
+  };
   pushUndo({
     label: 'biz ' + field,
+    monthId: bizMonthId,
+    entityType: 'biz_field',
+    entityId: bizId,
     undo: async () => {
-      await sb
+      const { error: e1 } = await sb
         .from('biz_months')
         .update({ [field]: oldVal })
-        .eq('id', state.biz!.id);
-      state.biz![field as keyof BizMonthRow] = oldVal;
+        .eq('id', bizId);
+      if (e1) throw e1;
+      setLocalBiz(oldVal);
+      // A Biz edit also moved income_private; put that back too.
+      if (affectsNet) {
+        const { error: e2 } = await sb
+          .from('months')
+          .update({ income_private: oldPrivate })
+          .eq('id', bizMonthId);
+        if (e2) throw e2;
+        setLocalPrivate(oldPrivate);
+      }
     },
     redo: async () => {
-      await sb
+      const { error: e1 } = await sb
         .from('biz_months')
         .update({ [field]: num })
-        .eq('id', state.biz!.id);
-      state.biz![field as keyof BizMonthRow] = num;
+        .eq('id', bizId);
+      if (e1) throw e1;
+      setLocalBiz(num);
+      if (affectsNet) {
+        const { error: e2 } = await sb
+          .from('months')
+          .update({ income_private: newPrivate })
+          .eq('id', bizMonthId);
+        if (e2) throw e2;
+        setLocalPrivate(newPrivate);
+      }
     },
   });
 
-  // If confirmed_amount changes, also update income_private in main months table
-  // Use state.biz!.month_id (not state.currentMonthId) so a stale biz row during a
-  // month switch can't write the net to the wrong month's dashboard.
-  const bizMonthId = state.biz!.month_id;
-  if (field === 'confirmed_amount') {
-    const net = num - (state.biz!.accountant_fee || 0) - (state.biz!.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
-    const month = state.months.find((m) => m.id === bizMonthId);
-    if (month) month.income_private = net;
-  }
-  if (field === 'accountant_fee' || field === 'spending') {
-    const net =
-      (state.biz!.confirmed_amount || 0) -
-      (state.biz!.accountant_fee || 0) -
-      (state.biz!.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
-    const month = state.months.find((m) => m.id === bizMonthId);
-    if (month) month.income_private = net;
+  // Cascade the new net into the month's dashboard (same month as the biz row).
+  if (affectsNet) {
+    await sb.from('months').update({ income_private: newPrivate }).eq('id', bizMonthId);
+    setLocalPrivate(newPrivate);
   }
 
   renderApp();
