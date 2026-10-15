@@ -503,4 +503,17 @@ test.describe('Analysis section', () => {
       await page.evaluate(() => getComputedStyle(document.querySelector('.hdr-tabs')).display),
     ).toBe('none');
   });
+
+  test('tile text is readable: question, note and "look closer" are 12px or larger', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 412, height: 892 });
+    await openAnalyze(page, 'real');
+    const small = await page.evaluate(() =>
+      [...document.querySelectorAll('.an-q, .an-qn, .an-a, .an-closer')]
+        .map((el) => ({ cls: el.className, px: parseFloat(getComputedStyle(el).fontSize) }))
+        .filter((x) => x.px < 12),
+    );
+    expect(small).toEqual([]);
+  });
 });
