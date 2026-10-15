@@ -2822,11 +2822,15 @@ async function setItemAsDefault(id: string): Promise<void> {
   const item = (state.budgetItems[catKey!] || []).find((i: BudgetItemRow) => i.id === id);
   if (!item) return;
   // Update template row matching this category + sort_order with the current amount + label
-  await sb
+  const { error: defErr } = await sb
     .from('budget_item_templates')
     .update({ amount: item.amount, label: item.label })
     .eq('category', catKey)
     .eq('sort_order', item.sort_order);
+  if (defErr) {
+    showErrorLine("Couldn't save that as your usual amount. Try again.");
+    return;
+  }
   logChange(
     'edit',
     'budget_item_template',
