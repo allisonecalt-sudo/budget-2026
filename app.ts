@@ -24,6 +24,7 @@ import {
   schoolGrossMonth,
   sessionHourly,
   gan2GrossMonth,
+  gan2NetMonth,
   seTax,
   taxSetAside,
   carmeiGatNet,
@@ -122,11 +123,10 @@ const PAY = {
     minutesPerSession: 40,
     paidMonths: 10, // no July–August
     // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
-    // Net next to Petachya alone / next to the school. UNVERIFIED until a
-    // payslip (built on 42 Mondays; gan 2 is Tuesdays now).
-    netWithPetachya: 3115,
-    netWithSchool8h: 2200,
-    netWithSchool5h: 1370,
+    // Net = gross × netFactor: a payslip job, tax withheld at her marginal
+    // rate with no tax coordination, pension only. Rough, before the year-end
+    // refund; waiting for the first payslip. Every gan 2 mix reads GAN2_NET.
+    netFactor: 0.7,
   },
   private: {
     netMonth: 1000, // 2 weekly clients, after the accountant (the mixes' number)
@@ -151,16 +151,20 @@ const PAY = {
     khHarel: 64000, // keren hishtalmut: withdrawable tax-free after 6 years
   },
 };
+// Gan 2 net a month: derived from its gross, one rough factor, never typed.
+const GAN2_NET = gan2NetMonth(
+  gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth),
+  PAY.gan2.netFactor,
+);
 // Net a month of every income mix after Feb 7 — sums of PAY, never typed twice.
 const MIX_NET = {
   pet: PAY.petachya.netInApp,
   pet2: PAY.petachya.netInApp + PAY.private.netMonth,
-  petgan: PAY.petachya.netInApp + PAY.gan2.netWithPetachya,
-  all: PAY.petachya.netInApp + PAY.gan2.netWithPetachya + PAY.private.netMonth,
+  petgan: PAY.petachya.netInApp + GAN2_NET,
+  all: PAY.petachya.netInApp + GAN2_NET + PAY.private.netMonth,
   school: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya,
   school2: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.private.netMonth,
-  schoolgan5: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.gan2.netWithSchool5h,
-  schoolgan8: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.gan2.netWithSchool8h,
+  schoolgan: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + GAN2_NET,
   clalit: PAY.petachya.netInApp + PAY.clalit.netExtraOverPetachya,
 };
 // The mixes that include the private clients (the US self-employment tax line).
@@ -10945,7 +10949,7 @@ function cashTotals(): {
 // (second-brain projects/leaving-clalit/money-model-2026-09-04-1002.md), net
 // a month after tax, ב.ל. and her pension/KH share. Petachya at ₪120 as her
 // only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
-// cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
+// cancellations, after OPS); gan 2 = derived from PAY.gan2 (was ₪890 × 42 Mondays).
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
 // Oct 15 2026: gan 2 is a YES (start date and day to confirm); on Oct 12 it was "no gan 2 right now". The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
@@ -10955,16 +10959,15 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // the only payslip; 2 weekly private clients ≈ 1,000 (31% bracket next to
   // two salaries ≈ 1,000 too); gan 2 on Tuesdays ≈ ₪890/day × ~42 ÷ 12 with
   // Petachya alone, ≈ 52% kept as a third salary (8 paid hrs ≈ 2,200/mo,
-  // 5 paid hrs ≈ 1,370/mo); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
+  // (gan 2 is now derived, PAY.gan2); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
   // ≈ 16,200 net with Petachya (Sep 23 model). ESTIMATES.
   { key: 'pet', label: 'Petachya only', income: MIX_NET.pet },
   { key: 'pet2', label: 'Petachya + 2 private clients', income: MIX_NET.pet2 },
-  { key: 'petgan', label: 'Petachya + gan 2 (Tue, 8 hrs)', income: MIX_NET.petgan },
+  { key: 'petgan', label: 'Petachya + gan 2 (Tue)', income: MIX_NET.petgan },
   { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: MIX_NET.all },
   { key: 'school', label: 'Petachya + the school', income: MIX_NET.school },
   { key: 'school2', label: 'Petachya + school + 2 clients', income: MIX_NET.school2 },
-  { key: 'schoolgan5', label: 'Petachya + school + gan 2 (5 hrs)', income: MIX_NET.schoolgan5 },
-  { key: 'schoolgan8', label: 'Petachya + school + gan 2 (8 hrs)', income: MIX_NET.schoolgan8 },
+  { key: 'schoolgan', label: 'Petachya + school + gan 2', income: MIX_NET.schoolgan },
 ];
 
 // Her four spending levels for 2027, ₪ a month — built line by line with
@@ -11040,12 +11043,12 @@ const CHOICES: {
     driveHrs: 5.3,
     sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: PAY.gan2.netWithPetachya + PAY.private.netMonth,
+    maybe: GAN2_NET + PAY.private.netMonth,
     august: 'gan 2 and clients stop',
   },
   {
     key: 'petgan',
-    label: 'Petachya + gan 2 (Tue, 8 hrs)',
+    label: 'Petachya + gan 2 (Tue)',
     note: 'gan 2: yes (Oct 15), start date and day to confirm',
     net: MIX_NET.petgan,
     realHrs: 17.5,
@@ -11053,7 +11056,7 @@ const CHOICES: {
     driveHrs: 3.8,
     sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: PAY.gan2.netWithPetachya,
+    maybe: GAN2_NET,
     august: 'gan 2 stops',
   },
   // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
@@ -13241,7 +13244,9 @@ function renderAnalyzeTab(): string {
       PAY.gan2.paidMonths +
       ' months ≈ ' +
       money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
-      ' gross a month, rough; its net is unverified until a payslip); the school ₪' +
+      ' gross a month, rough, ≈ ' +
+      money(GAN2_NET) +
+      ' net before the tax refund; waiting for the first payslip); the school ₪' +
       PAY.school.ratePerPaidHour +
       ' × ' +
       PAY.school.paidHoursWeek +

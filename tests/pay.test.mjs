@@ -50,6 +50,24 @@ test('gan 2: ₪180 × 4 sessions on one day a week, paid 10 months ≈ ₪2,600
   assert.equal(gan2GrossMonth({ ...g, daysPerWeek: 0 }, 4.33), 0);
 });
 
+test('gan 2 net is below its gross and derived once; no mix carries a hard-coded gan 2 number', async () => {
+  const { gan2NetMonth } = await import(pathToFileURL(compiled).href);
+  const gross = gan2GrossMonth(
+    { perSession: 180, sessionsPerDay: 4, daysPerWeek: 1, paidMonths: 10 },
+    4.33,
+  );
+  const net = gan2NetMonth(gross, 0.7);
+  assert.equal(net, 1819);
+  assert.ok(net < gross);
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(resolve(here, '..', 'app.ts'), 'utf8');
+  // The old hard-coded gan 2 nets are gone; every gan 2 mix reads GAN2_NET.
+  for (const old of ['netWithPetachya:', 'netWithSchool8h', 'netWithSchool5h', ': 3115', ': 1370'])
+    assert.ok(!src.includes(old), 'app.ts still has ' + old);
+  for (const key of ['petgan', 'all', 'schoolgan'])
+    assert.match(src, new RegExp('  ' + key + ':[^\n]*GAN2_NET'));
+});
+
 test('seTax: 15.3% on 92.35% of net private income (rough, US)', () => {
   assert.equal(seTax(1000), 141.3);
   assert.equal(seTax(0), 0);

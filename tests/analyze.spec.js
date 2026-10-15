@@ -289,20 +289,31 @@ test.describe('Analysis section', () => {
       text: document.querySelector('.an-section').innerText.replace(/,/g, ''),
     }));
     const pet = r.pay.petachya.netInApp;
+    const g = r.pay.gan2;
+    const ganGross = Math.round(
+      (g.perSession *
+        g.sessionsPerDay *
+        g.daysPerWeek *
+        r.pay.school.weeksPerMonth *
+        g.paidMonths) /
+        12,
+    );
+    const gan = Math.round(ganGross * g.netFactor);
+    expect(gan).toBeLessThan(ganGross);
     // Net a month of each card = sums of PAY (Clalit, school, school+2, all, gan 2, plan, Petachya).
     const expected = [
       pet + r.pay.clalit.netExtraOverPetachya,
       pet + r.pay.school.netExtraOverPetachya,
       pet + r.pay.school.netExtraOverPetachya + r.pay.private.netMonth,
-      pet + r.pay.gan2.netWithPetachya + r.pay.private.netMonth,
-      pet + r.pay.gan2.netWithPetachya,
+      pet + gan + r.pay.private.netMonth,
+      pet + gan,
       pet + r.pay.private.netMonth,
       pet,
     ];
     const nets = await page.locator('.an-card2:not(.an-mini) .an-c2-net').allTextContents();
     expect(nets.map((t) => parseInt(t.replace(/[^\d]/g, ''), 10))).toEqual(expected);
     // Today's values, so an accidental edit to PAY shows up here.
-    expect(expected).toEqual([14960, 16280, 17280, 13975, 12975, 10860, 9860]);
+    expect(expected).toEqual([14960, 16280, 17280, 12679, 11679, 10860, 9860]);
   });
 
   test('US self-employment tax: off by default, a separate rough line when switched on', async ({

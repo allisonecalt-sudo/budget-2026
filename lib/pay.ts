@@ -67,6 +67,11 @@ export function gan2GrossMonth(
   );
 }
 
+/** Gan 2 net a month: gross × one rough factor (payslip job, before the refund). */
+export function gan2NetMonth(gross: number, netFactor: number): number {
+  return Math.round(n(gross) * n(netFactor));
+}
+
 /**
  * Rough US self-employment tax a month: rate (15.3%) on 92.35% of net private
  * income. A rough, US-side figure — never mixed into the Israeli numbers.
