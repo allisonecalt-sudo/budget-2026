@@ -195,14 +195,24 @@ test('with no signed-in window the queue waits instead of sending a dead token',
   assert.equal(env.idb.rows.size, 1);
 });
 
-test('a server hiccup (503) leaves the item queued, not stuck, and keeps going', async () => {
+test('a server hiccup (503) stops the drain so a later edit cannot jump ahead of its add', async () => {
   const env = loadSw({
     token: 'FRESH',
     respond: (url) => (url.endsWith('.1') ? { ok: false, status: 503 } : { ok: true, status: 200 }),
   });
+  // item 1 = an add, item 2 = a later edit of the row item 1 creates.
   await seed(env, [item(1), item(2)]);
   await env.ctx.drainQueue();
-  assert.equal(env.sent.length, 2);
-  assert.deepEqual([...env.idb.rows.keys()], ['op-1']);
+  assert.equal(env.sent.length, 1, 'the edit must not be sent before its add');
+  assert.deepEqual([...env.idb.rows.keys()].sort(), ['op-1', 'op-2']);
   assert.equal(env.idb.rows.get('op-1').stuck, undefined);
+  // Later the server is back: both go out, in order.
+  env.sent.length = 0;
+  env.ctx.fetch = async (url, init) => (env.sent.push({ url, init }), { ok: true, status: 200 });
+  await env.ctx.drainQueue();
+  assert.deepEqual(
+    env.sent.map((s) => s.url.slice(-2)),
+    ['.1', '.2'],
+  );
+  assert.equal(env.idb.rows.size, 0);
 });

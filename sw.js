@@ -394,15 +394,17 @@ async function drainQueue() {
         });
         if (res.ok || res.status === 409 /* idempotent retry */) {
           await idbDelete(item.op_id);
-        } else if (res.status === 408 || res.status === 429 || res.status >= 500) {
-          // Server hiccup: leave it queued and keep going; the next signal retries.
-          continue;
-        } else {
-          // 401 / 403 / other 4xx: the server refused this write. Park it as
-          // stuck (visible in the app, with a retry button) and carry on.
+        } else if (res.status === 401 || res.status === 403) {
+          // Refused with a fresh login: park it as stuck (visible in the app, with a
+          // retry button) and carry on with the rest.
           item.stuck = true;
           item.stuck_status = res.status;
           await idbAdd(item);
+        } else {
+          // Anything else (server hiccup 408/429/5xx, odd 4xx): STOP and retry later.
+          // Later writes may depend on this one (an edit to a row this add creates),
+          // so they must not jump ahead and silently hit zero rows.
+          break;
         }
       } catch (err) {
         // Network is down again: abort the drain, try on the next online tick.
