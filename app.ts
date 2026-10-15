@@ -10426,6 +10426,69 @@ async function loadFloors(): Promise<void> {
     if (year !== state.currentYear) return;
     const pm: Record<string, SpendFloorRow> = {};
     if (!prev.error) ((prev.data || []) as SpendFloorRow[]).forEach((r) => (pm[r.category] = r));
+    // A line she never set a floor for (bills included) reads the PRIOR year's own
+    // suggestion — its bills now, its lowest normal months — never this year's
+    // still-empty data (₪0). Needs the prior year's rows, read only (GET).
+    const pmo = await sb
+      .from('months')
+      .select('*')
+      .eq('year', year - 1);
+    if (year !== state.currentYear) return;
+    const pMonths = (pmo.data || []) as MonthRow[];
+    const ids = pMonths.map((m) => m.id);
+    if (ids.length) {
+      const [tx, bi, bu, ii] = await Promise.all([
+        sb.from('transactions').select('*').in('month_id', ids),
+        sb.from('budget_items').select('*').in('month_id', ids),
+        sb.from('budgets').select('*').in('month_id', ids),
+        sb.from('income_items').select('*').in('month_id', ids),
+      ]);
+      if (year !== state.currentYear) return;
+      const now = new Date();
+      const pFloors: Record<string, AnalyzeFloorIn | undefined> = {};
+      for (const k of Object.keys(pm))
+        pFloors[k] = {
+          amount: pm[k].amount === null || pm[k].amount === undefined ? null : Number(pm[k].amount),
+          avgN: pm[k].avg_n ?? 3,
+          excluded: pm[k].excluded_months ?? [],
+        };
+      const pr = analyzeYear({
+        months: pMonths.map((m) => ({
+          id: m.id,
+          month_num: m.month_num,
+          month_name: MONTHS[m.month_num - 1] || '',
+          income_petachya: m.income_petachya,
+          income_clalit: m.income_clalit,
+          income_private: m.income_private,
+          income_other: m.income_other,
+          charity_pct: m.charity_pct,
+        })),
+        txns: (tx.data || []) as TransactionRow[],
+        budgetItems: (bi.data || []) as BudgetItemRow[],
+        budgets: (bu.data || []) as { month_id: string; category: string; amount: number }[],
+        incomeItems: (ii.data || []) as IncomeItemRow[],
+        categories: CATEGORIES,
+        todayMonth:
+          year - 1 === now.getFullYear()
+            ? now.getMonth() + 1
+            : year - 1 < now.getFullYear()
+              ? 13
+              : 0,
+        avgWindow: 0,
+        floors: pFloors,
+      });
+      for (const c of pr.cats) {
+        if (pm[c.key] && typeof pm[c.key].amount === 'number') continue;
+        pm[c.key] = {
+          id: 'fallback-' + c.key,
+          year: year - 1,
+          category: c.key,
+          amount: c.floor,
+          avg_n: pm[c.key] ? pm[c.key].avg_n : 3,
+          excluded_months: pm[c.key] ? pm[c.key].excluded_months : [],
+        };
+      }
+    }
     _floorsFallback = { forYear: year, fromYear: year - 1, map: pm };
   }
   state.floors = map;

@@ -540,12 +540,16 @@ test.describe('Analysis section', () => {
     page,
   }) => {
     await openAnalyze(page, 'real');
+    const leanThisYear = await page.evaluate(() => window.computeAnalyze().summary.floorTotal);
     await page.evaluate(() => window.switchYear(window.state.currentYear + 1));
     await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
     await page.waitForSelector('.an-tiles', { timeout: 30000 });
     await page.waitForFunction(() => !document.querySelector('.an-loading'), null, {
       timeout: 30000,
     });
+    // Every category, bills included, reads the PRIOR year's floor: same Lean total.
+    const leanNext = await page.evaluate(() => window.computeAnalyze().summary.floorTotal);
+    expect(leanNext).toBe(leanThisYear);
     const year = await page.evaluate(() => window.state.currentYear);
     const tiles = await page.locator('.an-qtile').allTextContents();
     // My ladder: a number, labelled as the year before's Lean. Which week?: a count.
