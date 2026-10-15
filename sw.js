@@ -370,7 +370,8 @@ async function drainQueue() {
   if (_draining) return;
   _draining = true;
   try {
-    const items = (await idbAll()).filter((i) => !i.stuck);
+    const all = await idbAll();
+    const items = all.filter((i) => !i.stuck);
     if (!items.length) {
       await broadcastQueueUpdate();
       return;
@@ -381,7 +382,13 @@ async function drainQueue() {
       await broadcastQueueUpdate();
       return;
     }
-    for (const item of items) {
+    for (const item of all) {
+      // A stuck item that is not an auth refusal (401/403) holds the line: later
+      // writes may depend on it, so they wait until she taps Try again.
+      if (item.stuck) {
+        if (item.stuck_status === 401 || item.stuck_status === 403) continue;
+        break;
+      }
       try {
         const headers = Object.assign({}, item.headers);
         // Replace whatever token was saved at queue time with the fresh one.
@@ -400,8 +407,20 @@ async function drainQueue() {
           item.stuck = true;
           item.stuck_status = res.status;
           await idbAdd(item);
+        } else if (
+          res.status >= 400 &&
+          res.status < 500 &&
+          res.status !== 408 &&
+          res.status !== 429
+        ) {
+          // Permanently refused (422-style): flag it so she sees "didn't save", and
+          // stop here to keep order.
+          item.stuck = true;
+          item.stuck_status = res.status;
+          await idbAdd(item);
+          break;
         } else {
-          // Anything else (server hiccup 408/429/5xx, odd 4xx): STOP and retry later.
+          // Server hiccup (408/429/5xx): STOP and retry later.
           // Later writes may depend on this one (an edit to a row this add creates),
           // so they must not jump ahead and silently hit zero rows.
           break;

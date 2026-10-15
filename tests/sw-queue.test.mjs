@@ -216,3 +216,23 @@ test('a server hiccup (503) stops the drain so a later edit cannot jump ahead of
   );
   assert.equal(env.idb.rows.size, 0);
 });
+
+test('a permanently refused write (422) is flagged stuck, the badge count shows it, and later items wait', async () => {
+  const env = loadSw({
+    token: 'FRESH',
+    respond: (url) => (url.endsWith('.1') ? { ok: false, status: 422 } : { ok: true, status: 200 }),
+  });
+  await seed(env, [item(1), item(2)]);
+  await env.ctx.drainQueue();
+  assert.equal(env.sent.length, 1, 'item 2 waits behind the refused item 1');
+  assert.equal(env.idb.rows.get('op-1').stuck, true);
+  assert.equal(env.idb.rows.get('op-1').stuck_status, 422);
+  const last = env.broadcasts.at(-1);
+  assert.equal(last.stuck, 1);
+  assert.equal(last.count, 1);
+  // A later drain still holds item 2 back.
+  env.sent.length = 0;
+  await env.ctx.drainQueue();
+  assert.equal(env.sent.length, 0);
+  assert.ok(env.idb.rows.has('op-2'));
+});
