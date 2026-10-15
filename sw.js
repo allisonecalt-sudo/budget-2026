@@ -29,7 +29,7 @@ const SHELL_ASSETS = [
 ];
 
 // External assets — cache opportunistically; do not require for install.
-const EXTERNAL_OPPORTUNISTIC = ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'];
+const EXTERNAL_OPPORTUNISTIC = ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0'];
 
 // IndexedDB — write queue.
 const IDB_NAME = 'budget-2026-sw';
@@ -120,6 +120,7 @@ async function getFreshToken() {
       const timer = setTimeout(() => resolve(null), 4000);
       ch.port1.onmessage = (ev) => {
         clearTimeout(timer);
+        ch.port1.close();
         resolve((ev.data && ev.data.token) || null);
       };
       win.postMessage({ type: 'need-token' }, [ch.port2]);
