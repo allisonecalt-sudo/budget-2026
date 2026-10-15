@@ -6,7 +6,7 @@
 // rendered, and cross-checks the arithmetic against the Year tab's own Total
 // Used through the window-exposed pure helpers. Any non-GET Supabase call is
 // aborted so a regression that starts writing fails loudly here.
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test.use({ serviceWorkers: 'block' });
 
@@ -16,7 +16,7 @@ const openSub = (page, sub) => page.locator(`[onclick="setAnalyzeSub('${sub}')"]
 
 async function openApp(page) {
   await page.route('**/rest/v1/**', (route) =>
-    route.request().method() === 'GET' ? route.continue() : route.abort(),
+    route.request().method() === 'GET' ? route.fallback() : route.abort(),
   );
   await page.goto('/');
   await expect(page).toHaveTitle(/Budget/);

@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 // v29: the ribbon split into hero stats (.ribbon-stat, big decision numbers)
 // and compact data points (.rb-dp — Income/Budgeted/Used/Saved). Every test
@@ -306,24 +306,27 @@ test('history panel shows loading or content after opening', async ({ page }) =>
 });
 
 // ─── Undo/Redo: Add Transaction via Sidebar ───
-// SKIPPED: writes to live Supabase. Cleanup via undo can race; left a stray
-// PlaywrightTestStore row in production for ~6 weeks. Re-enable only when
-// tests run against an isolated DB.
-test.skip('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
+// Runs on the in-memory fake Supabase (tests/fixtures.js): nothing reaches a real database.
+test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
   page,
+  db,
 }) => {
   await page.goto('/');
   await page.waitForSelector('#sb-cat', { timeout: 10000 });
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
-  // Capture the current grocery spent amount
-  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
-  const getSpent = async () => {
-    const text = await groceryRow.textContent();
-    const match = text.match(/₪([\d,.]+)/);
-    return match ? parseFloat(match[1].replace(',', '')) : 0;
-  };
+  // Capture the current grocery spent amount (from the app's own state) and
+  // count the matching rows in the fake database.
+  const getSpent = () =>
+    page.evaluate(() =>
+      window.state.transactions
+        .filter((t) => t.category === 'groceries')
+        .reduce((s, t) => s + (Number(t.amount) || 0), 0),
+    );
+  const dbHas = () =>
+    db.rowsOf('transactions').filter((t) => t.store === 'PlaywrightTestStore').length;
   const spentBefore = await getSpent();
+  expect(dbHas()).toBe(0);
 
   // Fill sidebar form with a test transaction
   await page.selectOption('#sb-cat', 'groceries');
@@ -346,6 +349,7 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
   // Spent should have increased
   const spentAfterAdd = await getSpent();
   expect(spentAfterAdd).toBeGreaterThan(spentBefore);
+  expect(dbHas()).toBe(1);
 
   // Click undo
   await page.click('#undo-btn');
@@ -354,6 +358,9 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
   // Spent should be back to original
   const spentAfterUndo = await getSpent();
   expect(spentAfterUndo).toBeCloseTo(spentBefore, 1);
+  expect(dbHas()).toBe(0);
+  // The undo itself is written to the history log.
+  expect(db.rowsOf('change_log').some((r) => r.action === 'undo')).toBe(true);
 
   // Redo button should be enabled
   await expect(page.locator('#redo-btn')).toBeEnabled();
@@ -364,70 +371,38 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
 
   const spentAfterRedo = await getSpent();
   expect(spentAfterRedo).toBeGreaterThan(spentBefore);
-
-  // Clean up: undo again to remove the test transaction from Supabase
-  await page.click('#undo-btn');
-  await page.waitForTimeout(2000);
+  expect(dbHas()).toBe(1);
+  expect(db.rowsOf('change_log').some((r) => r.action === 'redo')).toBe(true);
 });
 
 // ─── Inline Add: History Logging ───
-// SKIPPED: writes to live Supabase via inline form. Same race risk as sidebar add.
-test.skip('inline add transaction appears in history log', async ({ page }) => {
+// Runs on the in-memory fake Supabase (tests/fixtures.js).
+test('an added transaction appears in the history log', async ({ page }) => {
   await page.goto('/');
-  await page.waitForSelector('.cat-row', { timeout: 10000 });
-
-  // Open the groceries category
-  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
-  await groceryRow.locator('.cat-top').click();
-  await expect(groceryRow).toHaveClass(/open/);
-
-  // Click "+ add line" button inside groceries
-  const addBtn = groceryRow.locator('.bi-add');
-  if ((await addBtn.count()) === 0) {
-    // Category already has lines — use sidebar instead, skip this test
-    return;
-  }
-  await addBtn.click({ force: true });
-
-  // Fill inline form
-  const storeInput = page.locator('#inline-store-groceries');
-  await expect(storeInput).toBeVisible({ timeout: 5000 });
-  await storeInput.fill('PlaywrightInlineTest');
-  await page.locator('#inline-amount-groceries').fill('0.01');
-
-  // Submit via Enter key
-  await page.locator('#inline-amount-groceries').press('Enter');
-
-  // Wait for save toast
+  await page.waitForSelector('#sb-cat', { timeout: 10000 });
+  await page.selectOption('#sb-cat', 'groceries');
+  await page.fill('#sb-store', 'PlaywrightInlineTest');
+  await page.fill('#sb-amount', '0.01');
+  await page.click('#sb-btn');
   await page.waitForFunction(
     () => {
       const toast = document.getElementById('toast');
-      return toast && toast.textContent.includes('Saved');
+      return toast && toast.textContent.includes('saved');
     },
     { timeout: 10000 },
   );
+  await page.waitForTimeout(500);
 
-  // Wait a moment for logChange to complete
-  await page.waitForTimeout(1500);
-
-  // Open history panel
   await page.locator('.mtab[title="History log"]').click();
   await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(2000);
-
-  // Verify "Added PlaywrightInlineTest" appears in history
-  const historyText = await page.locator('#history-list').textContent();
-  expect(historyText).toContain('PlaywrightInlineTest');
-
-  // Clean up: undo the test transaction
-  await page.locator('#history-panel button:has-text("✕")').click();
-  await page.click('#undo-btn');
-  await page.waitForTimeout(2000);
+  await expect(page.locator('#history-list')).toContainText('PlaywrightInlineTest', {
+    timeout: 5000,
+  });
 });
 
 // ─── Inline Add: Performance ───
-// SKIPPED: writes to live Supabase. Same race risk as other inline-add tests.
-test.skip('inline add transaction completes within 5 seconds', async ({ page }) => {
+// Runs on the in-memory fake Supabase (tests/fixtures.js).
+test('inline add transaction completes within 5 seconds', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
@@ -578,10 +553,8 @@ test('year view total savings row uses budget values', async ({ page }) => {
 });
 
 // ─── Savings Edit: Consistency Across Views ───
-// SKIPPED: filled 9999 directly into May savings_bank in production on
-// 2026-05-14. Cleanup via bankInput.fill(original) is race-prone — left
-// 9999 in the live ribbon. Re-enable only when tests run against isolated DB.
-test.skip('editing savings updates ribbon and snapshot consistently', async ({ page }) => {
+// Runs on the in-memory fake Supabase (it once left 9999 in her real May savings).
+test('editing savings updates ribbon and group header consistently', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 
@@ -593,32 +566,26 @@ test.skip('editing savings updates ribbon and snapshot consistently', async ({ p
   // Read original value
   const original = await bankInput.inputValue();
 
+  // Saved = bank + invested, so the expected total includes the invested input.
+  const invested = Number(
+    (await savingsGroup.locator('input[type="number"]').nth(1).inputValue()) || 0,
+  );
+  const expected = (9999 + invested).toLocaleString('en-US');
+
   // Set to a test value
   await bankInput.fill('9999');
   await bankInput.blur();
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(1500);
 
-  // Check ribbon "Saved" includes 9999
-  const ribbonSaved = page.locator('.ribbon-val', { hasText: '9,999' });
-  const ribbonHasSaved = (await ribbonSaved.count()) > 0;
-
-  // Check Savings group header shows 9999
-  const groupHeader = savingsGroup.locator('.group-header');
-  const headerText = await groupHeader.textContent();
-  const headerHas9999 = headerText.includes('9,999');
-
-  // At least one should reflect the new value
-  expect(ribbonHasSaved || headerHas9999).toBeTruthy();
-
-  // Restore original value
-  await bankInput.fill(original || '0');
-  await bankInput.blur();
-  await page.waitForTimeout(2000);
+  // The Savings group header AND the ribbon both show the new total.
+  const headerText = await savingsGroup.locator('.group-header').textContent();
+  expect(headerText).toContain(expected);
+  const ribbonVals = await page.locator('.ribbon-val, .rb-dp-val').allTextContents();
+  expect(ribbonVals.some((t) => t.includes(expected))).toBeTruthy();
+  expect(original).not.toBe('9999');
 });
 
-// SKIPPED: writes 8888 to live savings_bank. Cleanup uses Undo (more reliable
-// than fill-restore but still hits production data).
-test.skip('editing savings produces only one undo entry', async ({ page }) => {
+test('editing savings produces only one undo entry', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 

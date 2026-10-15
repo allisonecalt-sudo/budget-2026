@@ -98,6 +98,7 @@ module.exports = [
         module: 'writable',
         exports: 'writable',
         process: 'readonly',
+        Buffer: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
         console: 'readonly',
@@ -127,6 +128,11 @@ module.exports = [
       globals: {
         process: 'readonly',
         console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        structuredClone: 'readonly',
+        MessageChannel: 'readonly',
+        URL: 'readonly',
       },
     },
     rules: {

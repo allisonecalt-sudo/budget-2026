@@ -9,13 +9,16 @@ const PORT = Number(process.env.BUDGET_TEST_PORT) || 3100;
 module.exports = defineConfig({
   testDir: './tests',
   workers: 1,
-  // E2E runs against live Supabase data; a couple of render/animation-timing
-  // tests (category toggle, mobile snapshot) are occasionally flaky. Retry
-  // before failing so the suite is a reliable regression gate.
-  retries: 2,
-  // Authenticate once (app is behind the E4 login gate) and reuse the session.
+
+  // No retries: a flaky test must show up red instead of passing on attempt 3.
+  retries: 0,
+  // Writes a FAKE session (the app is behind the login gate) and checks the setup
+  // cannot reach production. The suite never logs in as her.
   globalSetup: require.resolve('./tests/global-setup.js'),
   use: {
+    // Block service workers so Playwright can route every Supabase request to the
+    // in-memory fake (tests/fixtures.js). global-setup refuses to run without this.
+    serviceWorkers: 'block',
     // 3100, not 3000: the Gmail MCP server squats on 3000 locally, and with
     // reuseExistingServer Playwright would happily run the suite against it.
     baseURL: `http://localhost:${PORT}`,

@@ -1,6 +1,6 @@
 // Smoke test: Admin tab — Allocated/Spent/Remaining math stays consistent,
 // and Payment Log never shows a bare "?" for an unknown month.
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 test('admin tab: summary cards are consistent and payment log has no "?" month', async ({
   page,
