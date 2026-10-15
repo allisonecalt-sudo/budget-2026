@@ -486,8 +486,12 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
   const inAvg = out.filter((m) => avgSet.has(m.month_num));
   const complete = out.filter((m) => m.status === 'past');
   const ytd = out.filter((m) => m.status !== 'future');
+  // The month in progress; else, for a year that has not started (nothing
+  // complete, nothing current — January 2027), its FIRST month, so "bills now"
+  // reads the first budgeted month instead of an empty December; else the last.
   const reference =
-    out.find((m) => m.status === 'current') || (out.length ? out[out.length - 1] : null);
+    out.find((m) => m.status === 'current') ||
+    (out.length ? (complete.length ? out[out.length - 1] : out[0]) : null);
 
   const mean = (xs: number[]): number =>
     xs.length ? ag(xs.reduce((s, x) => s + x, 0) / xs.length) : 0;
@@ -1034,4 +1038,45 @@ export function monthNow(r: AnalyzeResult, rules: MonthNowRules): MonthNow | nul
     charity: bm.charity,
     total: ag(bm.fixed + everyday + bm.charity),
   };
+}
+
+/**
+ * The three figures "A month now" can show, from ONE computation so the
+ * tile and its section can never disagree (v70: the tile said 12,970 while the
+ * section bolded 10,869 — the tile added the lean-plan trips, the section did
+ * not). base = bills + everyday + charity; withLean / withNormal add the
+ * next year's trips & one-offs per month under her lean / normal plan.
+ * `headline` is the one number the tile and the section's first sentence show:
+ * base plus the lean plan when a plan exists, else the base alone.
+ */
+export interface MonthNowTotals {
+  base: number;
+  withLean: number;
+  withNormal: number;
+  headline: number;
+}
+export function monthNowTotals(
+  base: number,
+  oneOffsMo: number,
+  oneOffsLeanMo: number,
+): MonthNowTotals {
+  const b = ag(n(base));
+  const withLean = ag(b + n(oneOffsLeanMo));
+  const withNormal = ag(b + n(oneOffsMo));
+  return {
+    base: b,
+    withLean,
+    withNormal,
+    headline: n(oneOffsMo) || n(oneOffsLeanMo) ? withLean : b,
+  };
+}
+
+/**
+ * Which month's bills "now" means, for EVERY caller (the tile, the bills
+ * chip, the Bills section, Why's "running now"): the reference month — the
+ * month in progress, the one she is looking at — never the next one. The
+ * old A-month-now code looked one month ahead (Nov ₪5,197 beside Oct ₪5,432).
+ */
+export function billsMonthFor(referenceMonth: number | null): number {
+  return referenceMonth || 12;
 }

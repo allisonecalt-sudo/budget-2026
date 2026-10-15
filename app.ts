@@ -16,6 +16,8 @@ import {
   billLines,
   potYear,
   monthNow,
+  monthNowTotals,
+  billsMonthFor,
 } from './lib/analyze.js';
 import type {
   AnalyzeCatStat,
@@ -11598,11 +11600,11 @@ function renderAnalyzeTab(): string {
   const wspan = (ms: number[]): string =>
     span(ms) + (why && ms.some((x) => why.projected.includes(x)) ? ' (budgeted)' : '');
   const nowRules = MONTH_NOW_RULES[state.currentYear] || { fromMonth: {}, zero: [] };
-  const refNum = s.referenceMonth || 12;
+  const refNum = billsMonthFor(s.referenceMonth);
   const mNow = none
     ? null
     : monthNow(r, {
-        billsMonth: months.some((m) => m.month_num === refNum + 1) ? refNum + 1 : refNum,
+        billsMonth: refNum,
         recentN: 6,
         fromMonth: nowRules.fromMonth,
         zero: nowRules.zero,
@@ -11610,6 +11612,8 @@ function renderAnalyzeTab(): string {
   const planNext = PLAN_NEXT[state.currentYear + 1] || [];
   const oneOffsMo = planNext.reduce((a, p) => a + p.amount, 0) / 12;
   const oneOffsLeanMo = planNext.reduce((a, p) => a + (p.lean ?? p.amount), 0) / 12;
+  // ONE computation for A month now: the tile and the section both read it.
+  const nowTotals = mNow ? monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo) : null;
   const levelTotal = (lv: LevelKey): number =>
     lv === 'lean' ? s.floorTotal : Object.values(LEVELS[lv]).reduce((a, v) => a + v, 0);
   const levelSpend = levelTotal(_anLevel);
@@ -11727,8 +11731,12 @@ function renderAnalyzeTab(): string {
     tile(
       'now',
       'What does a month cost?',
-      mNow ? money(mNow.total + oneOffsLeanMo) : '—',
-      mNow ? money(mNow.total) + ' + trips & one-offs (lean plan)' : 'needs a complete month',
+      nowTotals ? money(nowTotals.headline) : '—',
+      mNow
+        ? oneOffsMo
+          ? money(nowTotals ? nowTotals.base : 0) + ' + trips & one-offs (lean plan)'
+          : 'bills, everyday and charity'
+        : 'needs a complete month',
     ) +
     tile(
       'floor',
@@ -12288,19 +12296,21 @@ function renderAnalyzeTab(): string {
     if (!mNow) return noneNote;
     const bmName = abbr(mNow.billsMonth);
     const potsAvg = avgOf((m) => m.pots);
+    const nt = nowTotals || monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo);
     const say =
       '<p class="an-say">From here on, a month costs about <b>' +
-      money(mNow.total) +
-      '</b> — bills as they are now, everyday at your recent pace, and charity.' +
+      money(nt.headline) +
+      '</b> — ' +
       (oneOffsMo
-        ? ' With the trips and one-offs in your ' +
+        ? money(nt.base) +
+          ' for bills as they are now, everyday at your recent pace and charity, plus ' +
+          money(oneOffsLeanMo) +
+          ' of the trips and one-offs in your lean ' +
           (state.currentYear + 1) +
-          ' plan, about <b>' +
-          money(mNow.total + oneOffsMo) +
-          '</b> (lean plan: ' +
-          money(mNow.total + oneOffsLeanMo) +
+          ' plan (your normal plan: ' +
+          money(nt.withNormal) +
           ').'
-        : '') +
+        : 'bills as they are now, everyday at your recent pace, and charity.') +
       '</p>' +
       '<p class="an-say an-say-sm">Your ' +
       avgSpan +
@@ -12347,14 +12357,19 @@ function renderAnalyzeTab(): string {
         envRows,
       ) +
       row('💚 Charity · ' + bmName, money(mNow.charity)) +
-      row('A month now', money(mNow.total), 'ym-row-bold') +
+      row(
+        oneOffsMo ? 'Bills + everyday + charity' : 'A month now',
+        money(nt.base),
+        oneOffsMo ? '' : 'ym-row-bold',
+      ) +
       (oneOffsMo
         ? row(
-            '✈️📋 Trips + one-offs · your ' + (state.currentYear + 1) + ' plan',
-            '+' + money(oneOffsMo),
+            '✈️📋 Trips + one-offs · your lean ' + (state.currentYear + 1) + ' plan',
+            '+' + money(oneOffsLeanMo),
           ) +
           go('pots', 'travel & admin, this year vs next') +
-          row('With trips and one-offs', money(mNow.total + oneOffsMo), 'ym-row-bold')
+          row('A month now, with trips and one-offs', money(nt.headline), 'ym-row-bold') +
+          row('your normal plan instead', money(nt.withNormal), 'ym-row-sub')
         : '') +
       '</div>';
     // What moved against the window average — biggest first.

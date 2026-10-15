@@ -385,6 +385,44 @@ test.describe('Analysis section', () => {
     expect(r.tile).toMatch(/₪[\d,]+/);
     expect(r.text.replace(/,/g, '')).toContain(r.tile.replace(/[^\d]/g, ''));
     expect(r.text).toContain('A month now');
+    // v70: the tile's number IS the first bold number of its section (v69 showed
+    // 12,970 on the tile and 10,869 in bold below it).
+    const bold = await page.evaluate(
+      () => document.querySelector('.an-section .an-say b').textContent,
+    );
+    expect(bold.replace(/[^d]/g, '')).toBe(r.tile.replace(/[^d]/g, ''));
+  });
+
+  test('Bills now names ONE month everywhere (the month in progress, not the next)', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'now');
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    const row = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.an-section .ym-label')].find((e) =>
+        e.textContent.includes('Bills ·'),
+      );
+      return el ? el.textContent : '';
+    });
+    const ref = await page.evaluate(() => window.computeAnalyze().summary.referenceMonth);
+    expect(row).toContain('Bills · ' + names[ref - 1]);
+    // The Bills section reads the same month.
+    await openSub(page, 'bills');
+    const say = await page.locator('.an-section .an-say').first().textContent();
+    expect(say).toContain('(' + names[ref - 1] + ')');
   });
 
   test('a year with nothing complete shows no invented numbers, even on Whole year', async ({
