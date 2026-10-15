@@ -16,7 +16,20 @@ import {
   billLines,
   potYear,
   monthNow,
+  monthNowTotals,
+  billsMonthFor,
 } from './lib/analyze.js';
+import {
+  perHour,
+  schoolGrossMonth,
+  sessionHourly,
+  gan2GrossMonth,
+  gan2NetMonth,
+  seTax,
+  taxSetAside,
+  carmeiGatNet,
+  cashLasts,
+} from './lib/pay.js';
 import type {
   AnalyzeCatStat,
   AnalyzeFloorIn,
@@ -58,8 +71,104 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v69';
-const BUILD_DATE = 'Oct 15, 2026 19:10';
+const APP_VERSION = 'v70';
+const BUILD_DATE = 'Oct 15, 2026 20:47';
+
+// ── PAY · every salary figure in the app, in ONE place ────────────────────
+// A payslip changes a number here and nowhere else: the Analyze scenarios
+// (CHOICES, SAFE_SCENARIOS), the job comparison, the per-hour lines and the
+// notes all read this object. Homes (second-brain): Petachya → self/petachya-
+// pay.md · Clalit → projects/clalit/pay-system-decoded-2026-07-15.md (glance
+// box) · tax → self/tax.md · Carmei Gat → self/carmei-gat.md · private →
+// self/private-practice.md. Per-hour figures are GROSS per PAID hour unless a
+// label says "real" (hours in the room). All ESTIMATES until a payslip says so.
+const PAY = {
+  clalit: {
+    plainGrossMonth: 8670, // a plain month, no extra hours (Jan–Sep 2026 slips)
+    withGrantsGrossMonth: 10340, // + the yearly grants spread over 12
+    paidHoursMonth: 95.15, // = 22 paid hours a week
+    paidHoursWeek: 22,
+    realHoursWeek: 22,
+    netExtraOverPetachya: 5100, // net the job adds next to Petachya (grants spread)
+    grossWithPetachyaMonth: 22700,
+    fundsMonth: 2470, // pension + KH into the funds
+  },
+  petachya: {
+    ratePerPaidHour: 120, // gross, since the Sep slip
+    paidHoursMonth: 95.33,
+    paidHoursWeek: 22,
+    realHoursWeek: 12.5,
+    netLow: 9660, // a normal month with travel (self/petachya-pay.md)
+    netHigh: 9730,
+    // The figure the scenarios carry today. PENDING her exact number (Oct 15:
+    // "I lower it… let's just wait") — change it HERE, once, and every
+    // scenario follows.
+    netInApp: 9860,
+  },
+  school: {
+    ratePerPaidHour: 130,
+    weeksPerMonth: 4.33,
+    paidHoursWeek: 20,
+    realHoursWeek: 14, // she is in the room 14 h for 20 paid
+    netExtraOverPetachya: 6420,
+    netWithPetachyaKhBelief: 16000, // if the keren hishtalmut is real (her belief)
+    grossWithPetachyaMonth: 23500,
+    fundsMonth: 3210, // with the KH
+    fundsMonthNoKh: 2080,
+  },
+  gan2: {
+    perSession: 180, // ₪ per session
+    sessionsPerDay: 4, // four 40-minute sessions on ONE gan day a week
+    daysPerWeek: 1,
+    minutesPerSession: 40,
+    paidMonths: 10, // no July–August
+    // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
+    // Net = gross × netFactor: a payslip job, tax withheld at her marginal
+    // rate with no tax coordination, pension only. Rough, before the year-end
+    // refund; waiting for the first payslip. Every gan 2 mix reads GAN2_NET.
+    netFactor: 0.7,
+  },
+  private: {
+    netMonth: 1000, // 2 weekly clients, after the accountant (the mixes' number)
+    // TURNOVER, which the 70% rule applies to (not the net above): 2026 ≈
+    // ₪14.2–14.9K a year (self/tax.md) ≈ ₪1,200 a month. Rough.
+    turnoverMonth: 1200,
+    marginalRate: 0.31, // 35% only when gan 2 sits on top of the school
+    marginalRateHigh: 0.35,
+    taxableShare: 0.7, // עוסק זעיר: tax on 70% of turnover
+    seRate: 0.153, // US self-employment tax, rough
+    seBase: 0.9235,
+  },
+  carmeiGat: {
+    // From the Oct 12 analysis (self/carmei-gat.md): rough.
+    rent: 4850,
+    mortgage: 4797.8,
+    insurance: 112,
+    mortgageLife: 26,
+    upkeepAllowance: 250, // her 2027 plan's ₪3,000 of fixes ÷ 12
+  },
+  reserves: {
+    khHarel: 64000, // keren hishtalmut: withdrawable tax-free after 6 years
+  },
+};
+// Gan 2 net a month: derived from its gross, one rough factor, never typed.
+const GAN2_NET = gan2NetMonth(
+  gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth),
+  PAY.gan2.netFactor,
+);
+// Net a month of every income mix after Feb 7 — sums of PAY, never typed twice.
+const MIX_NET = {
+  pet: PAY.petachya.netInApp,
+  pet2: PAY.petachya.netInApp + PAY.private.netMonth,
+  petgan: PAY.petachya.netInApp + GAN2_NET,
+  all: PAY.petachya.netInApp + GAN2_NET + PAY.private.netMonth,
+  school: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya,
+  school2: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.private.netMonth,
+  schoolgan: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + GAN2_NET,
+  clalit: PAY.petachya.netInApp + PAY.clalit.netExtraOverPetachya,
+};
+// The mixes that include the private clients (the US self-employment tax line).
+const PRIVATE_MIXES = ['pet2', 'all', 'school2'];
 
 const MONTHS = [
   'January',
@@ -10292,6 +10401,19 @@ function renderYearSnapshot(): string {
 // spend", "Floor", "Above floor" — so it never collides with "Room to move"
 // (Budget tab, this month only) or "Remaining" (Admin/Travel).
 
+// A year with no floors of its own yet (2027 before she sets any) reads the
+// year before's floors for DISPLAY only — never written under the new year,
+// always labelled "from 2026". Her Oct 11 decision: 2027 reads 2026 Lean.
+let _floorsFallback: {
+  forYear: number;
+  fromYear: number;
+  map: Record<string, SpendFloorRow>;
+} | null = null;
+function floorsFromPriorYear(): number | null {
+  const f = _floorsFallback;
+  return f && f.forYear === state.currentYear && Object.keys(f.map).length ? f.fromYear : null;
+}
+
 async function loadFloors(): Promise<void> {
   const year = state.currentYear;
   const { data, error } = await sb.from('spend_floors').select('*').eq('year', year);
@@ -10306,6 +10428,80 @@ async function loadFloors(): Promise<void> {
   ((data || []) as SpendFloorRow[]).forEach((r) => {
     map[r.category] = r;
   });
+  _floorsFallback = null;
+  if (!Object.keys(map).length) {
+    const prev = await sb
+      .from('spend_floors')
+      .select('*')
+      .eq('year', year - 1);
+    if (year !== state.currentYear) return;
+    const pm: Record<string, SpendFloorRow> = {};
+    if (!prev.error) ((prev.data || []) as SpendFloorRow[]).forEach((r) => (pm[r.category] = r));
+    // A line she never set a floor for (bills included) reads the PRIOR year's own
+    // suggestion — its bills now, its lowest normal months — never this year's
+    // still-empty data (₪0). Needs the prior year's rows, read only (GET).
+    const pmo = await sb
+      .from('months')
+      .select('*')
+      .eq('year', year - 1);
+    if (year !== state.currentYear) return;
+    const pMonths = (pmo.data || []) as MonthRow[];
+    const ids = pMonths.map((m) => m.id);
+    if (ids.length) {
+      const [tx, bi, bu, ii] = await Promise.all([
+        sb.from('transactions').select('*').in('month_id', ids),
+        sb.from('budget_items').select('*').in('month_id', ids),
+        sb.from('budgets').select('*').in('month_id', ids),
+        sb.from('income_items').select('*').in('month_id', ids),
+      ]);
+      if (year !== state.currentYear) return;
+      const now = new Date();
+      const pFloors: Record<string, AnalyzeFloorIn | undefined> = {};
+      for (const k of Object.keys(pm))
+        pFloors[k] = {
+          amount: pm[k].amount === null || pm[k].amount === undefined ? null : Number(pm[k].amount),
+          avgN: pm[k].avg_n ?? 3,
+          excluded: pm[k].excluded_months ?? [],
+        };
+      const pr = analyzeYear({
+        months: pMonths.map((m) => ({
+          id: m.id,
+          month_num: m.month_num,
+          month_name: MONTHS[m.month_num - 1] || '',
+          income_petachya: m.income_petachya,
+          income_clalit: m.income_clalit,
+          income_private: m.income_private,
+          income_other: m.income_other,
+          charity_pct: m.charity_pct,
+        })),
+        txns: (tx.data || []) as TransactionRow[],
+        budgetItems: (bi.data || []) as BudgetItemRow[],
+        budgets: (bu.data || []) as { month_id: string; category: string; amount: number }[],
+        incomeItems: (ii.data || []) as IncomeItemRow[],
+        categories: CATEGORIES,
+        todayMonth:
+          year - 1 === now.getFullYear()
+            ? now.getMonth() + 1
+            : year - 1 < now.getFullYear()
+              ? 13
+              : 0,
+        avgWindow: 0,
+        floors: pFloors,
+      });
+      for (const c of pr.cats) {
+        if (pm[c.key] && typeof pm[c.key].amount === 'number') continue;
+        pm[c.key] = {
+          id: 'fallback-' + c.key,
+          year: year - 1,
+          category: c.key,
+          amount: c.floor,
+          avg_n: pm[c.key] ? pm[c.key].avg_n : 3,
+          excluded_months: pm[c.key] ? pm[c.key].excluded_months : [],
+        };
+      }
+    }
+    _floorsFallback = { forYear: year, fromYear: year - 1, map: pm };
+  }
   state.floors = map;
 }
 
@@ -10333,7 +10529,11 @@ function setAnalyzeAvgWindow(n: number): void {
 
 function computeAnalyze(): AnalyzeResult | null {
   if (!state.yearData) return null;
-  const rows = state.floors || {};
+  const own = state.floors || {};
+  const rows =
+    Object.keys(own).length === 0 && floorsFromPriorYear() && _floorsFallback
+      ? _floorsFallback.map
+      : own;
   const floors: Record<string, AnalyzeFloorIn | undefined> = {};
   Object.keys(rows).forEach((k) => {
     const r = rows[k];
@@ -10749,9 +10949,9 @@ function cashTotals(): {
 // (second-brain projects/leaving-clalit/money-model-2026-09-04-1002.md), net
 // a month after tax, ב.ל. and her pension/KH share. Petachya at ₪120 as her
 // only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
-// cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
+// cancellations, after OPS); gan 2 = derived from PAY.gan2 (was ₪890 × 42 Mondays).
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
-// Oct 12 2026: no gan 2 right now (her words) — gan 2 mixes are what-ifs. The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
+// Oct 15 2026: gan 2 is a YES (start date and day to confirm); on Oct 12 it was "no gan 2 right now". The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // Net a month, year 1, incl. Petachya's havra'a (~₪80). Her walkthrough
   // 2026-10-11 20:19–20:23 (second-brain projects/budget-app/
@@ -10759,16 +10959,15 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // the only payslip; 2 weekly private clients ≈ 1,000 (31% bracket next to
   // two salaries ≈ 1,000 too); gan 2 on Tuesdays ≈ ₪890/day × ~42 ÷ 12 with
   // Petachya alone, ≈ 52% kept as a third salary (8 paid hrs ≈ 2,200/mo,
-  // 5 paid hrs ≈ 1,370/mo); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
+  // (gan 2 is now derived, PAY.gan2); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
   // ≈ 16,200 net with Petachya (Sep 23 model). ESTIMATES.
-  { key: 'pet', label: 'Petachya only', income: 9860 },
-  { key: 'pet2', label: 'Petachya + 2 private clients', income: 10860 },
-  { key: 'petgan', label: 'Petachya + gan 2 (Tue, 8 hrs)', income: 12975 },
-  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13975 },
-  { key: 'school', label: 'Petachya + the school', income: 16280 },
-  { key: 'school2', label: 'Petachya + school + 2 clients', income: 17280 },
-  { key: 'schoolgan5', label: 'Petachya + school + gan 2 (5 hrs)', income: 17650 },
-  { key: 'schoolgan8', label: 'Petachya + school + gan 2 (8 hrs)', income: 18480 },
+  { key: 'pet', label: 'Petachya only', income: MIX_NET.pet },
+  { key: 'pet2', label: 'Petachya + 2 private clients', income: MIX_NET.pet2 },
+  { key: 'petgan', label: 'Petachya + gan 2 (Tue)', income: MIX_NET.petgan },
+  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: MIX_NET.all },
+  { key: 'school', label: 'Petachya + the school', income: MIX_NET.school },
+  { key: 'school2', label: 'Petachya + school + 2 clients', income: MIX_NET.school2 },
+  { key: 'schoolgan', label: 'Petachya + school + gan 2', income: MIX_NET.schoolgan },
 ];
 
 // Her four spending levels for 2027, ₪ a month — built line by line with
@@ -10799,11 +10998,11 @@ const CHOICES: {
     key: 'clalit',
     label: 'Clalit + Petachya — as it is now',
     note: 'no extra hours, grants spread · ends Feb 7',
-    net: 14960,
+    net: MIX_NET.clalit,
     realHrs: 34.5,
     paidHrs: 44,
     driveHrs: 6.8,
-    sure: 14960,
+    sure: MIX_NET.clalit,
     likely: 0,
     maybe: 0,
     august: 'both paid',
@@ -10812,52 +11011,52 @@ const CHOICES: {
     key: 'school',
     label: 'Petachya + the school',
     note: 'not offered yet · with KH (your belief): ₪16,000 net, more into funds',
-    net: 16280,
+    net: MIX_NET.school,
     realHrs: 26.5,
     paidHrs: 42,
     driveHrs: 5.5,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 6420,
+    maybe: PAY.school.netExtraOverPetachya,
     august: 'both paid',
   },
   {
     key: 'school2',
     label: 'Petachya + school + 2 clients',
     note: 'the school not offered yet',
-    net: 17280,
+    net: MIX_NET.school2,
     realHrs: 29,
     paidHrs: 44.5,
     driveHrs: 7,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 7420,
+    maybe: PAY.school.netExtraOverPetachya + PAY.private.netMonth,
     august: 'clients stop',
   },
   {
     key: 'all',
     label: 'Petachya + gan 2 (Tue) + 2 clients',
-    note: 'what if — no gan 2 right now',
-    net: 13975,
+    note: 'gan 2: yes (Oct 15), start date and day to confirm',
+    net: MIX_NET.all,
     realHrs: 20,
     paidHrs: 32.5,
     driveHrs: 5.3,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 4115,
+    maybe: GAN2_NET + PAY.private.netMonth,
     august: 'gan 2 and clients stop',
   },
   {
     key: 'petgan',
-    label: 'Petachya + gan 2 (Tue, 8 hrs)',
-    note: 'what if — no gan 2 right now',
-    net: 12975,
+    label: 'Petachya + gan 2 (Tue)',
+    note: 'gan 2: yes (Oct 15), start date and day to confirm',
+    net: MIX_NET.petgan,
     realHrs: 17.5,
     paidHrs: 30,
     driveHrs: 3.8,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 3115,
+    maybe: GAN2_NET,
     august: 'gan 2 stops',
   },
   // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
@@ -10866,24 +11065,24 @@ const CHOICES: {
     key: 'pet2',
     label: 'Petachya + 2 private clients',
     note: 'your plan today',
-    net: 10860,
+    net: MIX_NET.pet2,
     realHrs: 15,
     paidHrs: 24.5,
     driveHrs: 4.8,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 1000,
+    maybe: PAY.private.netMonth,
     august: 'clients stop',
   },
   {
     key: 'pet',
     label: 'Petachya only',
     note: 'if it goes wrong',
-    net: 9860,
+    net: MIX_NET.pet,
     realHrs: 12.5,
     paidHrs: 22,
     driveHrs: 3.3,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
     maybe: 0,
     august: 'paid',
@@ -10977,6 +11176,23 @@ function setAnalyzeDrive(on: boolean): void {
   }
   renderApp();
 }
+// US self-employment tax on the private-income line: OFF by default (she left
+// it off Oct 8); a rough figure when ON. View state only.
+let _anSE = false;
+try {
+  _anSE = localStorage.getItem('analyzeSE') === '1';
+} catch {
+  /* view state only */
+}
+function setAnalyzeSE(on: boolean): void {
+  _anSE = !!on;
+  try {
+    localStorage.setItem('analyzeSE', _anSE ? '1' : '0');
+  } catch {
+    /* view state only */
+  }
+  renderApp();
+}
 let _anLevel: LevelKey = 'lean';
 try {
   const v = localStorage.getItem('analyzeLevel');
@@ -10996,19 +11212,132 @@ function setAnalyzeLevel(v: string): void {
 }
 // Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
 // her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
-const JOB_COMPARE: { label: string; clalit: string; school: string; diff: string }[] = [
-  { label: 'Net a month', clalit: '₪14,960', school: '₪16,000', diff: 'school +₪1,040' },
-  { label: 'Gross a month', clalit: '₪22,700', school: '₪23,500', diff: 'school +₪800' },
-  {
-    label: 'Into pension + KH (the job)',
-    clalit: '₪2,470',
-    school: '₪3,210',
-    diff: 'school +₪740',
-  },
-  { label: 'Net + funds', clalit: '₪17,430', school: '₪19,210', diff: 'school +₪1,780' },
-  { label: 'Real hours a week', clalit: '34.5', school: '26.5', diff: 'school −8' },
-  { label: 'Net per real hour', clalit: '₪100', school: '₪139', diff: 'school +39%' },
-];
+// Every per-hour figure is GROSS per PAID hour (the same basis for every
+// job) unless the label says "real" (hours in the room) — and it is the job's
+// own rate, i.e. at the margin, never Petachya's whole-week average.
+function jobRates(): {
+  clalitPaid: number;
+  clalitReal: number;
+  schoolGross: number;
+  schoolPaid: number;
+  schoolReal: number;
+  petachya: number;
+  gan2Hour: number;
+} {
+  const c = PAY.clalit;
+  const sc = PAY.school;
+  const schoolGross = schoolGrossMonth(sc.ratePerPaidHour, sc.weeksPerMonth, sc.paidHoursWeek);
+  return {
+    clalitPaid: perHour(c.withGrantsGrossMonth, c.paidHoursMonth),
+    clalitReal: perHour(
+      c.withGrantsGrossMonth,
+      (c.paidHoursMonth * c.realHoursWeek) / c.paidHoursWeek,
+    ),
+    schoolGross,
+    schoolPaid: perHour(schoolGross, sc.paidHoursWeek * sc.weeksPerMonth),
+    schoolReal: perHour(schoolGross, sc.realHoursWeek * sc.weeksPerMonth),
+    petachya: PAY.petachya.ratePerPaidHour,
+    gan2Hour: sessionHourly(PAY.gan2.perSession, PAY.gan2.minutesPerSession),
+  };
+}
+// The per-hour lines on one "Which week?" card — job, ₪, and the basis.
+function perHourLines(key: string): { job: string; value: number; basis: string }[] {
+  const r = jobRates();
+  const pet = { job: 'Petachya', value: r.petachya, basis: 'gross per paid hour' };
+  if (key === 'clalit')
+    return [
+      { job: 'Clalit', value: r.clalitPaid, basis: 'gross per paid hour, grants spread' },
+      pet,
+    ];
+  if (key === 'school' || key === 'school2')
+    return [
+      { job: 'The school', value: r.schoolPaid, basis: 'gross per paid hour' },
+      {
+        job: 'The school',
+        value: r.schoolReal,
+        basis: 'gross per real hour (' + PAY.school.realHoursWeek + ' h in the room)',
+      },
+      pet,
+    ];
+  if (key === 'petgan' || key === 'all')
+    return [
+      {
+        job: 'Gan 2',
+        value: r.gan2Hour,
+        basis:
+          'gross per session hour (₪' +
+          PAY.gan2.perSession +
+          ' for ' +
+          PAY.gan2.minutesPerSession +
+          ' min)',
+      },
+      pet,
+    ];
+  return [pet];
+}
+// Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
+// her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
+function jobCompareRows(): { label: string; clalit: string; school: string; diff: string }[] {
+  const r = jobRates();
+  const c = PAY.clalit;
+  const sc = PAY.school;
+  const sh = shekels;
+  const diff = (school: number, clalit: number, dec = 0): string => {
+    const d = school - clalit;
+    const mag = dec ? Math.abs(d).toFixed(dec) : sh(Math.abs(d)).replace('₪', '');
+    return 'school ' + (d >= 0 ? '+' : '−') + (dec ? '' : '₪') + mag;
+  };
+  const clalitMix = CHOICES.find((x) => x.key === 'clalit');
+  const schoolMix = CHOICES.find((x) => x.key === 'school');
+  const rows = [
+    {
+      label: 'Net a month',
+      clalit: sh(MIX_NET.clalit),
+      school: sh(sc.netWithPetachyaKhBelief),
+      diff: diff(sc.netWithPetachyaKhBelief, MIX_NET.clalit),
+    },
+    {
+      label: 'Gross a month',
+      clalit: sh(c.grossWithPetachyaMonth),
+      school: sh(sc.grossWithPetachyaMonth),
+      diff: diff(sc.grossWithPetachyaMonth, c.grossWithPetachyaMonth),
+    },
+    {
+      label: 'Into pension + KH (the job)',
+      clalit: sh(c.fundsMonth),
+      school: sh(sc.fundsMonth),
+      diff: diff(sc.fundsMonth, c.fundsMonth),
+    },
+    {
+      label: 'Net + funds',
+      clalit: sh(MIX_NET.clalit + c.fundsMonth),
+      school: sh(sc.netWithPetachyaKhBelief + sc.fundsMonth),
+      diff: diff(sc.netWithPetachyaKhBelief + sc.fundsMonth, MIX_NET.clalit + c.fundsMonth),
+    },
+    {
+      label: 'Real hours a week',
+      clalit: String(clalitMix ? clalitMix.realHrs : ''),
+      school: String(schoolMix ? schoolMix.realHrs : ''),
+      diff: diff(schoolMix ? schoolMix.realHrs : 0, clalitMix ? clalitMix.realHrs : 0, 1).replace(
+        /\.0$/,
+        '',
+      ),
+    },
+    {
+      label: 'The extra job, gross per PAID hour',
+      clalit: sh(r.clalitPaid),
+      school: sh(r.schoolPaid),
+      diff: diff(r.schoolPaid, r.clalitPaid),
+    },
+    {
+      label: 'The extra job, gross per REAL hour',
+      clalit: sh(r.clalitReal),
+      school: sh(r.schoolReal),
+      diff: diff(r.schoolReal, r.clalitReal),
+    },
+  ];
+  return rows;
+}
 
 // "Why so high" — the drivers in her order, and the PROPOSED tag on each,
 // with where the tag came from. She changes a tag by saying so in chat.
@@ -11495,6 +11824,7 @@ function renderAnalyzeTab(): string {
   // Floors not loaded for this year yet: the math above ran on none, so every
   // floor-derived number is a placeholder — say so, never show a default as hers.
   const floorsLoading = !state.floors;
+  const floorsFrom = floorsFromPriorYear();
   const LOADING = '<span class="an-loading">loading…</span>';
   // Never ₪-x: a minus sits in front of the shekel sign.
   const money = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v || 0));
@@ -11598,11 +11928,11 @@ function renderAnalyzeTab(): string {
   const wspan = (ms: number[]): string =>
     span(ms) + (why && ms.some((x) => why.projected.includes(x)) ? ' (budgeted)' : '');
   const nowRules = MONTH_NOW_RULES[state.currentYear] || { fromMonth: {}, zero: [] };
-  const refNum = s.referenceMonth || 12;
+  const refNum = billsMonthFor(s.referenceMonth);
   const mNow = none
     ? null
     : monthNow(r, {
-        billsMonth: months.some((m) => m.month_num === refNum + 1) ? refNum + 1 : refNum,
+        billsMonth: refNum,
         recentN: 6,
         fromMonth: nowRules.fromMonth,
         zero: nowRules.zero,
@@ -11610,6 +11940,8 @@ function renderAnalyzeTab(): string {
   const planNext = PLAN_NEXT[state.currentYear + 1] || [];
   const oneOffsMo = planNext.reduce((a, p) => a + p.amount, 0) / 12;
   const oneOffsLeanMo = planNext.reduce((a, p) => a + (p.lean ?? p.amount), 0) / 12;
+  // ONE computation for A month now: the tile and the section both read it.
+  const nowTotals = mNow ? monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo) : null;
   const levelTotal = (lv: LevelKey): number =>
     lv === 'lean' ? s.floorTotal : Object.values(LEVELS[lv]).reduce((a, v) => a + v, 0);
   const levelSpend = levelTotal(_anLevel);
@@ -11619,7 +11951,12 @@ function renderAnalyzeTab(): string {
   const plan = SAFE_SCENARIOS.find((x) => x.key === 'pet2') || pet;
   const cashLeft = cash.liquid - _anOneOff;
   const petReal = runway(cashLeft, pet.income, s.realAvg);
-  const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
+  // US self-employment tax (rough), only when she switches it on, only on the
+  // mixes that carry the private clients.
+  const seMonthly = _anSE ? seTax(PAY.private.netMonth, PAY.private.seRate, PAY.private.seBase) : 0;
+  const seOf = (key: string): number => (PRIVATE_MIXES.includes(key) ? seMonthly : 0);
+  const incomeOf = (key: string, income: number): number => income - seOf(key);
+  const planNow = mNow ? runway(cashLeft, incomeOf(plan.key, plan.income), mNow.total) : null;
   const margin = (v: number): string =>
     v >= 0
       ? '<span class="an-pos">+' + money(v) + '</span>'
@@ -11712,7 +12049,9 @@ function renderAnalyzeTab(): string {
     label +
     (val ? ' <b>' + val + '</b>' : '') +
     '</button>';
-  const choiceFit = (c: { net: number }): number => c.net - levelSpend;
+  // One source with the cards: income after the (optional) US self-employment tax.
+  const choiceFit = (c: { key: string; net: number }): number =>
+    incomeOf(c.key, c.net) - levelSpend;
   const fitting = CHOICES.filter((c) => choiceFit(c) >= 0).length;
   const tiles =
     '<div class="an-tiles an-tiles4">' +
@@ -11727,33 +12066,40 @@ function renderAnalyzeTab(): string {
     tile(
       'now',
       'What does a month cost?',
-      mNow ? money(mNow.total + oneOffsLeanMo) : '—',
-      mNow ? money(mNow.total) + ' + trips & one-offs (lean plan)' : 'needs a complete month',
+      nowTotals ? money(nowTotals.headline) : '—',
+      mNow
+        ? oneOffsMo
+          ? money(nowTotals ? nowTotals.base : 0) + ' + trips & one-offs (lean plan)'
+          : 'bills, everyday and charity'
+        : 'needs a complete month',
     ) +
     tile(
       'floor',
       'My ladder',
-      floorsLoading ? LOADING : none ? '—' : money(s.floorTotal),
-      floorsLoading || none
+      floorsLoading ? LOADING : none && !floorsFrom ? '—' : money(s.floorTotal),
+      floorsLoading || (none && !floorsFrom)
         ? ''
-        : 'Lean · Temp ' + money(levelTotal('temp')) + ' · Normal ' + money(levelTotal('normal')),
+        : 'Lean' +
+            (floorsFrom ? ' (from ' + floorsFrom + ')' : '') +
+            ' · Temp ' +
+            money(levelTotal('temp')) +
+            ' · Normal ' +
+            money(levelTotal('normal')),
     ) +
     tile(
       'safe',
       'Which week?',
-      floorsLoading || none ? '—' : fitting + ' of ' + CHOICES.length,
-      floorsLoading || none ? '' : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
+      floorsLoading || (none && !floorsFrom) ? '—' : fitting + ' of ' + CHOICES.length,
+      floorsLoading || (none && !floorsFrom)
+        ? ''
+        : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
     ) +
     '</div>' +
     '<div class="an-chips"><span class="an-closer">Look closer</span>' +
     chip('why', 'Why so high', why ? signed(why.delta) : '') +
     chip('cut', 'Where to cut', floorsLoading || none ? '' : money(Math.max(0, s.aboveFloor))) +
     chip('income', 'Income', none ? '' : money(avgOf((m) => m.income)) + '/mo') +
-    chip(
-      'bills',
-      'Bills',
-      none ? '' : money(months.find((m) => m.month_num === refNum)?.fixed || 0) + '/mo',
-    ) +
+    chip('bills', 'Bills', money(months.find((m) => m.month_num === refNum)?.fixed || 0) + '/mo') +
     chip(
       'pots',
       'Travel & admin',
@@ -12288,19 +12634,21 @@ function renderAnalyzeTab(): string {
     if (!mNow) return noneNote;
     const bmName = abbr(mNow.billsMonth);
     const potsAvg = avgOf((m) => m.pots);
+    const nt = nowTotals || monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo);
     const say =
       '<p class="an-say">From here on, a month costs about <b>' +
-      money(mNow.total) +
-      '</b> — bills as they are now, everyday at your recent pace, and charity.' +
+      money(nt.headline) +
+      '</b> — ' +
       (oneOffsMo
-        ? ' With the trips and one-offs in your ' +
+        ? money(nt.base) +
+          ' for bills as they are now, everyday at your recent pace and charity, plus ' +
+          money(oneOffsLeanMo) +
+          ' of the trips and one-offs in your lean ' +
           (state.currentYear + 1) +
-          ' plan, about <b>' +
-          money(mNow.total + oneOffsMo) +
-          '</b> (lean plan: ' +
-          money(mNow.total + oneOffsLeanMo) +
+          ' plan (your normal plan: ' +
+          money(nt.withNormal) +
           ').'
-        : '') +
+        : 'bills as they are now, everyday at your recent pace, and charity.') +
       '</p>' +
       '<p class="an-say an-say-sm">Your ' +
       avgSpan +
@@ -12347,14 +12695,19 @@ function renderAnalyzeTab(): string {
         envRows,
       ) +
       row('💚 Charity · ' + bmName, money(mNow.charity)) +
-      row('A month now', money(mNow.total), 'ym-row-bold') +
+      row(
+        oneOffsMo ? 'Bills + everyday + charity' : 'A month now',
+        money(nt.base),
+        oneOffsMo ? '' : 'ym-row-bold',
+      ) +
       (oneOffsMo
         ? row(
-            '✈️📋 Trips + one-offs · your ' + (state.currentYear + 1) + ' plan',
-            '+' + money(oneOffsMo),
+            '✈️📋 Trips + one-offs · your lean ' + (state.currentYear + 1) + ' plan',
+            '+' + money(oneOffsLeanMo),
           ) +
           go('pots', 'travel & admin, this year vs next') +
-          row('With trips and one-offs', money(mNow.total + oneOffsMo), 'ym-row-bold')
+          row('A month now, with trips and one-offs', money(nt.headline), 'ym-row-bold') +
+          row('your normal plan instead', money(nt.withNormal), 'ym-row-sub')
         : '') +
       '</div>';
     // What moved against the window average — biggest first.
@@ -12421,7 +12774,11 @@ function renderAnalyzeTab(): string {
         const body =
           '<div class="an-why">' +
           LEVEL_NOTE[lv] +
-          (lv === 'lean' ? ' — edit it line by line below.' : ' — from your Oct 11 walkthrough.') +
+          (lv === 'lean'
+            ? none
+              ? ''
+              : ' — edit it line by line below.'
+            : ' — from your Oct 11 walkthrough.') +
           '</div>' +
           Object.keys(by)
             .sort((a, b) => by[b] - by[a])
@@ -12439,7 +12796,21 @@ function renderAnalyzeTab(): string {
     );
   };
   const floorSection = (): string => {
-    if (none) return noneNote;
+    if (none)
+      return floorsLoading
+        ? '<p class="an-say">' + LOADING + '</p>'
+        : '<p class="an-say">Nothing in ' +
+            state.currentYear +
+            ' has happened yet, so there is no average to read your lines against. Your four levels are below' +
+            (floorsFrom
+              ? ' — Lean is ' +
+                floorsFrom +
+                '’s floor until you set ' +
+                state.currentYear +
+                '’s (shown, not saved)'
+              : '') +
+            '.</p>' +
+            levelsBlock();
     const lv = cats.map((c) => ({ c, lv: levelOf(c) }));
     const names = (l: Level[]): string =>
       lv
@@ -12605,11 +12976,13 @@ function renderAnalyzeTab(): string {
     // A year with nothing complete (January 2027) has no real spend and only
     // bills in its floor — a confident "+₪X" there would be a number with
     // nothing under it. Say so instead.
-    if (none)
+    // A year with nothing complete has no real spend: the "a month now" column
+    // is a dash, the levels (Lean from last year's floor, labelled) still work.
+    if (none && !floorsFrom)
       return (
         '<p class="an-say">Nothing in ' +
         state.currentYear +
-        ' has happened yet, so there’s no real spend here, and the floor holds only this year’s bills until you set the rest. ' +
+        ' has happened yet, and no floors are set for it, so there’s no level to read the mixes against. ' +
         (state.currentYear > 2026
           ? 'Switch to ' + (state.currentYear - 1) + ' for the numbers that happened.'
           : '') +
@@ -12631,7 +13004,8 @@ function renderAnalyzeTab(): string {
           ]),
     ];
     const lvName = LEVEL_NAME[_anLevel];
-    const fit = (x: { income: number }): number => x.income - levelSpend;
+    const fit = (x: { key: string; income: number }): number =>
+      incomeOf(x.key, x.income) - levelSpend;
     const lowest = [...SAFE_SCENARIOS].sort((p, q) => p.income - q.income)[0];
     const firstFit = [...SAFE_SCENARIOS]
       .sort((p, q) => p.income - q.income)
@@ -12672,7 +13046,7 @@ function renderAnalyzeTab(): string {
       '<p class="an-say an-say-sm">Your plan now — ' +
       esc(plan.label) +
       ': ' +
-      margin(plan.income - levelSpend) +
+      margin(fit(plan)) +
       ' at ' +
       lvName +
       (planNow ? ', ' + margin(planNow.margin) + ' against a month now' : '') +
@@ -12697,6 +13071,91 @@ function renderAnalyzeTab(): string {
           money(cashLeft) +
           '. Nothing is saved — it’s a what-if.'
         : 'Type an amount to see “cash lasts” move. Nothing is saved — it’s a what-if.') +
+      '</div></div>';
+    // ── Three small reads (one idea each; none of them is added into any total) ──
+    const mini = (title: string, big: string, lines: string[], foot: string): string =>
+      '<div class="an-card2 an-mini"><div class="an-c2-head"><span class="an-c2-label">' +
+      title +
+      '</span></div><div class="an-c2-net">' +
+      big +
+      '</div><div class="an-c2-lines">' +
+      lines.map((l) => '<div>' + l + '</div>').join('') +
+      '</div><div class="an-c2-save an-legend">' +
+      foot +
+      '</div></div>';
+    const cg = carmeiGatNet(PAY.carmeiGat);
+    const cgCard = mini(
+      '🏠 Carmei Gat, honestly',
+      money(cg.before) + ' to ' + money(cg.withUpkeep) + '<span class="an-c2-unit"> a month</span>',
+      [
+        'Rent in ' + money(PAY.carmeiGat.rent),
+        '− mortgage ' + money(PAY.carmeiGat.mortgage),
+        '− building insurance ' +
+          money(PAY.carmeiGat.insurance) +
+          ' · mortgage life ' +
+          money(PAY.carmeiGat.mortgageLife),
+        '= ' + money(cg.before) + ' a month',
+        '− upkeep allowance ' + money(PAY.carmeiGat.upkeepAllowance) + ' = ' + money(cg.withUpkeep),
+      ],
+      'Rough, from the Oct 12 analysis. Vaad bayit and your arnona share aren’t in this number. It costs a little each month — the bet is the apartment going up.',
+    );
+    const taxLow = taxSetAside(
+      PAY.private.turnoverMonth,
+      PAY.private.marginalRate,
+      PAY.private.taxableShare,
+    );
+    const taxHigh = taxSetAside(
+      PAY.private.turnoverMonth,
+      PAY.private.marginalRateHigh,
+      PAY.private.taxableShare,
+    );
+    const taxCard = mini(
+      '🧾 Set aside for tax on private',
+      money(taxLow) + '<span class="an-c2-unit"> a month</span>',
+      [
+        'Tax is on ' +
+          Math.round(PAY.private.taxableShare * 100) +
+          '% of about ' +
+          money(PAY.private.turnoverMonth) +
+          ' a month turnover, rough',
+        '× your ' + Math.round(PAY.private.marginalRate * 100) + '% rate',
+        'If gan 2 sits on top of the school: ' +
+          money(taxHigh) +
+          ' (' +
+          Math.round(PAY.private.marginalRateHigh * 100) +
+          '%)',
+      ],
+      'An estimate to park in the bank, not a number in any total. Your accountant confirms the rate.',
+    );
+    const runLeft = cashLasts(cashLeft, fit(plan), PAY.reserves.khHarel);
+    const monthsTxt = (m: number): string => (m > 60 ? 'years' : m + ' months');
+    const runCard = mini(
+      '⏳ How long cash lasts',
+      runLeft
+        ? monthsTxt(runLeft.months) + '<span class="an-c2-unit"> at ' + lvName + '</span>'
+        : 'Covered<span class="an-c2-unit"> at ' + lvName + '</span>',
+      [
+        'Total Liquid after cards ' +
+          money(cashLeft) +
+          (runLeft ? ' · short ' + money(-fit(plan)) + ' a month' : ' · nothing drawn down'),
+        'with ' + esc(plan.label),
+        runLeft
+          ? '+ ' +
+            (runLeft.extraWithReserve > 60 ? 'years' : runLeft.extraWithReserve + ' months') +
+            ' if the keren hishtalmut is used (' +
+            money(PAY.reserves.khHarel) +
+            ', never counted as cash)'
+          : 'The keren hishtalmut (' + money(PAY.reserves.khHarel) + ') stays untouched.',
+      ],
+      'Balances are the Cash tab’s' +
+        (cashDays !== null ? ', ' + cashDays + ' days old' : '') +
+        '. The KH is tax-free only after 6 years, so it’s a second line, never added.',
+    );
+    const smallCards =
+      '<div class="an-block"><div class="an-h">Three quick reads</div><div class="an-cards2">' +
+      cgCard +
+      taxCard +
+      runCard +
       '</div></div>';
     const cell = (inc: number, spend: number): string => {
       const rw = runway(cashLeft, inc, spend);
@@ -12728,9 +13187,9 @@ function renderAnalyzeTab(): string {
             '</span><span class="an-sinc">' +
             money(x.income) +
             '</span></span><span>' +
-            cell(x.income, levelSpend) +
+            cell(incomeOf(x.key, x.income), levelSpend) +
             '</span><span>' +
-            (none ? '—' : cell(x.income, real)) +
+            (none ? '—' : cell(incomeOf(x.key, x.income), real)) +
             '</span></div>',
         )
         .join('') +
@@ -12765,8 +13224,46 @@ function renderAnalyzeTab(): string {
       '</p></div>';
     const notes =
       '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
-      '<li>The incomes are your Oct 11 walkthrough: Petachya ₪120 × 22h ≈ ₪9,780 + havra’a ≈ ₪80; 2 weekly private clients ≈ ₪1,000; gan 2 on Tuesdays (8 or 5 paid hours at ₪180) (what if: no gan 2 right now); the school ₪130 × 20h. All net, estimates — real payslips can replace them.</li>' +
-      '<li>The school (Shtilim): ₪130 × 20 hours × 4.33 ≈ ₪11,258 gross a month; with Petachya ≈ ₪16,200 net — your Sep 23 numbers. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
+      '<li>The incomes are your Oct 11 walkthrough: Petachya ≈ ' +
+      money(PAY.petachya.netInApp) +
+      ' net (₪' +
+      PAY.petachya.ratePerPaidHour +
+      ' an hour × ' +
+      PAY.petachya.paidHoursWeek +
+      ' paid hours; your exact number is pending); 2 weekly private clients ≈ ' +
+      money(PAY.private.netMonth) +
+      '; gan 2 on Tuesdays (₪' +
+      PAY.gan2.perSession +
+      ' a ' +
+      PAY.gan2.minutesPerSession +
+      '-minute session, ' +
+      PAY.gan2.sessionsPerDay +
+      ' sessions on one gan day a week = ' +
+      money(PAY.gan2.perSession * PAY.gan2.sessionsPerDay) +
+      ' a day, paid ' +
+      PAY.gan2.paidMonths +
+      ' months ≈ ' +
+      money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
+      ' gross a month, rough, ≈ ' +
+      money(GAN2_NET) +
+      ' net before the tax refund; waiting for the first payslip); the school ₪' +
+      PAY.school.ratePerPaidHour +
+      ' × ' +
+      PAY.school.paidHoursWeek +
+      'h. All net, estimates — real payslips can replace them.</li>' +
+      '<li>The school (Shtilim): ₪' +
+      PAY.school.ratePerPaidHour +
+      ' × ' +
+      PAY.school.weeksPerMonth +
+      ' × ' +
+      PAY.school.paidHoursWeek +
+      ' paid hours ≈ ' +
+      money(jobRates().schoolGross) +
+      ' gross a month for ' +
+      PAY.school.realHoursWeek +
+      ' real hours; with Petachya ≈ ' +
+      money(MIX_NET.school) +
+      ' net. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
       '<li>“Now” is this app’s income, where private is before tax.</li>' +
       "<li>August: private stops, so it's Petachya only that month (no travel pay in August).</li>" +
       '<li>Clalit money that needs you on payroll that month: Nov 5 maybe ≈ ₪6,000 (not certain: ₪10K already paid in April); the January grant ≈ ₪5,300.</li>' +
@@ -12776,23 +13273,29 @@ function renderAnalyzeTab(): string {
     const jobs =
       '<div class="an-block"><div class="an-h">Petachya + Clalit (grants, no extra hours) vs Petachya + the school</div>' +
       '<div class="an-srow an-shead"><span></span><span>Clalit</span><span>School</span></div>' +
-      JOB_COMPARE.map(
-        (j) =>
-          '<div class="an-srow"><span><span class="an-slabel">' +
-          esc(j.label) +
-          '</span><span class="an-runway">' +
-          esc(j.diff) +
-          '</span></span><span>' +
-          esc(j.clalit) +
-          '</span><span><b>' +
-          esc(j.school) +
-          '</b></span></div>',
-      ).join('') +
-      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ₪16,280, net + funds ₪18,360.</div></div>';
+      jobCompareRows()
+        .map(
+          (j) =>
+            '<div class="an-srow"><span><span class="an-slabel">' +
+            esc(j.label) +
+            '</span><span class="an-runway">' +
+            esc(j.diff) +
+            '</span></span><span>' +
+            esc(j.clalit) +
+            '</span><span><b>' +
+            esc(j.school) +
+            '</b></span></div>',
+        )
+        .join('') +
+      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ' +
+      money(MIX_NET.school) +
+      ', net + funds ' +
+      money(MIX_NET.school + PAY.school.fundsMonthNoKh) +
+      '. Per-hour rows: gross ÷ paid hours — the extra job alone, at the margin.</div></div>';
     const card = (c: (typeof CHOICES)[number]): string => {
       const hrs = c.realHrs + (_anDrive ? c.driveHrs : 0);
-      const perHr = c.net / (hrs * 4.33);
-      const rw = runway(cashLeft, c.net, levelSpend);
+      const se = seOf(c.key);
+      const rw = runway(cashLeft, c.net - se, levelSpend);
       return (
         '<div class="an-card2' +
         (c.key === 'pet2' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
@@ -12811,11 +13314,23 @@ function renderAnalyzeTab(): string {
         ' (' +
         c.paidHrs +
         ' paid)</div>' +
-        '<div>₪ <b>' +
-        money(perHr) +
-        '</b> per hour ' +
-        (_anDrive ? 'of your week' : 'you work') +
-        '</div>' +
+        perHourLines(c.key)
+          .map(
+            (l) =>
+              '<div><b>' +
+              money(l.value) +
+              '</b> an hour · ' +
+              esc(l.job) +
+              '<span class="an-sublbl">' +
+              esc(l.basis) +
+              '</span></div>',
+          )
+          .join('') +
+        (se
+          ? '<div>🇺🇸 − <b>' +
+            money(se) +
+            '</b> a month self-employment tax<span class="an-sublbl">15.3% × 92.35% of the mixes’ private net after the accountant, rough, US</span></div>'
+          : '') +
         '<div>✓ sure ' +
         money(c.sure) +
         (c.likely ? ' · likely ' + money(c.likely) : '') +
@@ -12843,18 +13358,21 @@ function renderAnalyzeTab(): string {
       '<label class="an-toggle"><input type="checkbox"' +
       (_anDrive ? ' checked' : '') +
       ' onchange="setAnalyzeDrive(this.checked)"> include driving time</label>' +
+      '<label class="an-toggle"><input type="checkbox"' +
+      (_anSE ? ' checked' : '') +
+      ' onchange="setAnalyzeSE(this.checked)"> US self-employment tax: 15.3% × 92.35% of the mixes’ private net after the accountant (rough, US)</label>' +
       '<div class="an-cards2">' +
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
       (_anDrive ? '; driving is an estimate' : '') +
-      '. The school isn’t signed, and there’s no gan 2 right now. Nothing here writes to your budget.</div></div>';
+      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed; gan 2 is a yes (Oct 15), start date and day still to confirm. Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +
       ', with months of cash</summary><div>' +
       table +
       '</div></details>';
-    return say + cards + allMixes + jobs + oneOff + cashLine + notes;
+    return say + smallCards + cards + allMixes + jobs + oneOff + cashLine + notes;
   };
 
   // ── 6 · Income — why each month was what it was ───────────────────────
@@ -12885,23 +13403,26 @@ function renderAnalyzeTab(): string {
       inWin.length ? inWin.reduce((a, m) => a + p(m), 0) / inWin.length : 0;
     const total = (m: MonthRow): number => srcs.reduce((a, x) => a + x.pick(m), 0);
     const whyYear: Record<number, IncomeWhy> = INCOME_WHY[state.currentYear] || {};
-    const say =
-      '<p class="an-say"><b>' +
-      money(avgOf((m) => m.income)) +
-      '</b> a month came in (' +
-      avgSpan +
-      '): ' +
-      srcs
-        .filter((x) => Math.round(avgSrc(x.pick)) !== 0)
-        .map(
-          (x) =>
-            x.label.replace(/^\S+\s/, '').replace(/ \(.*\)$/, '') +
-            ' <b>' +
-            money(avgSrc(x.pick)) +
-            '</b>',
-        )
-        .join(' · ') +
-      '.</p>';
+    const say = none
+      ? '<p class="an-say">Nothing has landed in ' +
+        state.currentYear +
+        ' yet. These months are as budgeted so far — expected, not landed.</p>'
+      : '<p class="an-say"><b>' +
+        money(avgOf((m) => m.income)) +
+        '</b> a month came in (' +
+        avgSpan +
+        '): ' +
+        srcs
+          .filter((x) => Math.round(avgSrc(x.pick)) !== 0)
+          .map(
+            (x) =>
+              x.label.replace(/^\S+\s/, '').replace(/ \(.*\)$/, '') +
+              ' <b>' +
+              money(avgSrc(x.pick)) +
+              '</b>',
+          )
+          .join(' · ') +
+        '.</p>';
     const clalitPast = ms.filter((m) => statusOf(m.month_num) === 'past');
     const hi = clalitPast.length
       ? clalitPast.reduce((a, m) => (srcs[0].pick(m) > srcs[0].pick(a) ? m : a))
@@ -12963,9 +13484,11 @@ function renderAnalyzeTab(): string {
         ? how(
             'The reasons under each month come from your Clalit payslips and the pay-system decode (premiot land two months late; grants: היקף in April and October, קליטה in the January salary). Where a reason isn’t known, the month shows only its numbers.',
           )
-        : '<p class="an-flag">The reasons behind each month aren’t loaded for ' +
-          state.currentYear +
-          ' — only the app’s numbers show here.</p>')
+        : none
+          ? ''
+          : '<p class="an-flag">The reasons behind each month aren’t loaded for ' +
+            state.currentYear +
+            ' — only the app’s numbers show here.</p>')
     );
   };
 
@@ -12973,7 +13496,7 @@ function renderAnalyzeTab(): string {
   const billsSection = (): string => {
     if (!state.yearData) return '<p class="an-say">' + LOADING + '</p>';
     const fixedKeys = CATEGORIES.filter((c) => c.hasLines && !c.hasTab).map((c) => c.key);
-    const ref = s.referenceMonth || 12;
+    const ref = billsMonthFor(s.referenceMonth);
     const bl = billLines(state.yearData.budgetItems, state.months, fixedKeys, ref);
     const firstNum = months.length ? months[0].month_num : 1;
     const sumAt = (mn: number, cat?: string): number =>
@@ -12988,11 +13511,9 @@ function renderAnalyzeTab(): string {
       abbr(ref) +
       ') — ' +
       fixedKeys.map((k) => catLabel(k).toLowerCase() + ' ' + money(sumAt(ref, k))).join(' · ') +
-      '. In ' +
-      abbr(firstNum) +
-      ' they were ' +
-      money(sumAt(firstNum)) +
-      '. Across ' +
+      (ref === firstNum
+        ? '. Across '
+        : '. In ' + abbr(firstNum) + ' they were ' + money(sumAt(firstNum)) + '. Across ') +
       state.currentYear +
       ': ' +
       money(bl.reduce((a, l) => a + l.annual, 0)) +
@@ -13116,6 +13637,9 @@ function renderAnalyzeTab(): string {
     const [t0, t1] = pc.travel;
     const [a0, a1] = pc.admin;
     const plan = PLAN_NEXT[y1] || [];
+    // Her plan for the year being viewed, while the app has nothing booked for it
+    // (2027 is the viewed year from January: the plan must not vanish then).
+    const plan0 = PLAN_NEXT[y0] || [];
     const planT = plan.filter((p) => p.pot === 'travel');
     const planA = plan.filter((p) => p.pot === 'admin');
     const sum = (xs: { amount: number }[]): number => xs.reduce((a, x) => a + x.amount, 0);
@@ -13123,17 +13647,28 @@ function renderAnalyzeTab(): string {
     const y0Total = big(t0) + big(a0);
     const y1App = big(t1) + big(a1);
     const y1Plan = sum(plan);
+    const y0Say =
+      Math.round(y0Total) === 0 && plan0.length
+        ? y0 +
+          ':</b> nothing booked in the app yet; your plan says trips ' +
+          money(sum(plan0.filter((p) => p.pot === 'travel'))) +
+          ' · one-offs ' +
+          money(sum(plan0.filter((p) => p.pot === 'admin'))) +
+          ' — about <b>' +
+          money(sum(plan0) / 12) +
+          '</b> a month. <b>'
+        : y0 +
+          ':</b> trips ' +
+          money(big(t0)) +
+          ' · one-offs ' +
+          money(big(a0)) +
+          (Math.round(a0.planned - a0.paid) > 0 ? ' (' + money(a0.paid) + ' paid so far)' : '') +
+          ' — about <b>' +
+          money(y0Total / 12) +
+          '</b> a month. <b>';
     const say =
       '<p class="an-say"><b>' +
-      y0 +
-      ':</b> trips ' +
-      money(big(t0)) +
-      ' · one-offs ' +
-      money(big(a0)) +
-      (Math.round(a0.planned - a0.paid) > 0 ? ' (' + money(a0.paid) + ' paid so far)' : '') +
-      ' — about <b>' +
-      money(y0Total / 12) +
-      '</b> a month. <b>' +
+      y0Say +
       y1 +
       ':</b> ' +
       money(y1App) +
@@ -15418,6 +15953,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   setAnalyzeSub,
   setAnalyzeLevel,
   setAnalyzeDrive,
+  setAnalyzeSE,
+  PAY,
   setAnalyzeOneOff,
   toggleAnRow,
   analyzeToTop,

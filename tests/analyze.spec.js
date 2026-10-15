@@ -242,7 +242,7 @@ test.describe('Analysis section', () => {
     page,
   }) => {
     await openAnalyze(page, 'safe');
-    const cards = page.locator('.an-card2');
+    const cards = page.locator('.an-card2:not(.an-mini)');
     const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
     await expect(planCard).toHaveCount(1);
     await expect(planCard).toContainText('Petachya + 2 private clients');
@@ -250,8 +250,117 @@ test.describe('Analysis section', () => {
     const texts = await cards.allTextContents();
     for (const t of texts.filter((x) => x.includes('gan 2'))) {
       expect(t).not.toMatch(/your plan/);
-      expect(t).toContain('what if');
+      expect(t).toContain('gan 2: yes (Oct 15)');
+      expect(t).not.toContain('what if');
     }
+  });
+
+  test('Which week?: ₪ an hour is the job’s own gross per PAID hour, the basis beside every number', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const clalit = (
+      await page.locator('.an-card2', { hasText: 'Clalit + Petachya' }).innerText()
+    ).replace(/\s+/g, ' ');
+    expect(clalit).toMatch(/₪109 an hour · Clalit gross per paid hour, grants spread/);
+    const school = (
+      await page.locator('.an-card2', { hasText: 'Petachya + the school' }).first().innerText()
+    ).replace(/\s+/g, ' ');
+    expect(school).toMatch(/₪130 an hour · The school gross per paid hour/);
+    expect(school).toMatch(/₪18[56] an hour · The school gross per real hour/);
+    expect(school).toMatch(/₪120 an hour · Petachya gross per paid hour/);
+    // The old whole-week figure (and the money expert's ₪54) are gone.
+    const all = await page.locator('.an-section').innerText();
+    expect(all).not.toMatch(/₪54\b/);
+    expect(all).not.toMatch(/per hour you work|net per real hour/i);
+    // Every ₪-an-hour number carries its basis.
+    const lines = await page.locator('.an-c2-lines div', { hasText: 'an hour' }).count();
+    const withBasis = await page
+      .locator('.an-c2-lines div:has(.an-sublbl)', { hasText: 'an hour' })
+      .count();
+    expect(lines).toBeGreaterThan(0);
+    expect(withBasis).toBe(lines);
+  });
+
+  test('Which week?: every income mix reads the one PAY object', async ({ page }) => {
+    await openAnalyze(page, 'safe');
+    const r = await page.evaluate(() => ({
+      pay: window.PAY,
+      text: document.querySelector('.an-section').innerText.replace(/,/g, ''),
+    }));
+    const pet = r.pay.petachya.netInApp;
+    const g = r.pay.gan2;
+    const ganGross = Math.round(
+      (g.perSession *
+        g.sessionsPerDay *
+        g.daysPerWeek *
+        r.pay.school.weeksPerMonth *
+        g.paidMonths) /
+        12,
+    );
+    const gan = Math.round(ganGross * g.netFactor);
+    expect(gan).toBeLessThan(ganGross);
+    // Net a month of each card = sums of PAY (Clalit, school, school+2, all, gan 2, plan, Petachya).
+    const expected = [
+      pet + r.pay.clalit.netExtraOverPetachya,
+      pet + r.pay.school.netExtraOverPetachya,
+      pet + r.pay.school.netExtraOverPetachya + r.pay.private.netMonth,
+      pet + gan + r.pay.private.netMonth,
+      pet + gan,
+      pet + r.pay.private.netMonth,
+      pet,
+    ];
+    const nets = await page.locator('.an-card2:not(.an-mini) .an-c2-net').allTextContents();
+    expect(nets.map((t) => parseInt(t.replace(/[^\d]/g, ''), 10))).toEqual(expected);
+    // Today's values, so an accidental edit to PAY shows up here.
+    expect(expected).toEqual([14960, 16280, 17280, 12679, 11679, 10860, 9860]);
+  });
+
+  test('US self-employment tax: off by default, a separate rough line when switched on', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
+    await expect(planCard).not.toContainText('self-employment tax');
+    const before = await planCard.locator('.an-c2-save').innerText();
+    await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').check();
+    await expect(planCard).toContainText('self-employment tax');
+    await expect(planCard).toContainText('rough, US');
+    await expect(planCard).toContainText('₪141');
+    // Petachya alone has no private clients: no line.
+    await expect(page.locator('.an-card2', { hasText: 'if it goes wrong' })).not.toContainText(
+      'self-employment tax',
+    );
+    const after = await planCard.locator('.an-c2-save').innerText();
+    expect(after).not.toBe(before);
+    await page.evaluate(() => localStorage.removeItem('analyzeSE'));
+  });
+
+  test('three quick reads: Carmei Gat net, tax set-aside, how long cash lasts (KH a second line)', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const cards = page.locator('.an-card2', {
+      hasText: /Carmei Gat, honestly|Set aside for tax|How long cash lasts/,
+    });
+    await expect(cards).toHaveCount(3);
+    const cg = page.locator('.an-card2', { hasText: 'Carmei Gat, honestly' });
+    await expect(cg).toContainText('−₪86 to −₪336');
+    await expect(cg).toContainText('Oct 12 analysis');
+    const tax = page.locator('.an-card2', { hasText: 'Set aside for tax' });
+    // 70% × ₪1,200 turnover × 31% = ₪260; at 35% = ₪294.
+    await expect(tax).toContainText('₪260');
+    await expect(tax).toContainText('₪294');
+    await expect(tax).toContainText('turnover, rough');
+    // Covered at Lean on the fake data: no drawdown, the KH untouched.
+    const run = page.locator('.an-card2', { hasText: 'How long cash lasts' });
+    await expect(run).toContainText('Total Liquid after cards');
+    await expect(run).toContainText('Covered');
+    // A level the plan cannot cover: months of cash, KH as a SECOND line.
+    await page.evaluate(() => window.setAnalyzeLevel('normal'));
+    await expect(run).toContainText(/\d+(\.\d)? months/);
+    await expect(run).toContainText(/\+ \d+(\.\d)? months if the keren hishtalmut is used/);
+    await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
 
   test('Where to cut: lines above minus lines under = the net on the tile', async ({ page }) => {
@@ -385,6 +494,44 @@ test.describe('Analysis section', () => {
     expect(r.tile).toMatch(/₪[\d,]+/);
     expect(r.text.replace(/,/g, '')).toContain(r.tile.replace(/[^\d]/g, ''));
     expect(r.text).toContain('A month now');
+    // v70: the tile's number IS the first bold number of its section (v69 showed
+    // 12,970 on the tile and 10,869 in bold below it).
+    const bold = await page.evaluate(
+      () => document.querySelector('.an-section .an-say b').textContent,
+    );
+    expect(bold.replace(/[^\d]/g, '')).toBe(r.tile.replace(/[^\d]/g, ''));
+  });
+
+  test('Bills now names ONE month everywhere (the month in progress, not the next)', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'now');
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    const row = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('.an-section .ym-label')].find((e) =>
+        e.textContent.includes('Bills ·'),
+      );
+      return el ? el.textContent : '';
+    });
+    const ref = await page.evaluate(() => window.computeAnalyze().summary.referenceMonth);
+    expect(row).toContain('Bills · ' + names[ref - 1]);
+    // The Bills section reads the same month.
+    await openSub(page, 'bills');
+    const say = await page.locator('.an-section .an-say').first().textContent();
+    expect(say).toContain('(' + names[ref - 1] + ')');
   });
 
   test('a year with nothing complete shows no invented numbers, even on Whole year', async ({
@@ -396,9 +543,44 @@ test.describe('Analysis section', () => {
     await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
     await page.waitForSelector('.an-tiles', { timeout: 30000 });
     const vals = await page.locator('.an-qtile .an-a').allTextContents();
-    // Did I save?, What does a month cost?, My ladder, Which week?: no number at all.
-    for (const i of [0, 1, 2, 3]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
+    // Did I save? and What does a month cost? have nothing under them: no number.
+    for (const i of [0, 1]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
     await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
+    await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
+  });
+
+  test('the 2027 view is not blank: the ladder and Which week carry last year’s Lean, every section says something', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'real');
+    const leanThisYear = await page.evaluate(() => window.computeAnalyze().summary.floorTotal);
+    await page.evaluate(() => window.switchYear(window.state.currentYear + 1));
+    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
+    await page.waitForSelector('.an-tiles', { timeout: 30000 });
+    await page.waitForFunction(() => !document.querySelector('.an-loading'), null, {
+      timeout: 30000,
+    });
+    // Every category, bills included, reads the PRIOR year's floor: same Lean total.
+    const leanNext = await page.evaluate(() => window.computeAnalyze().summary.floorTotal);
+    expect(leanNext).toBe(leanThisYear);
+    const year = await page.evaluate(() => window.state.currentYear);
+    const tiles = await page.locator('.an-qtile').allTextContents();
+    // My ladder: a number, labelled as the year before's Lean. Which week?: a count.
+    expect(tiles[2]).toMatch(/₪[\d,]+/);
+    expect(tiles[2]).toContain('from ' + (year - 1));
+    expect(tiles[3]).toMatch(/\d+ of \d+/);
+    for (const sub of SUBS) {
+      await openSub(page, sub);
+      const text = await page.locator('.an-section').innerText();
+      expect(text.length, sub).toBeGreaterThan(40);
+      expect(text, sub).not.toMatch(/NaN|undefined/);
+    }
+    // The pots view shows her plan for the year being viewed.
+    await openSub(page, 'pots');
+    await expect(page.locator('.an-section')).toContainText('your plan says');
+    // Bills now reads the first budgeted month, not an empty December.
+    await openSub(page, 'bills');
+    await expect(page.locator('.an-section .an-say').first()).toContainText('(Jan)');
     await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
   });
 
@@ -433,5 +615,43 @@ test.describe('Analysis section', () => {
     expect(
       await page.evaluate(() => getComputedStyle(document.querySelector('.hdr-tabs')).display),
     ).toBe('none');
+  });
+
+  test('tile text is readable: question, note and "look closer" are 12px or larger', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 412, height: 892 });
+    const smallOnes = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('.an-q, .an-qn, .an-a, .an-closer, .an-sublbl')]
+          .map((el) => ({ cls: el.className, px: parseFloat(getComputedStyle(el).fontSize) }))
+          .filter((x) => x.px < 12),
+      );
+    await openAnalyze(page, 'real');
+    expect(await smallOnes()).toEqual([]);
+    // The per-hour basis labels on the Which week? cards too.
+    await openSub(page, 'safe');
+    await expect(page.locator('.an-c2-lines .an-sublbl').first()).toBeVisible();
+    expect(await smallOnes()).toEqual([]);
+  });
+
+  test('the "N of 7" tile counts the same incomes as the cards, with the SE toggle on or off', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const check = async () => {
+      const tile = await page.locator('.an-qtile .an-a').nth(3).innerText();
+      const covered = await page.locator('.an-card2:not(.an-mini) .an-c2-save .an-pos').count();
+      expect(parseInt(tile, 10)).toBe(covered);
+    };
+    for (const lv of ['lean', 'normal']) {
+      await page.evaluate((l) => window.setAnalyzeLevel(l), lv);
+      await page.evaluate(() => localStorage.removeItem('analyzeSE'));
+      await check();
+      await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').check();
+      await check();
+      await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').uncheck();
+    }
+    await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
 });

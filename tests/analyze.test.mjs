@@ -32,6 +32,8 @@ const {
   billLines,
   potYear,
   monthNow,
+  monthNowTotals,
+  billsMonthFor,
 } = await import(pathToFileURL(compiled).href);
 
 // A stored floor row as the math sees it.
@@ -626,4 +628,40 @@ test('monthNow: the coming month’s bills + recent everyday (with her rules) + 
   assert.equal(n2.byCat.retail, 0);
   // nothing complete → nothing to say
   assert.equal(monthNow(run({ todayMonth: 0 }), { billsMonth: 1 }), null);
+});
+
+// ── v70 (batch 2): one A-month-now computation, one bills month ──────────
+
+test('monthNowTotals: the tile and the section read the same headline', () => {
+  // The v69 bug: tile = base + lean trips (12,970), section bold = base (10,869).
+  const t = monthNowTotals(10869, 3313, 2101);
+  assert.equal(t.base, 10869);
+  assert.equal(t.withLean, 12970);
+  assert.equal(t.withNormal, 14182);
+  assert.equal(t.headline, 12970); // lean plan, as the tile always showed
+  // No plan for the year: the base is the headline, nothing is added.
+  assert.deepEqual(monthNowTotals(10869, 0, 0), {
+    base: 10869,
+    withLean: 10869,
+    withNormal: 10869,
+    headline: 10869,
+  });
+});
+
+test('billsMonthFor: the reference month for every caller, never the next one', () => {
+  assert.equal(billsMonthFor(10), 10);
+  assert.equal(billsMonthFor(null), 12);
+  // A month now with the reference month (3) reads March's bills, not April's.
+  const r = run();
+  assert.equal(r.summary.referenceMonth, 3);
+  const nowRef = monthNow(r, { billsMonth: billsMonthFor(r.summary.referenceMonth), recentN: 2 });
+  assert.equal(nowRef.billsMonth, 3);
+  assert.equal(nowRef.bills, r.months[2].fixed);
+});
+
+test('a year that has not started reads its FIRST month as the reference, not December', () => {
+  const r = run({ todayMonth: 0 });
+  assert.equal(r.summary.referenceMonth, 1);
+  // A year all in the past keeps reading the last month.
+  assert.equal(run({ todayMonth: 13 }).summary.referenceMonth, 4);
 });
