@@ -610,12 +610,37 @@ test.describe('Analysis section', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 412, height: 892 });
+    const smallOnes = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('.an-q, .an-qn, .an-a, .an-closer, .an-sublbl')]
+          .map((el) => ({ cls: el.className, px: parseFloat(getComputedStyle(el).fontSize) }))
+          .filter((x) => x.px < 12),
+      );
     await openAnalyze(page, 'real');
-    const small = await page.evaluate(() =>
-      [...document.querySelectorAll('.an-q, .an-qn, .an-a, .an-closer')]
-        .map((el) => ({ cls: el.className, px: parseFloat(getComputedStyle(el).fontSize) }))
-        .filter((x) => x.px < 12),
-    );
-    expect(small).toEqual([]);
+    expect(await smallOnes()).toEqual([]);
+    // The per-hour basis labels on the Which week? cards too.
+    await openSub(page, 'safe');
+    await expect(page.locator('.an-c2-lines .an-sublbl').first()).toBeVisible();
+    expect(await smallOnes()).toEqual([]);
+  });
+
+  test('the "N of 7" tile counts the same incomes as the cards, with the SE toggle on or off', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const check = async () => {
+      const tile = await page.locator('.an-qtile .an-a').nth(3).innerText();
+      const covered = await page.locator('.an-card2:not(.an-mini) .an-c2-save .an-pos').count();
+      expect(parseInt(tile, 10)).toBe(covered);
+    };
+    for (const lv of ['lean', 'normal']) {
+      await page.evaluate((l) => window.setAnalyzeLevel(l), lv);
+      await page.evaluate(() => localStorage.removeItem('analyzeSE'));
+      await check();
+      await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').check();
+      await check();
+      await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').uncheck();
+    }
+    await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
 });
