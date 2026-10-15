@@ -12046,7 +12046,9 @@ function renderAnalyzeTab(): string {
     label +
     (val ? ' <b>' + val + '</b>' : '') +
     '</button>';
-  const choiceFit = (c: { net: number }): number => c.net - levelSpend;
+  // One source with the cards: income after the (optional) US self-employment tax.
+  const choiceFit = (c: { key: string; net: number }): number =>
+    incomeOf(c.key, c.net) - levelSpend;
   const fitting = CHOICES.filter((c) => choiceFit(c) >= 0).length;
   const tiles =
     '<div class="an-tiles an-tiles4">' +
@@ -13322,7 +13324,7 @@ function renderAnalyzeTab(): string {
         (se
           ? '<div>🇺🇸 − <b>' +
             money(se) +
-            '</b> a month self-employment tax<span class="an-sublbl">rough, US</span></div>'
+            '</b> a month self-employment tax<span class="an-sublbl">15.3% × 92.35% of the mixes’ private net after the accountant, rough, US</span></div>'
           : '') +
         '<div>✓ sure ' +
         money(c.sure) +
@@ -13353,7 +13355,7 @@ function renderAnalyzeTab(): string {
       ' onchange="setAnalyzeDrive(this.checked)"> include driving time</label>' +
       '<label class="an-toggle"><input type="checkbox"' +
       (_anSE ? ' checked' : '') +
-      ' onchange="setAnalyzeSE(this.checked)"> US self-employment tax on the private clients (rough, US)</label>' +
+      ' onchange="setAnalyzeSE(this.checked)"> US self-employment tax: 15.3% × 92.35% of the mixes’ private net after the accountant (rough, US)</label>' +
       '<div class="an-cards2">' +
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
