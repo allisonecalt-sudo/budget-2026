@@ -660,6 +660,7 @@ interface State {
   biz: BizMonthRow | null;
   ptClients: PtClientRow[];
   ptSessions: PtSessions;
+  ptError: boolean; // Tracker (pt-sessions) could not be reached on the last load
   incomeItems: IncomeItemRow[];
   cashAccounts: CashAccountRow[];
   usdRate: number | null;
@@ -701,6 +702,7 @@ let state: State = {
   biz: null, // biz_months row for current month
   ptClients: [], // private tracker clients
   ptSessions: { earned: [], scheduled: [] }, // private tracker sessions
+  ptError: false,
   incomeItems: [], // flexible extra income items
   cashAccounts: [], // liquid cash positions
   usdRate: null, // USD→ILS rate
@@ -1069,6 +1071,34 @@ function toast(msg: string, opts?: ToastOpts): void {
   _toastTimer = setTimeout(() => t.classList.remove('show'), opts.duration || 5000);
 }
 
+// A short plain-English line pinned to the top of the screen. Unlike toast() it
+// stays until she taps it away (or 15 s), so a failure can't be missed.
+// 'fail' = a save did not go through (red); 'note' = needs a look (amber).
+let _errLineTimer: ReturnType<typeof setTimeout> | null = null;
+function showErrorLine(msg: string, kind: 'fail' | 'note' = 'fail'): void {
+  let el = document.getElementById('app-error-line');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-error-line';
+    el.setAttribute('role', 'alert');
+    document.body.appendChild(el);
+  }
+  el.className = 'app-error-line app-error-' + kind;
+  el.textContent = '';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '×';
+  const node = el;
+  close.onclick = () => node.remove();
+  node.appendChild(text);
+  node.appendChild(close);
+  if (_errLineTimer) clearTimeout(_errLineTimer);
+  _errLineTimer = setTimeout(() => node.remove(), 15000);
+}
+
 // HTML-escape user-supplied free text before interpolating into innerHTML.
 // Escapes all five HTML-significant chars so it is safe in both element text
 // and double/single-quoted attribute contexts. Use for ANY user free-text
@@ -1133,7 +1163,15 @@ async function loadMonths() {
     .select('*')
     .eq('year', state.currentYear)
     .order('month_num');
-  if (error) toast('Could not load months');
+  if (error) {
+    // Keep whatever months are already on screen; wiping them would make a
+    // network hiccup look like an empty budget.
+    showErrorLine(
+      "Couldn't load your months. You're seeing the last numbers saved on this device.",
+      'note',
+    );
+    return;
+  }
   state.months = data || [];
 }
 
@@ -2789,6 +2827,15 @@ async function setItemAsDefault(id: string): Promise<void> {
     .update({ amount: item.amount, label: item.label })
     .eq('category', catKey)
     .eq('sort_order', item.sort_order);
+  logChange(
+    'edit',
+    'budget_item_template',
+    item.id,
+    `Set as default: ${item.label} ₪${item.amount} • ${catKey}`,
+    null,
+    { label: item.label, amount: item.amount },
+    item.month_id,
+  );
   // Visual feedback — briefly mark as default
   item.is_default = true;
   renderApp();
@@ -2817,8 +2864,24 @@ async function seedBudgetItemsFromTemplate(monthId: string): Promise<void> {
       amount: t.amount,
       sort_order: t.sort_order,
     }));
-    const { data: newItems } = await sb.from('budget_items').insert(inserts).select();
+    const { data: newItems, error: seedErr } = await sb
+      .from('budget_items')
+      .insert(inserts)
+      .select();
+    if (seedErr) {
+      showErrorLine("Couldn't copy your usual lines into this month.", 'note');
+      continue;
+    }
     state.budgetItems[catKey] = newItems || [];
+    logChange(
+      'add',
+      'budget_items_template_copy',
+      null,
+      `Copied ${inserts.length} template ${catKey} lines into this month`,
+      null,
+      { category: catKey, count: inserts.length },
+      monthId,
+    );
   }
 }
 
@@ -3968,28 +4031,12 @@ function renderApp() {
   if (_chPct && income) {
     const _chCalc = Math.round((income * _chPct) / 100);
     state.budgets['charity'] = _chCalc;
-    // Quietly sync to DB if out of date (no renderApp, no undo, no log)
+    // Sync the derived cash into the budgets table, but ONLY when the stored
+    // number really differs, and leave a history row when it does.
     if (!state._lastCharitySync || state._lastCharitySync[state.currentMonthId] !== _chCalc) {
       if (!state._lastCharitySync) state._lastCharitySync = {};
       state._lastCharitySync[state.currentMonthId] = _chCalc;
-      sb.from('budgets')
-        .select('id')
-        .eq('month_id', state.currentMonthId!)
-        .eq('category', 'charity')
-        .single()
-        .then(({ data }) => {
-          if (data)
-            return sb
-              .from('budgets')
-              .update({ amount: _chCalc })
-              .eq('id', data.id)
-              .then(() => {});
-          else
-            return sb
-              .from('budgets')
-              .insert({ month_id: state.currentMonthId, category: 'charity', amount: _chCalc })
-              .then(() => {});
-        });
+      void syncCharityBudget(state.currentMonthId!, _chCalc);
     }
   }
   const spent = spentByCategory();
@@ -4464,6 +4511,46 @@ async function saveCharityPct(value: string | number): Promise<void> {
   renderApp();
 }
 
+// Charity's cash budget follows income x percent. Called from the Budget tab
+// render, so it must not write when nothing changed: it reads the stored row
+// first, writes only on a real difference, and logs that write.
+async function syncCharityBudget(monthId: string, calc: number): Promise<void> {
+  const { data, error } = await sb
+    .from('budgets')
+    .select('id,amount')
+    .eq('month_id', monthId)
+    .eq('category', 'charity')
+    .limit(1);
+  if (error) {
+    // Could not read it, so write nothing; allow a retry on the next render.
+    if (state._lastCharitySync) delete state._lastCharitySync[monthId];
+    return;
+  }
+  const row = data && data[0];
+  if (row && Number(row.amount) === calc) return; // already correct: no write, no log
+  const old = row ? Number(row.amount) || 0 : 0;
+  const res = row
+    ? await sb.from('budgets').update({ amount: calc }).eq('id', row.id)
+    : await sb.from('budgets').insert({ month_id: monthId, category: 'charity', amount: calc });
+  if (res.error) {
+    if (state._lastCharitySync) delete state._lastCharitySync[monthId];
+    showErrorLine(
+      "Charity's amount didn't save. It will try again when you reopen this month.",
+      'note',
+    );
+    return;
+  }
+  logChange(
+    'edit',
+    'budget_amount',
+    null,
+    `Budget changed: charity ₪${old} → ₪${calc} (auto, follows income × charity %)`,
+    { amount: old },
+    { amount: calc },
+    monthId,
+  );
+}
+
 // The database half of a budget-amount change: upsert the budgets row and keep
 // the pot allocation tables + state in sync. No log, no undo, no render — so
 // undo/redo can call it directly without re-entering saveBudget (which used to
@@ -4677,7 +4764,7 @@ async function saveIncomeField(field: string, value: string | number): Promise<v
     .update({ [field]: num })
     .eq('id', state.currentMonthId!);
   if (error) {
-    toast('Error saving');
+    showErrorLine("Your income didn't save. Check your connection and try again.");
     return;
   }
   if (month) month[field] = num;
@@ -4861,7 +4948,7 @@ async function saveIncome() {
   });
   const { error } = await sb.from('months').update(updates).eq('id', mid);
   if (error) {
-    toast('Error saving');
+    showErrorLine("Your income didn't save. Check your connection and try again.");
     return;
   }
   logChange(
@@ -4993,8 +5080,10 @@ async function loadBizData() {
       earned: sessions.filter((s: Record<string, unknown>) => s.status === 'happened'),
       scheduled: sessions.filter((s: Record<string, unknown>) => s.status === 'scheduled'),
     };
+    state.ptError = false;
   } catch (err) {
     console.error('pt-sessions edge function failed:', err);
+    state.ptError = true;
     state.ptClients = [];
     state.ptSessions = { earned: [], scheduled: [] };
   }
@@ -8295,17 +8384,19 @@ function renderBizTab(): string {
         <button class="biz-sync-btn" onclick="refreshBiz()">↻ Sync</button>
       </div>
       ${
-        Object.keys(earnedByClient).length === 0
-          ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions found for ${prevMonthName}</div>`
-          : Object.entries(earnedByClient)
-              .map(
-                ([cid, sessions]) => `
+        state.ptError
+          ? `<div style="color:var(--amber);font-size:.8rem;padding:.5rem 0">Couldn't reach the Tracker, so these sessions aren't loaded. Tap Sync to try again.</div>`
+          : Object.keys(earnedByClient).length === 0
+            ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions found for ${prevMonthName}</div>`
+            : Object.entries(earnedByClient)
+                .map(
+                  ([cid, sessions]) => `
           <div class="biz-session-item">
             <span>${clientName(cid)} × ${sessions.length}</span>
             <span class="biz-val green">${fmt(sessions.length * clientRate(cid) * 0.85)}</span>
           </div>`,
-              )
-              .join('')
+                )
+                .join('')
       }
       <div class="biz-row" style="margin-top:.5rem;background:var(--gsoft);">
         <span class="biz-label" style="font-weight:700;">Tracker net <span style="font-weight:400;color:var(--dim);font-size:.6rem;">after 15% cut</span></span>
@@ -13329,7 +13420,13 @@ async function init() {
           renderApp();
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('background refresh failed:', err);
+        showErrorLine(
+          "Couldn't refresh just now. You're seeing the last numbers saved on this device.",
+          'note',
+        );
+      });
     return;
   }
   // First visit or stale cache — normal load
@@ -15132,7 +15229,13 @@ document.addEventListener('visibilitychange', () => {
         renderApp();
       }
     })
-    .catch(() => {});
+    .catch((err) => {
+      console.warn('refresh on return failed:', err);
+      showErrorLine(
+        "Couldn't refresh just now. You're seeing the last numbers saved on this device.",
+        'note',
+      );
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────
