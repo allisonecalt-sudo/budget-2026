@@ -390,7 +390,7 @@ test.describe('Analysis section', () => {
     const bold = await page.evaluate(
       () => document.querySelector('.an-section .an-say b').textContent,
     );
-    expect(bold.replace(/[^d]/g, '')).toBe(r.tile.replace(/[^d]/g, ''));
+    expect(bold.replace(/[^\d]/g, '')).toBe(r.tile.replace(/[^\d]/g, ''));
   });
 
   test('Bills now names ONE month everywhere (the month in progress, not the next)', async ({
@@ -434,9 +434,40 @@ test.describe('Analysis section', () => {
     await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
     await page.waitForSelector('.an-tiles', { timeout: 30000 });
     const vals = await page.locator('.an-qtile .an-a').allTextContents();
-    // Did I save?, What does a month cost?, My ladder, Which week?: no number at all.
-    for (const i of [0, 1, 2, 3]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
+    // Did I save? and What does a month cost? have nothing under them: no number.
+    for (const i of [0, 1]) expect(vals[i].trim(), 'tile ' + i).toBe('—');
     await page.evaluate(() => localStorage.setItem('analyzeAvgWindow', '0'));
+    await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
+  });
+
+  test('the 2027 view is not blank: the ladder and Which week carry last year’s Lean, every section says something', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'real');
+    await page.evaluate(() => window.switchYear(window.state.currentYear + 1));
+    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
+    await page.waitForSelector('.an-tiles', { timeout: 30000 });
+    await page.waitForFunction(() => !document.querySelector('.an-loading'), null, {
+      timeout: 30000,
+    });
+    const year = await page.evaluate(() => window.state.currentYear);
+    const tiles = await page.locator('.an-qtile').allTextContents();
+    // My ladder: a number, labelled as the year before's Lean. Which week?: a count.
+    expect(tiles[2]).toMatch(/₪[\d,]+/);
+    expect(tiles[2]).toContain('from ' + (year - 1));
+    expect(tiles[3]).toMatch(/\d+ of \d+/);
+    for (const sub of SUBS) {
+      await openSub(page, sub);
+      const text = await page.locator('.an-section').innerText();
+      expect(text.length, sub).toBeGreaterThan(40);
+      expect(text, sub).not.toMatch(/NaN|undefined/);
+    }
+    // The pots view shows her plan for the year being viewed.
+    await openSub(page, 'pots');
+    await expect(page.locator('.an-section')).toContainText('your plan says');
+    // Bills now reads the first budgeted month, not an empty December.
+    await openSub(page, 'bills');
+    await expect(page.locator('.an-section .an-say').first()).toContainText('(Jan)');
     await page.evaluate(() => window.switchYear(window.state.currentYear - 1));
   });
 

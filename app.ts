@@ -10294,6 +10294,19 @@ function renderYearSnapshot(): string {
 // spend", "Floor", "Above floor" — so it never collides with "Room to move"
 // (Budget tab, this month only) or "Remaining" (Admin/Travel).
 
+// A year with no floors of its own yet (2027 before she sets any) reads the
+// year before's floors for DISPLAY only — never written under the new year,
+// always labelled "from 2026". Her Oct 11 decision: 2027 reads 2026 Lean.
+let _floorsFallback: {
+  forYear: number;
+  fromYear: number;
+  map: Record<string, SpendFloorRow>;
+} | null = null;
+function floorsFromPriorYear(): number | null {
+  const f = _floorsFallback;
+  return f && f.forYear === state.currentYear && Object.keys(f.map).length ? f.fromYear : null;
+}
+
 async function loadFloors(): Promise<void> {
   const year = state.currentYear;
   const { data, error } = await sb.from('spend_floors').select('*').eq('year', year);
@@ -10308,6 +10321,17 @@ async function loadFloors(): Promise<void> {
   ((data || []) as SpendFloorRow[]).forEach((r) => {
     map[r.category] = r;
   });
+  _floorsFallback = null;
+  if (!Object.keys(map).length) {
+    const prev = await sb
+      .from('spend_floors')
+      .select('*')
+      .eq('year', year - 1);
+    if (year !== state.currentYear) return;
+    const pm: Record<string, SpendFloorRow> = {};
+    if (!prev.error) ((prev.data || []) as SpendFloorRow[]).forEach((r) => (pm[r.category] = r));
+    _floorsFallback = { forYear: year, fromYear: year - 1, map: pm };
+  }
   state.floors = map;
 }
 
@@ -10335,7 +10359,11 @@ function setAnalyzeAvgWindow(n: number): void {
 
 function computeAnalyze(): AnalyzeResult | null {
   if (!state.yearData) return null;
-  const rows = state.floors || {};
+  const own = state.floors || {};
+  const rows =
+    Object.keys(own).length === 0 && floorsFromPriorYear() && _floorsFallback
+      ? _floorsFallback.map
+      : own;
   const floors: Record<string, AnalyzeFloorIn | undefined> = {};
   Object.keys(rows).forEach((k) => {
     const r = rows[k];
@@ -11497,6 +11525,7 @@ function renderAnalyzeTab(): string {
   // Floors not loaded for this year yet: the math above ran on none, so every
   // floor-derived number is a placeholder — say so, never show a default as hers.
   const floorsLoading = !state.floors;
+  const floorsFrom = floorsFromPriorYear();
   const LOADING = '<span class="an-loading">loading…</span>';
   // Never ₪-x: a minus sits in front of the shekel sign.
   const money = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v || 0));
@@ -11741,27 +11770,30 @@ function renderAnalyzeTab(): string {
     tile(
       'floor',
       'My ladder',
-      floorsLoading ? LOADING : none ? '—' : money(s.floorTotal),
-      floorsLoading || none
+      floorsLoading ? LOADING : none && !floorsFrom ? '—' : money(s.floorTotal),
+      floorsLoading || (none && !floorsFrom)
         ? ''
-        : 'Lean · Temp ' + money(levelTotal('temp')) + ' · Normal ' + money(levelTotal('normal')),
+        : 'Lean' +
+            (floorsFrom ? ' (from ' + floorsFrom + ')' : '') +
+            ' · Temp ' +
+            money(levelTotal('temp')) +
+            ' · Normal ' +
+            money(levelTotal('normal')),
     ) +
     tile(
       'safe',
       'Which week?',
-      floorsLoading || none ? '—' : fitting + ' of ' + CHOICES.length,
-      floorsLoading || none ? '' : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
+      floorsLoading || (none && !floorsFrom) ? '—' : fitting + ' of ' + CHOICES.length,
+      floorsLoading || (none && !floorsFrom)
+        ? ''
+        : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
     ) +
     '</div>' +
     '<div class="an-chips"><span class="an-closer">Look closer</span>' +
     chip('why', 'Why so high', why ? signed(why.delta) : '') +
     chip('cut', 'Where to cut', floorsLoading || none ? '' : money(Math.max(0, s.aboveFloor))) +
     chip('income', 'Income', none ? '' : money(avgOf((m) => m.income)) + '/mo') +
-    chip(
-      'bills',
-      'Bills',
-      none ? '' : money(months.find((m) => m.month_num === refNum)?.fixed || 0) + '/mo',
-    ) +
+    chip('bills', 'Bills', money(months.find((m) => m.month_num === refNum)?.fixed || 0) + '/mo') +
     chip(
       'pots',
       'Travel & admin',
@@ -12436,7 +12468,11 @@ function renderAnalyzeTab(): string {
         const body =
           '<div class="an-why">' +
           LEVEL_NOTE[lv] +
-          (lv === 'lean' ? ' — edit it line by line below.' : ' — from your Oct 11 walkthrough.') +
+          (lv === 'lean'
+            ? none
+              ? ''
+              : ' — edit it line by line below.'
+            : ' — from your Oct 11 walkthrough.') +
           '</div>' +
           Object.keys(by)
             .sort((a, b) => by[b] - by[a])
@@ -12454,7 +12490,21 @@ function renderAnalyzeTab(): string {
     );
   };
   const floorSection = (): string => {
-    if (none) return noneNote;
+    if (none)
+      return floorsLoading
+        ? '<p class="an-say">' + LOADING + '</p>'
+        : '<p class="an-say">Nothing in ' +
+            state.currentYear +
+            ' has happened yet, so there is no average to read your lines against. Your four levels are below' +
+            (floorsFrom
+              ? ' — Lean is ' +
+                floorsFrom +
+                '’s floor until you set ' +
+                state.currentYear +
+                '’s (shown, not saved)'
+              : '') +
+            '.</p>' +
+            levelsBlock();
     const lv = cats.map((c) => ({ c, lv: levelOf(c) }));
     const names = (l: Level[]): string =>
       lv
@@ -12620,11 +12670,13 @@ function renderAnalyzeTab(): string {
     // A year with nothing complete (January 2027) has no real spend and only
     // bills in its floor — a confident "+₪X" there would be a number with
     // nothing under it. Say so instead.
-    if (none)
+    // A year with nothing complete has no real spend: the "a month now" column
+    // is a dash, the levels (Lean from last year's floor, labelled) still work.
+    if (none && !floorsFrom)
       return (
         '<p class="an-say">Nothing in ' +
         state.currentYear +
-        ' has happened yet, so there’s no real spend here, and the floor holds only this year’s bills until you set the rest. ' +
+        ' has happened yet, and no floors are set for it, so there’s no level to read the mixes against. ' +
         (state.currentYear > 2026
           ? 'Switch to ' + (state.currentYear - 1) + ' for the numbers that happened.'
           : '') +
@@ -12900,23 +12952,26 @@ function renderAnalyzeTab(): string {
       inWin.length ? inWin.reduce((a, m) => a + p(m), 0) / inWin.length : 0;
     const total = (m: MonthRow): number => srcs.reduce((a, x) => a + x.pick(m), 0);
     const whyYear: Record<number, IncomeWhy> = INCOME_WHY[state.currentYear] || {};
-    const say =
-      '<p class="an-say"><b>' +
-      money(avgOf((m) => m.income)) +
-      '</b> a month came in (' +
-      avgSpan +
-      '): ' +
-      srcs
-        .filter((x) => Math.round(avgSrc(x.pick)) !== 0)
-        .map(
-          (x) =>
-            x.label.replace(/^\S+\s/, '').replace(/ \(.*\)$/, '') +
-            ' <b>' +
-            money(avgSrc(x.pick)) +
-            '</b>',
-        )
-        .join(' · ') +
-      '.</p>';
+    const say = none
+      ? '<p class="an-say">Nothing has landed in ' +
+        state.currentYear +
+        ' yet. These months are as budgeted so far — expected, not landed.</p>'
+      : '<p class="an-say"><b>' +
+        money(avgOf((m) => m.income)) +
+        '</b> a month came in (' +
+        avgSpan +
+        '): ' +
+        srcs
+          .filter((x) => Math.round(avgSrc(x.pick)) !== 0)
+          .map(
+            (x) =>
+              x.label.replace(/^\S+\s/, '').replace(/ \(.*\)$/, '') +
+              ' <b>' +
+              money(avgSrc(x.pick)) +
+              '</b>',
+          )
+          .join(' · ') +
+        '.</p>';
     const clalitPast = ms.filter((m) => statusOf(m.month_num) === 'past');
     const hi = clalitPast.length
       ? clalitPast.reduce((a, m) => (srcs[0].pick(m) > srcs[0].pick(a) ? m : a))
@@ -12978,9 +13033,11 @@ function renderAnalyzeTab(): string {
         ? how(
             'The reasons under each month come from your Clalit payslips and the pay-system decode (premiot land two months late; grants: היקף in April and October, קליטה in the January salary). Where a reason isn’t known, the month shows only its numbers.',
           )
-        : '<p class="an-flag">The reasons behind each month aren’t loaded for ' +
-          state.currentYear +
-          ' — only the app’s numbers show here.</p>')
+        : none
+          ? ''
+          : '<p class="an-flag">The reasons behind each month aren’t loaded for ' +
+            state.currentYear +
+            ' — only the app’s numbers show here.</p>')
     );
   };
 
@@ -12988,7 +13045,7 @@ function renderAnalyzeTab(): string {
   const billsSection = (): string => {
     if (!state.yearData) return '<p class="an-say">' + LOADING + '</p>';
     const fixedKeys = CATEGORIES.filter((c) => c.hasLines && !c.hasTab).map((c) => c.key);
-    const ref = s.referenceMonth || 12;
+    const ref = billsMonthFor(s.referenceMonth);
     const bl = billLines(state.yearData.budgetItems, state.months, fixedKeys, ref);
     const firstNum = months.length ? months[0].month_num : 1;
     const sumAt = (mn: number, cat?: string): number =>
@@ -13003,11 +13060,9 @@ function renderAnalyzeTab(): string {
       abbr(ref) +
       ') — ' +
       fixedKeys.map((k) => catLabel(k).toLowerCase() + ' ' + money(sumAt(ref, k))).join(' · ') +
-      '. In ' +
-      abbr(firstNum) +
-      ' they were ' +
-      money(sumAt(firstNum)) +
-      '. Across ' +
+      (ref === firstNum
+        ? '. Across '
+        : '. In ' + abbr(firstNum) + ' they were ' + money(sumAt(firstNum)) + '. Across ') +
       state.currentYear +
       ': ' +
       money(bl.reduce((a, l) => a + l.annual, 0)) +
@@ -13131,6 +13186,9 @@ function renderAnalyzeTab(): string {
     const [t0, t1] = pc.travel;
     const [a0, a1] = pc.admin;
     const plan = PLAN_NEXT[y1] || [];
+    // Her plan for the year being viewed, while the app has nothing booked for it
+    // (2027 is the viewed year from January: the plan must not vanish then).
+    const plan0 = PLAN_NEXT[y0] || [];
     const planT = plan.filter((p) => p.pot === 'travel');
     const planA = plan.filter((p) => p.pot === 'admin');
     const sum = (xs: { amount: number }[]): number => xs.reduce((a, x) => a + x.amount, 0);
@@ -13138,17 +13196,28 @@ function renderAnalyzeTab(): string {
     const y0Total = big(t0) + big(a0);
     const y1App = big(t1) + big(a1);
     const y1Plan = sum(plan);
+    const y0Say =
+      Math.round(y0Total) === 0 && plan0.length
+        ? y0 +
+          ':</b> nothing booked in the app yet; your plan says trips ' +
+          money(sum(plan0.filter((p) => p.pot === 'travel'))) +
+          ' · one-offs ' +
+          money(sum(plan0.filter((p) => p.pot === 'admin'))) +
+          ' — about <b>' +
+          money(sum(plan0) / 12) +
+          '</b> a month. <b>'
+        : y0 +
+          ':</b> trips ' +
+          money(big(t0)) +
+          ' · one-offs ' +
+          money(big(a0)) +
+          (Math.round(a0.planned - a0.paid) > 0 ? ' (' + money(a0.paid) + ' paid so far)' : '') +
+          ' — about <b>' +
+          money(y0Total / 12) +
+          '</b> a month. <b>';
     const say =
       '<p class="an-say"><b>' +
-      y0 +
-      ':</b> trips ' +
-      money(big(t0)) +
-      ' · one-offs ' +
-      money(big(a0)) +
-      (Math.round(a0.planned - a0.paid) > 0 ? ' (' + money(a0.paid) + ' paid so far)' : '') +
-      ' — about <b>' +
-      money(y0Total / 12) +
-      '</b> a month. <b>' +
+      y0Say +
       y1 +
       ':</b> ' +
       money(y1App) +
