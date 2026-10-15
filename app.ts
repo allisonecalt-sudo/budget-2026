@@ -34,7 +34,7 @@ declare global {
     // Supabase UMD global from the CDN <script> in index.html.
     supabase: { createClient: (url: string, key: string) => SupabaseClient };
     // SW → app bridge (assigned below, read by the inline SW script in index.html).
-    onQueueUpdate?: (data: { count?: number }) => void;
+    onQueueUpdate?: (data: { count?: number; stuck?: number }) => void;
     // Cross-module handler also assigned explicitly elsewhere.
     // One-time guard flag for the numeric-input-mode observer.
     _inputModeObserverInstalled?: boolean;
@@ -58,7 +58,7 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v68';
+const APP_VERSION = 'v69';
 const BUILD_DATE = 'Oct 12, 2026 14:05';
 
 const MONTHS = [
@@ -3868,6 +3868,7 @@ function renderApp() {
   document.title = `Budget ${state.currentYear}`;
   requestAnimationFrame(applyRibbonHeight);
   requestAnimationFrame(updateUndoButtons);
+  requestAnimationFrame(() => updateOfflineQueueUI(lastQueueCount, lastStuckCount));
 
   if (state.months.length === 0) {
     root.innerHTML = `
@@ -3987,6 +3988,9 @@ function renderApp() {
       <div class="hdr-actions">
         <span id="offline-queue-indicator" class="offline-queue-indicator" style="display:none;" title="Pending writes — will sync when online" onclick="syncQueueNow()">
           <span class="oqi-dot"></span><span id="offline-queue-count">0</span> to sync
+        </span>
+        <span id="offline-stuck-indicator" class="offline-queue-indicator offline-stuck-indicator" style="display:none;" role="button" tabindex="0" onclick="retryStuckWrites()">
+          <span id="offline-stuck-count">0</span> didn't save · Try again
         </span>
         <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" ${undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
         <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" ${redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
@@ -14927,7 +14931,18 @@ function openMoreSheet() {
 // whenever a write is enqueued or drained. We update a small toolbar
 // indicator. Manual sync trigger: clicking the indicator asks the SW to
 // drain immediately.
-function updateOfflineQueueUI(count: number): void {
+function updateOfflineQueueUI(count: number, stuck = 0): void {
+  const stuckEl = byId('offline-stuck-indicator');
+  const stuckNum = byId('offline-stuck-count');
+  if (stuckEl && stuckNum) {
+    if (stuck > 0) {
+      stuckNum.textContent = String(stuck);
+      stuckEl.style.display = '';
+      stuckEl.title = `${stuck} change${stuck === 1 ? '' : 's'} didn't save. Tap to try again.`;
+    } else {
+      stuckEl.style.display = 'none';
+    }
+  }
   const el = byId('offline-queue-indicator');
   const num = byId('offline-queue-count');
   if (!el || !num) return;
@@ -14942,8 +14957,39 @@ function updateOfflineQueueUI(count: number): void {
 
 // Called by sw.js bridge in index.html (window.onQueueUpdate)
 window.onQueueUpdate = function (data) {
-  updateOfflineQueueUI(Number(data && data.count) || 0);
+  lastQueueCount = Number(data && data.count) || 0;
+  lastStuckCount = Number(data && data.stuck) || 0;
+  updateOfflineQueueUI(lastQueueCount, lastStuckCount);
 };
+
+// Counts are remembered so a re-render of the header can repaint the badges.
+let lastQueueCount = 0;
+let lastStuckCount = 0;
+
+function retryStuckWrites(): void {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    toast('Not ready yet. Reload the app and try again.');
+    return;
+  }
+  navigator.serviceWorker.controller.postMessage({ type: 'retry-stuck' });
+  toast('Trying again…');
+}
+
+// The service worker asks for the CURRENT login token when it replays queued
+// writes (the token saved at queue time is usually expired by then).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e: MessageEvent) => {
+    const data = e.data as { type?: string } | null;
+    if (!data || data.type !== 'need-token' || !e.ports || !e.ports[0]) return;
+    const port = e.ports[0];
+    sb.auth
+      .getSession()
+      .then(({ data: d }) =>
+        port.postMessage({ token: d && d.session ? d.session.access_token : null }),
+      )
+      .catch(() => port.postMessage({ token: null }));
+  });
+}
 
 function syncQueueNow() {
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
@@ -15205,6 +15251,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   switchTab,
   switchYear,
   syncQueueNow,
+  retryStuckWrites,
   // Exported for tests/quickadd-date.spec.js — pure, no Supabase writes.
   monthNumFromDate,
   yearFromDate,

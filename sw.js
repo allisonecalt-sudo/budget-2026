@@ -9,7 +9,7 @@
 //     successful network call or 'online'-style replay tick.
 //   - Each queued write gets a UUID 'op_id' to guard against double-flush.
 
-const VERSION = 'budget-v68';
+const VERSION = 'budget-v69';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const SHELL_ASSETS = [
@@ -87,18 +87,6 @@ function idbDelete(opId) {
   );
 }
 
-function idbCount() {
-  return idbOpen().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(IDB_STORE_QUEUE, 'readonly');
-        const req = tx.objectStore(IDB_STORE_QUEUE).count();
-        req.onsuccess = () => resolve(req.result || 0);
-        req.onerror = () => reject(req.error);
-      }),
-  );
-}
-
 function uuidv4() {
   // Simple v4 — adequate for client-side dedup keys.
   if (self.crypto && typeof self.crypto.randomUUID === 'function') {
@@ -111,9 +99,46 @@ function uuidv4() {
 }
 
 async function broadcastQueueUpdate() {
-  const count = await idbCount().catch(() => 0);
+  // count = writes still waiting to go out; stuck = writes the server refused
+  // (shown to her with a "try again" button, never silently dropped).
+  const items = await idbAll().catch(() => []);
+  const stuck = items.filter((i) => i.stuck).length;
+  const count = items.length - stuck;
   const all = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-  all.forEach((c) => c.postMessage({ type: 'queue-update', count, ts: Date.now() }));
+  all.forEach((c) => c.postMessage({ type: 'queue-update', count, stuck, ts: Date.now() }));
+}
+
+// The login token saved with a queued write is long dead by the time it is
+// replayed (tokens last about an hour). At replay time we ask an open app
+// window for its CURRENT token instead (the page refreshes it if needed).
+// Resolves to null when no window answers; the queue then simply waits.
+async function getFreshToken() {
+  const wins = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+  for (const win of wins) {
+    const token = await new Promise((resolve) => {
+      const ch = new MessageChannel();
+      const timer = setTimeout(() => resolve(null), 4000);
+      ch.port1.onmessage = (ev) => {
+        clearTimeout(timer);
+        resolve((ev.data && ev.data.token) || null);
+      };
+      win.postMessage({ type: 'need-token' }, [ch.port2]);
+    });
+    if (token) return token;
+  }
+  return null;
+}
+
+async function retryStuck() {
+  const items = await idbAll();
+  for (const item of items) {
+    if (item.stuck) {
+      delete item.stuck;
+      delete item.stuck_status;
+      await idbAdd(item);
+    }
+  }
+  await drainQueue();
 }
 
 // ── Install / activate ────────────────────────────────────────────────────
@@ -156,6 +181,8 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   } else if (event.data.type === 'drain-now') {
     event.waitUntil(drainQueue());
+  } else if (event.data.type === 'retry-stuck') {
+    event.waitUntil(retryStuck());
   } else if (event.data.type === 'queue-count') {
     event.waitUntil(broadcastQueueUpdate());
   }
@@ -342,27 +369,42 @@ async function drainQueue() {
   if (_draining) return;
   _draining = true;
   try {
-    const items = await idbAll();
+    const items = (await idbAll()).filter((i) => !i.stuck);
     if (!items.length) {
+      await broadcastQueueUpdate();
+      return;
+    }
+    const token = await getFreshToken();
+    if (!token) {
+      // No signed-in window to borrow a token from. Leave everything queued.
       await broadcastQueueUpdate();
       return;
     }
     for (const item of items) {
       try {
+        const headers = Object.assign({}, item.headers);
+        // Replace whatever token was saved at queue time with the fresh one.
+        delete headers['authorization'];
+        headers['Authorization'] = 'Bearer ' + token;
         const res = await fetch(item.url, {
           method: item.method,
-          headers: item.headers,
+          headers,
           body: item.method === 'GET' ? undefined : item.body,
         });
         if (res.ok || res.status === 409 /* idempotent retry */) {
           await idbDelete(item.op_id);
+        } else if (res.status === 408 || res.status === 429 || res.status >= 500) {
+          // Server hiccup: leave it queued and keep going; the next signal retries.
+          continue;
         } else {
-          // Non-OK and non-409 — likely a real server-side problem.
-          // Leave in queue and stop draining; we'll retry on next signal.
-          break;
+          // 401 / 403 / other 4xx: the server refused this write. Park it as
+          // stuck (visible in the app, with a retry button) and carry on.
+          item.stuck = true;
+          item.stuck_status = res.status;
+          await idbAdd(item);
         }
       } catch (err) {
-        // Still offline, abort drain. Try again on next online tick.
+        // Network is down again: abort the drain, try on the next online tick.
         break;
       }
     }

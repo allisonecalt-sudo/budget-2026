@@ -3774,6 +3774,17 @@ tr.collapsed {
   }
 }
 
+/* Writes the server refused (a failed save, so red): "N didn't save · Try again" */
+.offline-stuck-indicator {
+  background: var(--redsoft, #fdecea);
+  color: var(--red);
+  border-color: var(--red);
+}
+.offline-stuck-indicator:hover {
+  background: var(--red);
+  color: var(--surface);
+}
+
 /* ── Year view: mobile one-month-at-a-time layout ──────────────────── */
 /* Desktop default: wide table shown, mobile layout + mobile toggle hidden. */
 .year-mobile {
