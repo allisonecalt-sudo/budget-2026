@@ -34,7 +34,7 @@ declare global {
     // Supabase UMD global from the CDN <script> in index.html.
     supabase: { createClient: (url: string, key: string) => SupabaseClient };
     // SW → app bridge (assigned below, read by the inline SW script in index.html).
-    onQueueUpdate?: (data: { count?: number }) => void;
+    onQueueUpdate?: (data: { count?: number; stuck?: number }) => void;
     // Cross-module handler also assigned explicitly elsewhere.
     // One-time guard flag for the numeric-input-mode observer.
     _inputModeObserverInstalled?: boolean;
@@ -58,8 +58,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v68';
-const BUILD_DATE = 'Oct 12, 2026 14:05';
+const APP_VERSION = 'v69';
+const BUILD_DATE = 'Oct 15, 2026 19:10';
 
 const MONTHS = [
   'January',
@@ -161,6 +161,9 @@ const undoStack: UndoAction[] = [],
     month_id uuid
   );
 */
+// The entity of the most recent logChange, so the undo entry pushed right after
+// it knows what it edits (used for the undo/redo history row).
+let lastLoggedChange: { entityType: string; entityId: string | null; at: number } | null = null;
 function logChange(
   action: string,
   entityType: string,
@@ -170,6 +173,7 @@ function logChange(
   newValue: unknown,
   monthId?: string,
 ): void {
+  lastLoggedChange = { entityType, entityId: entityId || null, at: Date.now() };
   sb.from('change_log')
     .insert({
       action,
@@ -188,6 +192,15 @@ function logChange(
     .catch((e) => console.warn('change_log insert error:', e));
 }
 function pushUndo(action: UndoAction): void {
+  if (!action.monthId && state.currentMonthId) action.monthId = state.currentMonthId;
+  if (action.year === undefined) {
+    const mo = state.months.find((m) => m.id === action.monthId);
+    action.year = mo ? mo.year : state.currentYear;
+  }
+  if (!action.entityType && lastLoggedChange && Date.now() - lastLoggedChange.at < 2000) {
+    action.entityType = lastLoggedChange.entityType;
+    if (lastLoggedChange.entityId) action.entityId = lastLoggedChange.entityId;
+  }
   undoStack.push(action);
   if (undoStack.length > 30) undoStack.shift();
   redoStack.length = 0;
@@ -202,18 +215,63 @@ function updateUndoButtons() {
 // One undo at a time; a failed undo goes back on the stack and says so,
 // instead of vanishing (before 2026-09-24 a throw lost the action silently).
 let undoBusy = false;
+// Bring the month the edit was made in onto the screen before undoing it, so
+// every undo (even the ones that read "the open month") hits the right month.
+async function runInEditMonth(a: UndoAction): Promise<void> {
+  if (
+    !a.monthId ||
+    (a.monthId === state.currentMonthId && (a.year ?? state.currentYear) === state.currentYear)
+  )
+    return;
+  const prevYear = state.currentYear;
+  const prevMonthId = state.currentMonthId;
+  if (a.year !== undefined && a.year !== state.currentYear) await switchYear(a.year);
+  if (state.months.some((m) => m.id === a.monthId)) {
+    if (state.currentMonthId !== a.monthId) await switchMonth(a.monthId);
+    return;
+  }
+  // The month could not be loaded: go back to where she was and refuse. The
+  // open-month marker is never pointed at a month that is not on screen.
+  if (state.currentYear !== prevYear) await switchYear(prevYear);
+  if (
+    prevMonthId &&
+    state.months.some((m) => m.id === prevMonthId) &&
+    state.currentMonthId !== prevMonthId
+  )
+    await switchMonth(prevMonthId);
+  throw new Error("That month isn't loaded, so this can't be undone from here.");
+}
+function logUndoRedo(kind: 'undo' | 'redo', a: UndoAction): void {
+  const m = state.months.find((x) => x.id === a.monthId);
+  const where = m ? ` (${m.month_name || 'month ' + m.month_num} ${m.year})` : '';
+  logChange(
+    kind,
+    a.entityType || 'app_edit',
+    a.entityId || null,
+    `[app ${kind}] ${a.label}${where}`,
+    null,
+    null,
+    a.monthId,
+  );
+}
 async function doUndo() {
   if (undoBusy) return;
   const a = undoStack.pop();
   if (!a) return;
   undoBusy = true;
   try {
+    await runInEditMonth(a);
     await a.undo();
+    logUndoRedo('undo', a);
     redoStack.push(a);
   } catch (e) {
     undoStack.push(a);
     console.warn('undo failed:', e);
-    toast('Could not undo ' + a.label);
+    toast(
+      e instanceof Error && e.message.startsWith('That month')
+        ? e.message
+        : 'Could not undo ' + a.label,
+    );
     return;
   } finally {
     undoBusy = false;
@@ -229,12 +287,18 @@ async function doRedo() {
   if (!a) return;
   undoBusy = true;
   try {
+    await runInEditMonth(a);
     await a.redo();
+    logUndoRedo('redo', a);
     undoStack.push(a);
   } catch (e) {
     redoStack.push(a);
     console.warn('redo failed:', e);
-    toast('Could not redo ' + a.label);
+    toast(
+      e instanceof Error && e.message.startsWith('That month')
+        ? e.message
+        : 'Could not redo ' + a.label,
+    );
     return;
   } finally {
     undoBusy = false;
@@ -259,6 +323,8 @@ function undoableInsert(table: string, row: Row, label: string, reload: Reload):
   const id = row.id as string;
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).delete().eq('id', id);
       if (error) throw error;
@@ -275,6 +341,8 @@ function undoableDelete(table: string, row: Row, label: string, reload: Reload):
   const id = row.id as string;
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).insert(row);
       if (error) throw error;
@@ -297,6 +365,8 @@ function undoableUpdate(
 ): void {
   pushUndo({
     label,
+    entityType: table,
+    entityId: id,
     undo: async () => {
       const { error } = await sb.from(table).update(before).eq('id', id);
       if (error) throw error;
@@ -575,6 +645,14 @@ interface UndoAction {
   label: string;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
+  // The month the edit was made in (stamped when the entry is pushed). Undo and
+  // redo run against THAT month even if she has since opened another one.
+  monthId?: string;
+  // The year that month belongs to (so undo can switch year as well as month).
+  year?: number;
+  // What was edited, for the change_log row written on undo/redo.
+  entityType?: string;
+  entityId?: string;
 }
 
 interface ToastOpts {
@@ -611,6 +689,7 @@ interface State {
   biz: BizMonthRow | null;
   ptClients: PtClientRow[];
   ptSessions: PtSessions;
+  ptError: boolean; // Tracker (pt-sessions) could not be reached on the last load
   incomeItems: IncomeItemRow[];
   cashAccounts: CashAccountRow[];
   usdRate: number | null;
@@ -652,6 +731,7 @@ let state: State = {
   biz: null, // biz_months row for current month
   ptClients: [], // private tracker clients
   ptSessions: { earned: [], scheduled: [] }, // private tracker sessions
+  ptError: false,
   incomeItems: [], // flexible extra income items
   cashAccounts: [], // liquid cash positions
   usdRate: null, // USD→ILS rate
@@ -1020,6 +1100,34 @@ function toast(msg: string, opts?: ToastOpts): void {
   _toastTimer = setTimeout(() => t.classList.remove('show'), opts.duration || 5000);
 }
 
+// A short plain-English line pinned to the top of the screen. Unlike toast() it
+// stays until she taps it away (or 15 s), so a failure can't be missed.
+// 'fail' = a save did not go through (red); 'note' = needs a look (amber).
+let _errLineTimer: ReturnType<typeof setTimeout> | null = null;
+function showErrorLine(msg: string, kind: 'fail' | 'note' = 'fail'): void {
+  let el = document.getElementById('app-error-line');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-error-line';
+    el.setAttribute('role', 'alert');
+    document.body.appendChild(el);
+  }
+  el.className = 'app-error-line app-error-' + kind;
+  el.textContent = '';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '×';
+  const node = el;
+  close.onclick = () => node.remove();
+  node.appendChild(text);
+  node.appendChild(close);
+  if (_errLineTimer) clearTimeout(_errLineTimer);
+  _errLineTimer = setTimeout(() => node.remove(), 15000);
+}
+
 // HTML-escape user-supplied free text before interpolating into innerHTML.
 // Escapes all five HTML-significant chars so it is safe in both element text
 // and double/single-quoted attribute contexts. Use for ANY user free-text
@@ -1084,7 +1192,15 @@ async function loadMonths() {
     .select('*')
     .eq('year', state.currentYear)
     .order('month_num');
-  if (error) toast('Could not load months');
+  if (error) {
+    // Keep whatever months are already on screen; wiping them would make a
+    // network hiccup look like an empty budget.
+    showErrorLine(
+      "Couldn't load your months. You're seeing the last numbers saved on this device.",
+      'note',
+    );
+    return;
+  }
   state.months = data || [];
 }
 
@@ -2735,11 +2851,24 @@ async function setItemAsDefault(id: string): Promise<void> {
   const item = (state.budgetItems[catKey!] || []).find((i: BudgetItemRow) => i.id === id);
   if (!item) return;
   // Update template row matching this category + sort_order with the current amount + label
-  await sb
+  const { error: defErr } = await sb
     .from('budget_item_templates')
     .update({ amount: item.amount, label: item.label })
     .eq('category', catKey)
     .eq('sort_order', item.sort_order);
+  if (defErr) {
+    showErrorLine("Couldn't save that as your usual amount. Try again.");
+    return;
+  }
+  logChange(
+    'edit',
+    'budget_item_template',
+    item.id,
+    `Set as default: ${item.label} ₪${item.amount} • ${catKey}`,
+    null,
+    { label: item.label, amount: item.amount },
+    item.month_id,
+  );
   // Visual feedback — briefly mark as default
   item.is_default = true;
   renderApp();
@@ -2768,8 +2897,24 @@ async function seedBudgetItemsFromTemplate(monthId: string): Promise<void> {
       amount: t.amount,
       sort_order: t.sort_order,
     }));
-    const { data: newItems } = await sb.from('budget_items').insert(inserts).select();
+    const { data: newItems, error: seedErr } = await sb
+      .from('budget_items')
+      .insert(inserts)
+      .select();
+    if (seedErr) {
+      showErrorLine("Couldn't copy your usual lines into this month.", 'note');
+      continue;
+    }
     state.budgetItems[catKey] = newItems || [];
+    logChange(
+      'add',
+      'budget_items_template_copy',
+      null,
+      `Copied ${inserts.length} template ${catKey} lines into this month`,
+      null,
+      { category: catKey, count: inserts.length },
+      monthId,
+    );
   }
 }
 
@@ -3868,6 +4013,7 @@ function renderApp() {
   document.title = `Budget ${state.currentYear}`;
   requestAnimationFrame(applyRibbonHeight);
   requestAnimationFrame(updateUndoButtons);
+  requestAnimationFrame(() => updateOfflineQueueUI(lastQueueCount, lastStuckCount));
 
   if (state.months.length === 0) {
     root.innerHTML = `
@@ -3918,28 +4064,12 @@ function renderApp() {
   if (_chPct && income) {
     const _chCalc = Math.round((income * _chPct) / 100);
     state.budgets['charity'] = _chCalc;
-    // Quietly sync to DB if out of date (no renderApp, no undo, no log)
+    // Sync the derived cash into the budgets table, but ONLY when the stored
+    // number really differs, and leave a history row when it does.
     if (!state._lastCharitySync || state._lastCharitySync[state.currentMonthId] !== _chCalc) {
       if (!state._lastCharitySync) state._lastCharitySync = {};
       state._lastCharitySync[state.currentMonthId] = _chCalc;
-      sb.from('budgets')
-        .select('id')
-        .eq('month_id', state.currentMonthId!)
-        .eq('category', 'charity')
-        .single()
-        .then(({ data }) => {
-          if (data)
-            return sb
-              .from('budgets')
-              .update({ amount: _chCalc })
-              .eq('id', data.id)
-              .then(() => {});
-          else
-            return sb
-              .from('budgets')
-              .insert({ month_id: state.currentMonthId, category: 'charity', amount: _chCalc })
-              .then(() => {});
-        });
+      void syncCharityBudget(state.currentMonthId!, _chCalc);
     }
   }
   const spent = spentByCategory();
@@ -3987,6 +4117,9 @@ function renderApp() {
       <div class="hdr-actions">
         <span id="offline-queue-indicator" class="offline-queue-indicator" style="display:none;" title="Pending writes — will sync when online" onclick="syncQueueNow()">
           <span class="oqi-dot"></span><span id="offline-queue-count">0</span> to sync
+        </span>
+        <span id="offline-stuck-indicator" class="offline-queue-indicator offline-stuck-indicator" style="display:none;" role="button" tabindex="0" onclick="retryStuckWrites()">
+          <span id="offline-stuck-count">0</span> didn't save · Try again
         </span>
         <button id="undo-btn" class="mtab toolbar-icon" onclick="doUndo()" ${undoStack.length ? '' : 'disabled'} title="Undo (Ctrl+Z)" aria-label="Undo">${ICON_UNDO}</button>
         <button id="redo-btn" class="mtab toolbar-icon" onclick="doRedo()" ${redoStack.length ? '' : 'disabled'} title="Redo (Ctrl+Y)" aria-label="Redo">${ICON_REDO}</button>
@@ -4411,6 +4544,46 @@ async function saveCharityPct(value: string | number): Promise<void> {
   renderApp();
 }
 
+// Charity's cash budget follows income x percent. Called from the Budget tab
+// render, so it must not write when nothing changed: it reads the stored row
+// first, writes only on a real difference, and logs that write.
+async function syncCharityBudget(monthId: string, calc: number): Promise<void> {
+  const { data, error } = await sb
+    .from('budgets')
+    .select('id,amount')
+    .eq('month_id', monthId)
+    .eq('category', 'charity')
+    .limit(1);
+  if (error) {
+    // Could not read it, so write nothing; allow a retry on the next render.
+    if (state._lastCharitySync) delete state._lastCharitySync[monthId];
+    return;
+  }
+  const row = data && data[0];
+  if (row && Number(row.amount) === calc) return; // already correct: no write, no log
+  const old = row ? Number(row.amount) || 0 : 0;
+  const res = row
+    ? await sb.from('budgets').update({ amount: calc }).eq('id', row.id)
+    : await sb.from('budgets').insert({ month_id: monthId, category: 'charity', amount: calc });
+  if (res.error) {
+    if (state._lastCharitySync) delete state._lastCharitySync[monthId];
+    showErrorLine(
+      "Charity's amount didn't save. It will try again when you reopen this month.",
+      'note',
+    );
+    return;
+  }
+  logChange(
+    'edit',
+    'budget_amount',
+    null,
+    `Budget changed: charity ₪${old} → ₪${calc} (auto, follows income × charity %)`,
+    { amount: old },
+    { amount: calc },
+    monthId,
+  );
+}
+
 // The database half of a budget-amount change: upsert the budgets row and keep
 // the pot allocation tables + state in sync. No log, no undo, no render — so
 // undo/redo can call it directly without re-entering saveBudget (which used to
@@ -4624,7 +4797,7 @@ async function saveIncomeField(field: string, value: string | number): Promise<v
     .update({ [field]: num })
     .eq('id', state.currentMonthId!);
   if (error) {
-    toast('Error saving');
+    showErrorLine("Your income didn't save. Check your connection and try again.");
     return;
   }
   if (month) month[field] = num;
@@ -4637,20 +4810,22 @@ async function saveIncomeField(field: string, value: string | number): Promise<v
     { [field]: num },
     state.currentMonthId!,
   );
+  const editMonthId = state.currentMonthId!;
   pushUndo({
     label: field.replace('income_', ''),
+    monthId: editMonthId,
     undo: async () => {
       await sb
         .from('months')
         .update({ [field]: oldVal })
-        .eq('id', state.currentMonthId!);
+        .eq('id', editMonthId);
       if (month) month[field] = oldVal;
     },
     redo: async () => {
       await sb
         .from('months')
         .update({ [field]: num })
-        .eq('id', state.currentMonthId!);
+        .eq('id', editMonthId);
       if (month) month[field] = num;
     },
   });
@@ -4806,7 +4981,7 @@ async function saveIncome() {
   });
   const { error } = await sb.from('months').update(updates).eq('id', mid);
   if (error) {
-    toast('Error saving');
+    showErrorLine("Your income didn't save. Check your connection and try again.");
     return;
   }
   logChange(
@@ -4938,8 +5113,10 @@ async function loadBizData() {
       earned: sessions.filter((s: Record<string, unknown>) => s.status === 'happened'),
       scheduled: sessions.filter((s: Record<string, unknown>) => s.status === 'scheduled'),
     };
+    state.ptError = false;
   } catch (err) {
     console.error('pt-sessions edge function failed:', err);
+    state.ptError = true;
     state.ptClients = [];
     state.ptSessions = { earned: [], scheduled: [] };
   }
@@ -8240,17 +8417,19 @@ function renderBizTab(): string {
         <button class="biz-sync-btn" onclick="refreshBiz()">↻ Sync</button>
       </div>
       ${
-        Object.keys(earnedByClient).length === 0
-          ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions found for ${prevMonthName}</div>`
-          : Object.entries(earnedByClient)
-              .map(
-                ([cid, sessions]) => `
+        state.ptError
+          ? `<div style="color:var(--amber);font-size:.8rem;padding:.5rem 0">Couldn't reach the Tracker, so these sessions aren't loaded. Tap Sync to try again.</div>`
+          : Object.keys(earnedByClient).length === 0
+            ? `<div style="color:var(--dim);font-size:.8rem;padding:.5rem 0">No sessions found for ${prevMonthName}</div>`
+            : Object.entries(earnedByClient)
+                .map(
+                  ([cid, sessions]) => `
           <div class="biz-session-item">
             <span>${clientName(cid)} × ${sessions.length}</span>
             <span class="biz-val green">${fmt(sessions.length * clientRate(cid) * 0.85)}</span>
           </div>`,
-              )
-              .join('')
+                )
+                .join('')
       }
       <div class="biz-row" style="margin-top:.5rem;background:var(--gsoft);">
         <span class="biz-label" style="font-weight:700;">Tracker net <span style="font-weight:400;color:var(--dim);font-size:.6rem;">after 15% cut</span></span>
@@ -8348,60 +8527,96 @@ async function saveBizField(field: string, value: number | string): Promise<void
     return;
   }
   const num = parseFloat(String(value)) || 0;
-  const oldVal = state.biz ? state.biz![field as keyof BizMonthRow] : 0;
+  const bizRow = state.biz;
+  // Everything the undo needs is captured NOW, at edit time, so undoing later
+  // hits this month's row even if another month is open by then.
+  const bizId = bizRow.id;
+  const bizMonthId = bizRow.month_id;
+  const oldVal = bizRow[field as keyof BizMonthRow];
+  const affectsNet =
+    field === 'confirmed_amount' || field === 'accountant_fee' || field === 'spending';
+  const monthRow = state.months.find((m) => m.id === bizMonthId);
+  const oldPrivate = monthRow ? monthRow.income_private : null;
   const { error } = await sb
     .from('biz_months')
     .update({ [field]: num })
-    .eq('id', state.biz!.id);
+    .eq('id', bizId);
   if (error) {
     toast('Error saving');
     return;
   }
-  state.biz![field as keyof BizMonthRow] = num;
+  bizRow[field as keyof BizMonthRow] = num;
   logChange(
     'edit',
     'biz_field',
-    state.biz!.id,
+    bizId,
     `Biz changed: ${field} ₪${oldVal} → ₪${num}`,
     { [field]: oldVal },
     { [field]: num },
+    bizMonthId,
   );
+
+  // Biz net (confirmed - fee - spending) is what income_private shows. Compute
+  // it from the row as it stands now (income_private is derived, never typed).
+  const newPrivate = affectsNet
+    ? (bizRow.confirmed_amount || 0) - (bizRow.accountant_fee || 0) - (bizRow.spending || 0)
+    : null;
+
+  // Keep whichever copies of this biz row are in memory in step with the database.
+  const setLocalBiz = (v: unknown): void => {
+    const rows = [state.biz, ...(state.allBiz || [])];
+    rows.forEach((r) => {
+      if (r && r.id === bizId) r[field as keyof BizMonthRow] = v as never;
+    });
+  };
+  const setLocalPrivate = (v: number | null): void => {
+    const m = state.months.find((x) => x.id === bizMonthId);
+    if (m) m.income_private = v;
+  };
   pushUndo({
     label: 'biz ' + field,
+    monthId: bizMonthId,
+    entityType: 'biz_field',
+    entityId: bizId,
     undo: async () => {
-      await sb
+      const { error: e1 } = await sb
         .from('biz_months')
         .update({ [field]: oldVal })
-        .eq('id', state.biz!.id);
-      state.biz![field as keyof BizMonthRow] = oldVal;
+        .eq('id', bizId);
+      if (e1) throw e1;
+      setLocalBiz(oldVal);
+      // A Biz edit also moved income_private; put that back too.
+      if (affectsNet) {
+        const { error: e2 } = await sb
+          .from('months')
+          .update({ income_private: oldPrivate })
+          .eq('id', bizMonthId);
+        if (e2) throw e2;
+        setLocalPrivate(oldPrivate);
+      }
     },
     redo: async () => {
-      await sb
+      const { error: e1 } = await sb
         .from('biz_months')
         .update({ [field]: num })
-        .eq('id', state.biz!.id);
-      state.biz![field as keyof BizMonthRow] = num;
+        .eq('id', bizId);
+      if (e1) throw e1;
+      setLocalBiz(num);
+      if (affectsNet) {
+        const { error: e2 } = await sb
+          .from('months')
+          .update({ income_private: newPrivate })
+          .eq('id', bizMonthId);
+        if (e2) throw e2;
+        setLocalPrivate(newPrivate);
+      }
     },
   });
 
-  // If confirmed_amount changes, also update income_private in main months table
-  // Use state.biz!.month_id (not state.currentMonthId) so a stale biz row during a
-  // month switch can't write the net to the wrong month's dashboard.
-  const bizMonthId = state.biz!.month_id;
-  if (field === 'confirmed_amount') {
-    const net = num - (state.biz!.accountant_fee || 0) - (state.biz!.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
-    const month = state.months.find((m) => m.id === bizMonthId);
-    if (month) month.income_private = net;
-  }
-  if (field === 'accountant_fee' || field === 'spending') {
-    const net =
-      (state.biz!.confirmed_amount || 0) -
-      (state.biz!.accountant_fee || 0) -
-      (state.biz!.spending || 0);
-    await sb.from('months').update({ income_private: net }).eq('id', bizMonthId);
-    const month = state.months.find((m) => m.id === bizMonthId);
-    if (month) month.income_private = net;
+  // Cascade the new net into the month's dashboard (same month as the biz row).
+  if (affectsNet) {
+    await sb.from('months').update({ income_private: newPrivate }).eq('id', bizMonthId);
+    setLocalPrivate(newPrivate);
   }
 
   renderApp();
@@ -13238,7 +13453,13 @@ async function init() {
           renderApp();
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn('background refresh failed:', err);
+        showErrorLine(
+          "Couldn't refresh just now. You're seeing the last numbers saved on this device.",
+          'note',
+        );
+      });
     return;
   }
   // First visit or stale cache — normal load
@@ -13252,6 +13473,7 @@ async function init() {
 // session → render the calm login screen instead of the app. Sessions persist
 // in localStorage (sb client default), so this is a no-op once logged in.
 const AUTH_DEFAULT_EMAIL = 'allisonecalt@gmail.com';
+const APP_LIVE_URL = 'https://allisonecalt-sudo.github.io/budget-2026/';
 let _authBootstrapped = false;
 
 async function bootstrap() {
@@ -13355,7 +13577,9 @@ async function handleForgotPassword() {
     return;
   }
   try {
-    const { error } = await sb.auth.resetPasswordForEmail(email);
+    // redirectTo = the live app, so the emailed link does not land on localhost
+    // (the project's Site URL is still http://localhost:3000).
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_LIVE_URL });
     if (error) {
       showLoginError(error.message || 'Could not send reset link.');
       return;
@@ -14927,7 +15151,18 @@ function openMoreSheet() {
 // whenever a write is enqueued or drained. We update a small toolbar
 // indicator. Manual sync trigger: clicking the indicator asks the SW to
 // drain immediately.
-function updateOfflineQueueUI(count: number): void {
+function updateOfflineQueueUI(count: number, stuck = 0): void {
+  const stuckEl = byId('offline-stuck-indicator');
+  const stuckNum = byId('offline-stuck-count');
+  if (stuckEl && stuckNum) {
+    if (stuck > 0) {
+      stuckNum.textContent = String(stuck);
+      stuckEl.style.display = '';
+      stuckEl.title = `${stuck} change${stuck === 1 ? '' : 's'} didn't save. Tap to try again.`;
+    } else {
+      stuckEl.style.display = 'none';
+    }
+  }
   const el = byId('offline-queue-indicator');
   const num = byId('offline-queue-count');
   if (!el || !num) return;
@@ -14942,8 +15177,39 @@ function updateOfflineQueueUI(count: number): void {
 
 // Called by sw.js bridge in index.html (window.onQueueUpdate)
 window.onQueueUpdate = function (data) {
-  updateOfflineQueueUI(Number(data && data.count) || 0);
+  lastQueueCount = Number(data && data.count) || 0;
+  lastStuckCount = Number(data && data.stuck) || 0;
+  updateOfflineQueueUI(lastQueueCount, lastStuckCount);
 };
+
+// Counts are remembered so a re-render of the header can repaint the badges.
+let lastQueueCount = 0;
+let lastStuckCount = 0;
+
+function retryStuckWrites(): void {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    toast('Not ready yet. Reload the app and try again.');
+    return;
+  }
+  navigator.serviceWorker.controller.postMessage({ type: 'retry-stuck' });
+  toast('Trying again…');
+}
+
+// The service worker asks for the CURRENT login token when it replays queued
+// writes (the token saved at queue time is usually expired by then).
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e: MessageEvent) => {
+    const data = e.data as { type?: string } | null;
+    if (!data || data.type !== 'need-token' || !e.ports || !e.ports[0]) return;
+    const port = e.ports[0];
+    sb.auth
+      .getSession()
+      .then(({ data: d }) =>
+        port.postMessage({ token: d && d.session ? d.session.access_token : null }),
+      )
+      .catch(() => port.postMessage({ token: null }));
+  });
+}
 
 function syncQueueNow() {
   if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
@@ -14999,7 +15265,13 @@ document.addEventListener('visibilitychange', () => {
         renderApp();
       }
     })
-    .catch(() => {});
+    .catch((err) => {
+      console.warn('refresh on return failed:', err);
+      showErrorLine(
+        "Couldn't refresh just now. You're seeing the last numbers saved on this device.",
+        'note',
+      );
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -15205,6 +15477,7 @@ Object.assign(window as unknown as Record<string, unknown>, {
   switchTab,
   switchYear,
   syncQueueNow,
+  retryStuckWrites,
   // Exported for tests/quickadd-date.spec.js — pure, no Supabase writes.
   monthNumFromDate,
   yearFromDate,

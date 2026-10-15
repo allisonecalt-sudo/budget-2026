@@ -7,7 +7,7 @@
 //
 // IMPORTANT: like money-in.spec.js, this spec NEVER writes to Supabase. It only
 // calls pure window helpers and reads the quick-add sheet's HTML string.
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 async function loadHelpers(page) {
   await page.goto('/');

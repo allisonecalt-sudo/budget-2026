@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 // v29: the ribbon split into hero stats (.ribbon-stat, big decision numbers)
 // and compact data points (.rb-dp — Income/Budgeted/Used/Saved). Every test
@@ -33,6 +33,19 @@ async function readRibbonPairs(page) {
     prev = cur;
   }
   return prev;
+}
+
+// Wait for the app to be idle (no load in flight, no spinner) instead of sleeping.
+// Two animation frames let the render that follows the load land.
+async function settled(page) {
+  await page.waitForFunction(
+    () => window.state && !window.state.loading && !document.querySelector('.loading'),
+    null,
+    { timeout: 15000 },
+  );
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+  );
 }
 
 // v30: the month chips became a dropdown (.month-select). ONE switcher for
@@ -306,24 +319,27 @@ test('history panel shows loading or content after opening', async ({ page }) =>
 });
 
 // ─── Undo/Redo: Add Transaction via Sidebar ───
-// SKIPPED: writes to live Supabase. Cleanup via undo can race; left a stray
-// PlaywrightTestStore row in production for ~6 weeks. Re-enable only when
-// tests run against an isolated DB.
-test.skip('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
+// Runs on the in-memory fake Supabase (tests/fixtures.js): nothing reaches a real database.
+test('add grocery transaction via sidebar, then undo removes it, redo restores it', async ({
   page,
+  db,
 }) => {
   await page.goto('/');
   await page.waitForSelector('#sb-cat', { timeout: 10000 });
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
-  // Capture the current grocery spent amount
-  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
-  const getSpent = async () => {
-    const text = await groceryRow.textContent();
-    const match = text.match(/₪([\d,.]+)/);
-    return match ? parseFloat(match[1].replace(',', '')) : 0;
-  };
+  // Capture the current grocery spent amount (from the app's own state) and
+  // count the matching rows in the fake database.
+  const getSpent = () =>
+    page.evaluate(() =>
+      window.state.transactions
+        .filter((t) => t.category === 'groceries')
+        .reduce((s, t) => s + (Number(t.amount) || 0), 0),
+    );
+  const dbHas = () =>
+    db.rowsOf('transactions').filter((t) => t.store === 'PlaywrightTestStore').length;
   const spentBefore = await getSpent();
+  expect(dbHas()).toBe(0);
 
   // Fill sidebar form with a test transaction
   await page.selectOption('#sb-cat', 'groceries');
@@ -346,6 +362,7 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
   // Spent should have increased
   const spentAfterAdd = await getSpent();
   expect(spentAfterAdd).toBeGreaterThan(spentBefore);
+  expect(dbHas()).toBe(1);
 
   // Click undo
   await page.click('#undo-btn');
@@ -354,6 +371,9 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
   // Spent should be back to original
   const spentAfterUndo = await getSpent();
   expect(spentAfterUndo).toBeCloseTo(spentBefore, 1);
+  expect(dbHas()).toBe(0);
+  // The undo itself is written to the history log.
+  expect(db.rowsOf('change_log').some((r) => r.action === 'undo')).toBe(true);
 
   // Redo button should be enabled
   await expect(page.locator('#redo-btn')).toBeEnabled();
@@ -364,70 +384,38 @@ test.skip('add grocery transaction via sidebar, then undo removes it, redo resto
 
   const spentAfterRedo = await getSpent();
   expect(spentAfterRedo).toBeGreaterThan(spentBefore);
-
-  // Clean up: undo again to remove the test transaction from Supabase
-  await page.click('#undo-btn');
-  await page.waitForTimeout(2000);
+  expect(dbHas()).toBe(1);
+  expect(db.rowsOf('change_log').some((r) => r.action === 'redo')).toBe(true);
 });
 
 // ─── Inline Add: History Logging ───
-// SKIPPED: writes to live Supabase via inline form. Same race risk as sidebar add.
-test.skip('inline add transaction appears in history log', async ({ page }) => {
+// Runs on the in-memory fake Supabase (tests/fixtures.js).
+test('an added transaction appears in the history log', async ({ page }) => {
   await page.goto('/');
-  await page.waitForSelector('.cat-row', { timeout: 10000 });
-
-  // Open the groceries category
-  const groceryRow = page.locator('.cat-row', { hasText: /groceries/i }).first();
-  await groceryRow.locator('.cat-top').click();
-  await expect(groceryRow).toHaveClass(/open/);
-
-  // Click "+ add line" button inside groceries
-  const addBtn = groceryRow.locator('.bi-add');
-  if ((await addBtn.count()) === 0) {
-    // Category already has lines — use sidebar instead, skip this test
-    return;
-  }
-  await addBtn.click({ force: true });
-
-  // Fill inline form
-  const storeInput = page.locator('#inline-store-groceries');
-  await expect(storeInput).toBeVisible({ timeout: 5000 });
-  await storeInput.fill('PlaywrightInlineTest');
-  await page.locator('#inline-amount-groceries').fill('0.01');
-
-  // Submit via Enter key
-  await page.locator('#inline-amount-groceries').press('Enter');
-
-  // Wait for save toast
+  await page.waitForSelector('#sb-cat', { timeout: 10000 });
+  await page.selectOption('#sb-cat', 'groceries');
+  await page.fill('#sb-store', 'PlaywrightInlineTest');
+  await page.fill('#sb-amount', '0.01');
+  await page.click('#sb-btn');
   await page.waitForFunction(
     () => {
       const toast = document.getElementById('toast');
-      return toast && toast.textContent.includes('Saved');
+      return toast && toast.textContent.includes('saved');
     },
     { timeout: 10000 },
   );
+  await page.waitForTimeout(500);
 
-  // Wait a moment for logChange to complete
-  await page.waitForTimeout(1500);
-
-  // Open history panel
   await page.locator('.mtab[title="History log"]').click();
   await expect(page.locator('#history-panel')).toBeVisible({ timeout: 5000 });
-  await page.waitForTimeout(2000);
-
-  // Verify "Added PlaywrightInlineTest" appears in history
-  const historyText = await page.locator('#history-list').textContent();
-  expect(historyText).toContain('PlaywrightInlineTest');
-
-  // Clean up: undo the test transaction
-  await page.locator('#history-panel button:has-text("✕")').click();
-  await page.click('#undo-btn');
-  await page.waitForTimeout(2000);
+  await expect(page.locator('#history-list')).toContainText('PlaywrightInlineTest', {
+    timeout: 5000,
+  });
 });
 
 // ─── Inline Add: Performance ───
-// SKIPPED: writes to live Supabase. Same race risk as other inline-add tests.
-test.skip('inline add transaction completes within 5 seconds', async ({ page }) => {
+// Runs on the in-memory fake Supabase (tests/fixtures.js).
+test('inline add transaction completes within 5 seconds', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('.cat-row', { timeout: 10000 });
 
@@ -551,7 +539,8 @@ test('year view loads without errors', async ({ page }) => {
 
   // Switch to Year tab
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(3000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const realErrors = errors.filter(
     (e) =>
@@ -569,7 +558,8 @@ test('year view total savings row uses budget values', async ({ page }) => {
 
   // Switch to Year tab
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(3000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Find Total Savings row — it should show values from budget, not months table
   const savingsRow = page.locator('tr', { hasText: 'Total Savings' });
@@ -578,10 +568,8 @@ test('year view total savings row uses budget values', async ({ page }) => {
 });
 
 // ─── Savings Edit: Consistency Across Views ───
-// SKIPPED: filled 9999 directly into May savings_bank in production on
-// 2026-05-14. Cleanup via bankInput.fill(original) is race-prone — left
-// 9999 in the live ribbon. Re-enable only when tests run against isolated DB.
-test.skip('editing savings updates ribbon and snapshot consistently', async ({ page }) => {
+// Runs on the in-memory fake Supabase (it once left 9999 in her real May savings).
+test('editing savings updates ribbon and group header consistently', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 
@@ -593,32 +581,26 @@ test.skip('editing savings updates ribbon and snapshot consistently', async ({ p
   // Read original value
   const original = await bankInput.inputValue();
 
+  // Saved = bank + invested, so the expected total includes the invested input.
+  const invested = Number(
+    (await savingsGroup.locator('input[type="number"]').nth(1).inputValue()) || 0,
+  );
+  const expected = (9999 + invested).toLocaleString('en-US');
+
   // Set to a test value
   await bankInput.fill('9999');
   await bankInput.blur();
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(1500);
 
-  // Check ribbon "Saved" includes 9999
-  const ribbonSaved = page.locator('.ribbon-val', { hasText: '9,999' });
-  const ribbonHasSaved = (await ribbonSaved.count()) > 0;
-
-  // Check Savings group header shows 9999
-  const groupHeader = savingsGroup.locator('.group-header');
-  const headerText = await groupHeader.textContent();
-  const headerHas9999 = headerText.includes('9,999');
-
-  // At least one should reflect the new value
-  expect(ribbonHasSaved || headerHas9999).toBeTruthy();
-
-  // Restore original value
-  await bankInput.fill(original || '0');
-  await bankInput.blur();
-  await page.waitForTimeout(2000);
+  // The Savings group header AND the ribbon both show the new total.
+  const headerText = await savingsGroup.locator('.group-header').textContent();
+  expect(headerText).toContain(expected);
+  const ribbonVals = await page.locator('.ribbon-val, .rb-dp-val').allTextContents();
+  expect(ribbonVals.some((t) => t.includes(expected))).toBeTruthy();
+  expect(original).not.toBe('9999');
 });
 
-// SKIPPED: writes 8888 to live savings_bank. Cleanup uses Undo (more reliable
-// than fill-restore but still hits production data).
-test.skip('editing savings produces only one undo entry', async ({ page }) => {
+test('editing savings produces only one undo entry', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('#group-Savings', { timeout: 10000 });
 
@@ -661,7 +643,7 @@ test('budget page totals match year view for each month', async ({ page }) => {
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Read ribbon values: Budgeted and Spent (heroes + data points)
     let budgeted = null;
@@ -676,7 +658,8 @@ test('budget page totals match year view for each month', async ({ page }) => {
 
   // Now switch to Year view
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Read year view values for Total Budgeted and Total Spent rows
   const yearRows = page.locator('tr');
@@ -730,7 +713,7 @@ test('ribbon math: Income - Used = Unspent, Income - Budgeted = Unallocated', as
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Read all ribbon numbers (heroes + data points)
     const vals = {};
@@ -905,7 +888,8 @@ test('year view: Income - Budgeted = Unallocated for each month', async ({ page 
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Find rows
   const findRow = async (label) => {
@@ -974,7 +958,7 @@ test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) 
 
   for (let mi = 0; mi < 2; mi++) {
     const monthName = await months.go(mi);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Expand ribbon snapshot
     const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
@@ -1255,7 +1239,7 @@ test('search runs and shows results or no-results message', async ({ page }) => 
   await page.waitForSelector('.hdr-actions', { timeout: 10000 });
   await page.locator('.mtab[title="Search transactions"]').click();
   await page.locator('#search-input').fill('test');
-  await page.waitForTimeout(1000);
+  await expect(page.locator('#search-results')).toContainText(/result/i, { timeout: 10000 });
   const results = page.locator('#search-results');
   // Should show either results or "No results" — not the initial placeholder
   const text = await results.textContent();
@@ -1278,7 +1262,7 @@ test('search for known term shows summary with total', async ({ page }) => {
 
   // Search for "shufersal" — a store that should have transactions
   await page.locator('#search-input').fill('shufersal');
-  await page.waitForTimeout(2000);
+  await expect(page.locator('#search-results')).toContainText(/result/i, { timeout: 10000 });
 
   const resultsText = await page.locator('#search-results').textContent();
   console.log('Search results text (first 500 chars):', resultsText.slice(0, 500));
@@ -1316,7 +1300,7 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
   // Collect "Unallocated" from each month's ribbon
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     let leftToBudget = null;
     for (const p of await readRibbonPairs(page)) {
@@ -1328,7 +1312,8 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
 
   // Switch to Year view and read the "Unallocated" row
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const yearRows = page.locator('tr');
   const rowCount = await yearRows.count();
@@ -1383,7 +1368,7 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2500);
+    await settled(page);
     console.log(`\n===== ${monthName} AUDIT =====`);
 
     // ── 1. Read all ribbon values (heroes + data points) ──
@@ -1619,7 +1604,8 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
   // ── 8. Cross-check with Year view ──
   console.log('\n===== YEAR VIEW CROSS-CHECK =====');
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const yearRows = page.locator('tr');
   const rowCount = await yearRows.count();

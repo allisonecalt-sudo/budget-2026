@@ -1,27 +1,60 @@
-// Playwright global setup — authenticates ONCE and saves the Supabase session
-// as storageState, so the budget.spec.js math-audit suite runs behind the
-// auth gate that E4 (login gate) added. Without this, every test times out on
-// the login screen and "Lint & Test" CI stays red.
+// Playwright global setup. The suite NEVER logs in as her.
 //
-// Credentials: email is the app default (already in source); password comes
-// from BUDGET_TEST_PASSWORD (local env / GitHub Actions secret) so it never
-// lands in this PUBLIC repo. The saved state file (tests/.auth/) is gitignored.
+// It (1) refuses to run unless the test setup cannot reach production, and
+// (2) writes a storageState holding a FAKE Supabase session, so the app gets
+// past its login gate. Every Supabase request the app then makes is answered
+// by the in-memory fake in tests/fake-supabase.js (see tests/fixtures.js).
+//
+// History: until 2026-10-15 this file logged in with her real password
+// (BUDGET_TEST_PASSWORD, a CI secret) against the live database. That secret is
+// no longer read anywhere and can be deleted from the repo's GitHub secrets.
 
-const { chromium } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
 // Same port rule as playwright.config.js (BUDGET_TEST_PORT overrides 3100;
 // 3000 is squatted by the Gmail MCP locally).
 const BASE_URL = `http://localhost:${Number(process.env.BUDGET_TEST_PORT) || 3100}`;
+const STATE_PATH = path.join(__dirname, '.auth', 'state.json');
+// supabase-js stores its session under sb-<project ref>-auth-token.
+const STORAGE_KEY = 'sb-hpiyvnfhoqnnnotrmwaz-auth-token';
+
+function b64url(obj) {
+  return Buffer.from(JSON.stringify(obj)).toString('base64url');
+}
+
+function fakeSession() {
+  const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
+  const jwt = [
+    b64url({ alg: 'HS256', typ: 'JWT' }),
+    b64url({ sub: 'fake-test-user', role: 'authenticated', exp }),
+    'fake-signature',
+  ].join('.');
+  return {
+    access_token: jwt,
+    token_type: 'bearer',
+    expires_in: 60 * 60 * 24 * 365,
+    expires_at: exp,
+    refresh_token: 'fake-refresh-token',
+    user: {
+      id: 'fake-test-user',
+      aud: 'authenticated',
+      role: 'authenticated',
+      email: 'test@example.invalid',
+      app_metadata: {},
+      user_metadata: {},
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  };
+}
 
 // Fail loud if the server on that port is not serving THIS checkout. With
 // reuseExistingServer, a stale `serve` left by another window quietly runs the
 // whole suite against an old build (it served v44 on 2026-09-24).
-async function assertServedBuildMatches(page) {
+async function assertServedBuildMatches() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'app.ts'), 'utf8');
   const local = (src.match(/const APP_VERSION = '([^']+)'/) || [])[1];
-  const res = await page.request.get(`${BASE_URL}/dist/app.js`);
+  const res = await fetch(`${BASE_URL}/dist/app.js`);
   const served = (((await res.text()) || '').match(/APP_VERSION = '([^']+)'/) || [])[1];
   if (local && served && local !== served) {
     throw new Error(
@@ -30,54 +63,50 @@ async function assertServedBuildMatches(page) {
     );
   }
 }
-const EMAIL = process.env.BUDGET_TEST_EMAIL || 'allisonecalt@gmail.com';
-const PASSWORD = process.env.BUDGET_TEST_PASSWORD;
-const STATE_PATH = path.join(__dirname, '.auth', 'state.json');
 
-// Always write a state file so config's `storageState` path resolves.
-function writeEmptyState() {
-  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-  fs.writeFileSync(STATE_PATH, JSON.stringify({ cookies: [], origins: [] }));
+// The production guard. The tests are safe only while (a) the app is served
+// from localhost and (b) service workers are blocked, so Playwright can route
+// every Supabase call to the fake. If either stops being true, stop here.
+function assertCannotHitProduction(config) {
+  const host = new URL(BASE_URL).hostname;
+  if (host !== 'localhost' && host !== '127.0.0.1') {
+    throw new Error(`Refusing to run: test base URL ${BASE_URL} is not local.`);
+  }
+  for (const p of config.projects) {
+    const sw = p.use && p.use.serviceWorkers;
+    if (sw !== 'block') {
+      throw new Error(
+        'Refusing to run: playwright.config.js must set use.serviceWorkers = "block". ' +
+          'A service worker would send Supabase calls past the fake and onto the real database.',
+      );
+    }
+    const base = p.use && p.use.baseURL;
+    if (base && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(base)) {
+      throw new Error(`Refusing to run: baseURL ${base} is not local.`);
+    }
+  }
+  if (process.env.BUDGET_TEST_PASSWORD) {
+    console.warn(
+      '[global-setup] BUDGET_TEST_PASSWORD is set but ignored: the suite runs on fake data and ' +
+        'never logs in as her.',
+    );
+  }
 }
 
-module.exports = async () => {
+module.exports = async (config) => {
+  assertCannotHitProduction(config);
+  await assertServedBuildMatches();
   fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
-
-  // No password → degrade gracefully with an empty (logged-out) session.
-  // The smoke workflow tests the live URL and needs no auth; only the
-  // budget.spec math-audit suite (run where the secret IS set) needs login.
-  if (!PASSWORD) {
-    console.warn(
-      '[global-setup] BUDGET_TEST_PASSWORD not set — writing logged-out ' +
-        'storageState. Auth-gated tests (budget.spec.js) will fail; set ' +
-        'BUDGET_TEST_PASSWORD to run them.',
-    );
-    writeEmptyState();
-    return;
-  }
-
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
-  try {
-    await assertServedBuildMatches(page);
-    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
-    // Login form rendered by renderLogin() in app.js.
-    await page.waitForSelector('#login-form', { timeout: 15000 });
-    await page.fill('#login-email', EMAIL);
-    await page.fill('#login-password', PASSWORD);
-    await page.click('#login-btn');
-    // Success path renders the app shell (.ptab tabs). If creds are wrong the
-    // login-err banner shows instead — fail loudly rather than save a bad state.
-    const ok = await Promise.race([
-      page.waitForSelector('.ptab', { timeout: 20000 }).then(() => true),
-      page.waitForSelector('#login-err:not([hidden])', { timeout: 20000 }).then(() => false),
-    ]);
-    if (!ok) {
-      const msg = await page.locator('#login-err').textContent();
-      throw new Error(`Login failed during global setup: ${msg || 'unknown error'}`);
-    }
-    await page.context().storageState({ path: STATE_PATH });
-  } finally {
-    await browser.close();
-  }
+  fs.writeFileSync(
+    STATE_PATH,
+    JSON.stringify({
+      cookies: [],
+      origins: [
+        {
+          origin: BASE_URL,
+          localStorage: [{ name: STORAGE_KEY, value: JSON.stringify(fakeSession()) }],
+        },
+      ],
+    }),
+  );
 };

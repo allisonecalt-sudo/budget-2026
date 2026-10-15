@@ -3774,6 +3774,17 @@ tr.collapsed {
   }
 }
 
+/* Writes the server refused (a failed save, so red): "N didn't save · Try again" */
+.offline-stuck-indicator {
+  background: var(--redsoft, #fdecea);
+  color: var(--red);
+  border-color: var(--red);
+}
+.offline-stuck-indicator:hover {
+  background: var(--red);
+  color: var(--surface);
+}
+
 /* ── Year view: mobile one-month-at-a-time layout ──────────────────── */
 /* Desktop default: wide table shown, mobile layout + mobile toggle hidden. */
 .year-mobile {
@@ -5268,4 +5279,39 @@ input.an-oneoff-in {
 .an-toggle input {
   width: 18px;
   height: 18px;
+}
+
+/* One-line error/notice pinned to the top of the screen (showErrorLine). */
+.app-error-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #fff;
+}
+.app-error-line button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -0.5rem -0.5rem -0.5rem 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.app-error-fail {
+  background: var(--red);
+}
+.app-error-note {
+  background: var(--amber);
 }

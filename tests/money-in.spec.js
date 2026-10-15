@@ -8,7 +8,7 @@
 // IMPORTANT: this spec NEVER calls page.fill against prod and NEVER writes to
 // Supabase. It only sets window.state.admin.credits to synthetic in-memory rows
 // and reads the helper outputs back. Safe to run against the live app.
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./fixtures');
 
 // Load the app shell so the ES module evaluates and the window helpers register.
 // We don't need to be logged in — the helpers are pure functions on window.
