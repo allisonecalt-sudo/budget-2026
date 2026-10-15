@@ -337,9 +337,10 @@ test.describe('Analysis section', () => {
     await expect(cg).toContainText('−₪86 to −₪336');
     await expect(cg).toContainText('Oct 12 analysis');
     const tax = page.locator('.an-card2', { hasText: 'Set aside for tax' });
-    // 70% × ₪1,000 × 31% = ₪217; at 35% = ₪245.
-    await expect(tax).toContainText('₪217');
-    await expect(tax).toContainText('₪245');
+    // 70% × ₪1,200 turnover × 31% = ₪260; at 35% = ₪294.
+    await expect(tax).toContainText('₪260');
+    await expect(tax).toContainText('₪294');
+    await expect(tax).toContainText('turnover, rough');
     // Covered at Lean on the fake data: no drawdown, the KH untouched.
     const run = page.locator('.an-card2', { hasText: 'How long cash lasts' });
     await expect(run).toContainText('Total Liquid after cards');

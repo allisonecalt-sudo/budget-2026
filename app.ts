@@ -130,6 +130,9 @@ const PAY = {
   },
   private: {
     netMonth: 1000, // 2 weekly clients, after the accountant (the mixes' number)
+    // TURNOVER, which the 70% rule applies to (not the net above): 2026 ≈
+    // ₪14.2–14.9K a year (self/tax.md) ≈ ₪1,200 a month. Rough.
+    turnoverMonth: 1200,
     marginalRate: 0.31, // 35% only when gan 2 sits on top of the school
     marginalRateHigh: 0.35,
     taxableShare: 0.7, // עוסק זעיר: tax on 70% of turnover
@@ -13092,12 +13095,12 @@ function renderAnalyzeTab(): string {
       'Rough, from the Oct 12 analysis. Vaad bayit and your arnona share aren’t in this number. It costs a little each month — the bet is the apartment going up.',
     );
     const taxLow = taxSetAside(
-      PAY.private.netMonth,
+      PAY.private.turnoverMonth,
       PAY.private.marginalRate,
       PAY.private.taxableShare,
     );
     const taxHigh = taxSetAside(
-      PAY.private.netMonth,
+      PAY.private.turnoverMonth,
       PAY.private.marginalRateHigh,
       PAY.private.taxableShare,
     );
@@ -13107,9 +13110,9 @@ function renderAnalyzeTab(): string {
       [
         'Tax is on ' +
           Math.round(PAY.private.taxableShare * 100) +
-          '% of ' +
-          money(PAY.private.netMonth) +
-          ' a month of private income',
+          '% of about ' +
+          money(PAY.private.turnoverMonth) +
+          ' a month turnover, rough',
         '× your ' + Math.round(PAY.private.marginalRate * 100) + '% rate',
         'If gan 2 sits on top of the school: ' +
           money(taxHigh) +
