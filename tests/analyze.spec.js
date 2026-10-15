@@ -250,7 +250,8 @@ test.describe('Analysis section', () => {
     const texts = await cards.allTextContents();
     for (const t of texts.filter((x) => x.includes('gan 2'))) {
       expect(t).not.toMatch(/your plan/);
-      expect(t).toContain('what if');
+      expect(t).toContain('gan 2: yes (Oct 15)');
+      expect(t).not.toContain('what if');
     }
   });
 

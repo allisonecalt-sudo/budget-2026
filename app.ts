@@ -10944,7 +10944,7 @@ function cashTotals(): {
 // only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
 // cancellations, after OPS); gan 2 ≈ ₪890 a Monday × 42 Mondays ÷ 12 ≈ 3,115.
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
-// Oct 12 2026: no gan 2 right now (her words) — gan 2 mixes are what-ifs. The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
+// Oct 15 2026: gan 2 is a YES (start date and day to confirm); on Oct 12 it was "no gan 2 right now". The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // Net a month, year 1, incl. Petachya's havra'a (~₪80). Her walkthrough
   // 2026-10-11 20:19–20:23 (second-brain projects/budget-app/
@@ -11030,7 +11030,7 @@ const CHOICES: {
   {
     key: 'all',
     label: 'Petachya + gan 2 (Tue) + 2 clients',
-    note: 'what if — no gan 2 right now',
+    note: 'gan 2: yes (Oct 15), start date and day to confirm',
     net: MIX_NET.all,
     realHrs: 20,
     paidHrs: 32.5,
@@ -11043,7 +11043,7 @@ const CHOICES: {
   {
     key: 'petgan',
     label: 'Petachya + gan 2 (Tue, 8 hrs)',
-    note: 'what if — no gan 2 right now',
+    note: 'gan 2: yes (Oct 15), start date and day to confirm',
     net: MIX_NET.petgan,
     realHrs: 17.5,
     paidHrs: 30,
@@ -13355,7 +13355,7 @@ function renderAnalyzeTab(): string {
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
       (_anDrive ? '; driving is an estimate' : '') +
-      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed, and there’s no gan 2 right now. Nothing here writes to your budget.</div></div>';
+      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed; gan 2 is a yes (Oct 15), start date and day still to confirm. Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +
