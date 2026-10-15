@@ -20,6 +20,7 @@ const SHELL_ASSETS = [
   './dist/lib/budget-math.js',
   './dist/lib/history-format.js',
   './dist/lib/money.js',
+  './dist/lib/pay.js',
   './styles.css',
   './manifest.webmanifest',
   './icon.svg',

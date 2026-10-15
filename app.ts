@@ -19,6 +19,7 @@ import {
   monthNowTotals,
   billsMonthFor,
 } from './lib/analyze.js';
+import { perHour, schoolGrossMonth, sessionHourly, seTax } from './lib/pay.js';
 import type {
   AnalyzeCatStat,
   AnalyzeFloorIn,
@@ -62,6 +63,93 @@ const PT_KEY =
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v69';
 const BUILD_DATE = 'Oct 15, 2026 19:10';
+
+// ── PAY · every salary figure in the app, in ONE place ────────────────────
+// A payslip changes a number here and nowhere else: the Analyze scenarios
+// (CHOICES, SAFE_SCENARIOS), the job comparison, the per-hour lines and the
+// notes all read this object. Homes (second-brain): Petachya → self/petachya-
+// pay.md · Clalit → projects/clalit/pay-system-decoded-2026-07-15.md (glance
+// box) · tax → self/tax.md · Carmei Gat → self/carmei-gat.md · private →
+// self/private-practice.md. Per-hour figures are GROSS per PAID hour unless a
+// label says "real" (hours in the room). All ESTIMATES until a payslip says so.
+const PAY = {
+  clalit: {
+    plainGrossMonth: 8670, // a plain month, no extra hours (Jan–Sep 2026 slips)
+    withGrantsGrossMonth: 10340, // + the yearly grants spread over 12
+    paidHoursMonth: 95.15, // = 22 paid hours a week
+    paidHoursWeek: 22,
+    realHoursWeek: 22,
+    netExtraOverPetachya: 5100, // net the job adds next to Petachya (grants spread)
+    grossWithPetachyaMonth: 22700,
+    fundsMonth: 2470, // pension + KH into the funds
+  },
+  petachya: {
+    ratePerPaidHour: 120, // gross, since the Sep slip
+    paidHoursMonth: 95.33,
+    paidHoursWeek: 22,
+    realHoursWeek: 12.5,
+    netLow: 9660, // a normal month with travel (self/petachya-pay.md)
+    netHigh: 9730,
+    // The figure the scenarios carry today. PENDING her exact number (Oct 15:
+    // "I lower it… let's just wait") — change it HERE, once, and every
+    // scenario follows.
+    netInApp: 9860,
+  },
+  school: {
+    ratePerPaidHour: 130,
+    weeksPerMonth: 4.33,
+    paidHoursWeek: 20,
+    realHoursWeek: 14, // she is in the room 14 h for 20 paid
+    netExtraOverPetachya: 6420,
+    netWithPetachyaKhBelief: 16000, // if the keren hishtalmut is real (her belief)
+    grossWithPetachyaMonth: 23500,
+    fundsMonth: 3210, // with the KH
+    fundsMonthNoKh: 2080,
+  },
+  gan2: {
+    perSession: 180, // ₪ per session
+    sessionsPerMonth: 4,
+    minutesPerSession: 40,
+    // Net next to Petachya alone / next to the school. UNVERIFIED until a
+    // payslip (built on 42 Mondays; gan 2 is Tuesdays now).
+    netWithPetachya: 3115,
+    netWithSchool8h: 2200,
+    netWithSchool5h: 1370,
+  },
+  private: {
+    netMonth: 1000, // 2 weekly clients, after the accountant (the mixes' number)
+    marginalRate: 0.31, // 35% only when gan 2 sits on top of the school
+    marginalRateHigh: 0.35,
+    taxableShare: 0.7, // עוסק זעיר: tax on 70% of turnover
+    seRate: 0.153, // US self-employment tax, rough
+    seBase: 0.9235,
+  },
+  carmeiGat: {
+    // From the Oct 12 analysis (self/carmei-gat.md): rough.
+    rent: 4850,
+    mortgage: 4797.8,
+    insurance: 112,
+    mortgageLife: 26,
+    upkeepAllowance: 250, // her 2027 plan's ₪3,000 of fixes ÷ 12
+  },
+  reserves: {
+    khHarel: 64000, // keren hishtalmut: withdrawable tax-free after 6 years
+  },
+};
+// Net a month of every income mix after Feb 7 — sums of PAY, never typed twice.
+const MIX_NET = {
+  pet: PAY.petachya.netInApp,
+  pet2: PAY.petachya.netInApp + PAY.private.netMonth,
+  petgan: PAY.petachya.netInApp + PAY.gan2.netWithPetachya,
+  all: PAY.petachya.netInApp + PAY.gan2.netWithPetachya + PAY.private.netMonth,
+  school: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya,
+  school2: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.private.netMonth,
+  schoolgan5: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.gan2.netWithSchool5h,
+  schoolgan8: PAY.petachya.netInApp + PAY.school.netExtraOverPetachya + PAY.gan2.netWithSchool8h,
+  clalit: PAY.petachya.netInApp + PAY.clalit.netExtraOverPetachya,
+};
+// The mixes that include the private clients (the US self-employment tax line).
+const PRIVATE_MIXES = ['pet2', 'all', 'school2'];
 
 const MONTHS = [
   'January',
@@ -10791,14 +10879,14 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
   // Petachya alone, ≈ 52% kept as a third salary (8 paid hrs ≈ 2,200/mo,
   // 5 paid hrs ≈ 1,370/mo); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
   // ≈ 16,200 net with Petachya (Sep 23 model). ESTIMATES.
-  { key: 'pet', label: 'Petachya only', income: 9860 },
-  { key: 'pet2', label: 'Petachya + 2 private clients', income: 10860 },
-  { key: 'petgan', label: 'Petachya + gan 2 (Tue, 8 hrs)', income: 12975 },
-  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: 13975 },
-  { key: 'school', label: 'Petachya + the school', income: 16280 },
-  { key: 'school2', label: 'Petachya + school + 2 clients', income: 17280 },
-  { key: 'schoolgan5', label: 'Petachya + school + gan 2 (5 hrs)', income: 17650 },
-  { key: 'schoolgan8', label: 'Petachya + school + gan 2 (8 hrs)', income: 18480 },
+  { key: 'pet', label: 'Petachya only', income: MIX_NET.pet },
+  { key: 'pet2', label: 'Petachya + 2 private clients', income: MIX_NET.pet2 },
+  { key: 'petgan', label: 'Petachya + gan 2 (Tue, 8 hrs)', income: MIX_NET.petgan },
+  { key: 'all', label: 'Petachya + gan 2 + 2 clients', income: MIX_NET.all },
+  { key: 'school', label: 'Petachya + the school', income: MIX_NET.school },
+  { key: 'school2', label: 'Petachya + school + 2 clients', income: MIX_NET.school2 },
+  { key: 'schoolgan5', label: 'Petachya + school + gan 2 (5 hrs)', income: MIX_NET.schoolgan5 },
+  { key: 'schoolgan8', label: 'Petachya + school + gan 2 (8 hrs)', income: MIX_NET.schoolgan8 },
 ];
 
 // Her four spending levels for 2027, ₪ a month — built line by line with
@@ -10829,11 +10917,11 @@ const CHOICES: {
     key: 'clalit',
     label: 'Clalit + Petachya — as it is now',
     note: 'no extra hours, grants spread · ends Feb 7',
-    net: 14960,
+    net: MIX_NET.clalit,
     realHrs: 34.5,
     paidHrs: 44,
     driveHrs: 6.8,
-    sure: 14960,
+    sure: MIX_NET.clalit,
     likely: 0,
     maybe: 0,
     august: 'both paid',
@@ -10842,52 +10930,52 @@ const CHOICES: {
     key: 'school',
     label: 'Petachya + the school',
     note: 'not offered yet · with KH (your belief): ₪16,000 net, more into funds',
-    net: 16280,
+    net: MIX_NET.school,
     realHrs: 26.5,
     paidHrs: 42,
     driveHrs: 5.5,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 6420,
+    maybe: PAY.school.netExtraOverPetachya,
     august: 'both paid',
   },
   {
     key: 'school2',
     label: 'Petachya + school + 2 clients',
     note: 'the school not offered yet',
-    net: 17280,
+    net: MIX_NET.school2,
     realHrs: 29,
     paidHrs: 44.5,
     driveHrs: 7,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 7420,
+    maybe: PAY.school.netExtraOverPetachya + PAY.private.netMonth,
     august: 'clients stop',
   },
   {
     key: 'all',
     label: 'Petachya + gan 2 (Tue) + 2 clients',
     note: 'what if — no gan 2 right now',
-    net: 13975,
+    net: MIX_NET.all,
     realHrs: 20,
     paidHrs: 32.5,
     driveHrs: 5.3,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 4115,
+    maybe: PAY.gan2.netWithPetachya + PAY.private.netMonth,
     august: 'gan 2 and clients stop',
   },
   {
     key: 'petgan',
     label: 'Petachya + gan 2 (Tue, 8 hrs)',
     note: 'what if — no gan 2 right now',
-    net: 12975,
+    net: MIX_NET.petgan,
     realHrs: 17.5,
     paidHrs: 30,
     driveHrs: 3.8,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 3115,
+    maybe: PAY.gan2.netWithPetachya,
     august: 'gan 2 stops',
   },
   // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
@@ -10896,24 +10984,24 @@ const CHOICES: {
     key: 'pet2',
     label: 'Petachya + 2 private clients',
     note: 'your plan today',
-    net: 10860,
+    net: MIX_NET.pet2,
     realHrs: 15,
     paidHrs: 24.5,
     driveHrs: 4.8,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
-    maybe: 1000,
+    maybe: PAY.private.netMonth,
     august: 'clients stop',
   },
   {
     key: 'pet',
     label: 'Petachya only',
     note: 'if it goes wrong',
-    net: 9860,
+    net: MIX_NET.pet,
     realHrs: 12.5,
     paidHrs: 22,
     driveHrs: 3.3,
-    sure: 9860,
+    sure: PAY.petachya.netInApp,
     likely: 0,
     maybe: 0,
     august: 'paid',
@@ -11007,6 +11095,23 @@ function setAnalyzeDrive(on: boolean): void {
   }
   renderApp();
 }
+// US self-employment tax on the private-income line: OFF by default (she left
+// it off Oct 8); a rough figure when ON. View state only.
+let _anSE = false;
+try {
+  _anSE = localStorage.getItem('analyzeSE') === '1';
+} catch {
+  /* view state only */
+}
+function setAnalyzeSE(on: boolean): void {
+  _anSE = !!on;
+  try {
+    localStorage.setItem('analyzeSE', _anSE ? '1' : '0');
+  } catch {
+    /* view state only */
+  }
+  renderApp();
+}
 let _anLevel: LevelKey = 'lean';
 try {
   const v = localStorage.getItem('analyzeLevel');
@@ -11026,19 +11131,132 @@ function setAnalyzeLevel(v: string): void {
 }
 // Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
 // her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
-const JOB_COMPARE: { label: string; clalit: string; school: string; diff: string }[] = [
-  { label: 'Net a month', clalit: '₪14,960', school: '₪16,000', diff: 'school +₪1,040' },
-  { label: 'Gross a month', clalit: '₪22,700', school: '₪23,500', diff: 'school +₪800' },
-  {
-    label: 'Into pension + KH (the job)',
-    clalit: '₪2,470',
-    school: '₪3,210',
-    diff: 'school +₪740',
-  },
-  { label: 'Net + funds', clalit: '₪17,430', school: '₪19,210', diff: 'school +₪1,780' },
-  { label: 'Real hours a week', clalit: '34.5', school: '26.5', diff: 'school −8' },
-  { label: 'Net per real hour', clalit: '₪100', school: '₪139', diff: 'school +39%' },
-];
+// Every per-hour figure is GROSS per PAID hour (the same basis for every
+// job) unless the label says "real" (hours in the room) — and it is the job's
+// own rate, i.e. at the margin, never Petachya's whole-week average.
+function jobRates(): {
+  clalitPaid: number;
+  clalitReal: number;
+  schoolGross: number;
+  schoolPaid: number;
+  schoolReal: number;
+  petachya: number;
+  gan2Hour: number;
+} {
+  const c = PAY.clalit;
+  const sc = PAY.school;
+  const schoolGross = schoolGrossMonth(sc.ratePerPaidHour, sc.weeksPerMonth, sc.paidHoursWeek);
+  return {
+    clalitPaid: perHour(c.withGrantsGrossMonth, c.paidHoursMonth),
+    clalitReal: perHour(
+      c.withGrantsGrossMonth,
+      (c.paidHoursMonth * c.realHoursWeek) / c.paidHoursWeek,
+    ),
+    schoolGross,
+    schoolPaid: perHour(schoolGross, sc.paidHoursWeek * sc.weeksPerMonth),
+    schoolReal: perHour(schoolGross, sc.realHoursWeek * sc.weeksPerMonth),
+    petachya: PAY.petachya.ratePerPaidHour,
+    gan2Hour: sessionHourly(PAY.gan2.perSession, PAY.gan2.minutesPerSession),
+  };
+}
+// The per-hour lines on one "Which week?" card — job, ₪, and the basis.
+function perHourLines(key: string): { job: string; value: number; basis: string }[] {
+  const r = jobRates();
+  const pet = { job: 'Petachya', value: r.petachya, basis: 'gross per paid hour' };
+  if (key === 'clalit')
+    return [
+      { job: 'Clalit', value: r.clalitPaid, basis: 'gross per paid hour, grants spread' },
+      pet,
+    ];
+  if (key === 'school' || key === 'school2')
+    return [
+      { job: 'The school', value: r.schoolPaid, basis: 'gross per paid hour' },
+      {
+        job: 'The school',
+        value: r.schoolReal,
+        basis: 'gross per real hour (' + PAY.school.realHoursWeek + ' h in the room)',
+      },
+      pet,
+    ];
+  if (key === 'petgan' || key === 'all')
+    return [
+      {
+        job: 'Gan 2',
+        value: r.gan2Hour,
+        basis:
+          'gross per session hour (₪' +
+          PAY.gan2.perSession +
+          ' for ' +
+          PAY.gan2.minutesPerSession +
+          ' min)',
+      },
+      pet,
+    ];
+  return [pet];
+}
+// Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
+// her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
+function jobCompareRows(): { label: string; clalit: string; school: string; diff: string }[] {
+  const r = jobRates();
+  const c = PAY.clalit;
+  const sc = PAY.school;
+  const sh = shekels;
+  const diff = (school: number, clalit: number, dec = 0): string => {
+    const d = school - clalit;
+    const mag = dec ? Math.abs(d).toFixed(dec) : sh(Math.abs(d)).replace('₪', '');
+    return 'school ' + (d >= 0 ? '+' : '−') + (dec ? '' : '₪') + mag;
+  };
+  const clalitMix = CHOICES.find((x) => x.key === 'clalit');
+  const schoolMix = CHOICES.find((x) => x.key === 'school');
+  const rows = [
+    {
+      label: 'Net a month',
+      clalit: sh(MIX_NET.clalit),
+      school: sh(sc.netWithPetachyaKhBelief),
+      diff: diff(sc.netWithPetachyaKhBelief, MIX_NET.clalit),
+    },
+    {
+      label: 'Gross a month',
+      clalit: sh(c.grossWithPetachyaMonth),
+      school: sh(sc.grossWithPetachyaMonth),
+      diff: diff(sc.grossWithPetachyaMonth, c.grossWithPetachyaMonth),
+    },
+    {
+      label: 'Into pension + KH (the job)',
+      clalit: sh(c.fundsMonth),
+      school: sh(sc.fundsMonth),
+      diff: diff(sc.fundsMonth, c.fundsMonth),
+    },
+    {
+      label: 'Net + funds',
+      clalit: sh(MIX_NET.clalit + c.fundsMonth),
+      school: sh(sc.netWithPetachyaKhBelief + sc.fundsMonth),
+      diff: diff(sc.netWithPetachyaKhBelief + sc.fundsMonth, MIX_NET.clalit + c.fundsMonth),
+    },
+    {
+      label: 'Real hours a week',
+      clalit: String(clalitMix ? clalitMix.realHrs : ''),
+      school: String(schoolMix ? schoolMix.realHrs : ''),
+      diff: diff(schoolMix ? schoolMix.realHrs : 0, clalitMix ? clalitMix.realHrs : 0, 1).replace(
+        /\.0$/,
+        '',
+      ),
+    },
+    {
+      label: 'The extra job, gross per PAID hour',
+      clalit: sh(r.clalitPaid),
+      school: sh(r.schoolPaid),
+      diff: diff(r.schoolPaid, r.clalitPaid),
+    },
+    {
+      label: 'The extra job, gross per REAL hour',
+      clalit: sh(r.clalitReal),
+      school: sh(r.schoolReal),
+      diff: diff(r.schoolReal, r.clalitReal),
+    },
+  ];
+  return rows;
+}
 
 // "Why so high" — the drivers in her order, and the PROPOSED tag on each,
 // with where the tag came from. She changes a tag by saying so in chat.
@@ -11652,7 +11870,12 @@ function renderAnalyzeTab(): string {
   const plan = SAFE_SCENARIOS.find((x) => x.key === 'pet2') || pet;
   const cashLeft = cash.liquid - _anOneOff;
   const petReal = runway(cashLeft, pet.income, s.realAvg);
-  const planNow = mNow ? runway(cashLeft, plan.income, mNow.total) : null;
+  // US self-employment tax (rough), only when she switches it on, only on the
+  // mixes that carry the private clients.
+  const seMonthly = _anSE ? seTax(PAY.private.netMonth, PAY.private.seRate, PAY.private.seBase) : 0;
+  const seOf = (key: string): number => (PRIVATE_MIXES.includes(key) ? seMonthly : 0);
+  const incomeOf = (key: string, income: number): number => income - seOf(key);
+  const planNow = mNow ? runway(cashLeft, incomeOf(plan.key, plan.income), mNow.total) : null;
   const margin = (v: number): string =>
     v >= 0
       ? '<span class="an-pos">+' + money(v) + '</span>'
@@ -12698,7 +12921,8 @@ function renderAnalyzeTab(): string {
           ]),
     ];
     const lvName = LEVEL_NAME[_anLevel];
-    const fit = (x: { income: number }): number => x.income - levelSpend;
+    const fit = (x: { key: string; income: number }): number =>
+      incomeOf(x.key, x.income) - levelSpend;
     const lowest = [...SAFE_SCENARIOS].sort((p, q) => p.income - q.income)[0];
     const firstFit = [...SAFE_SCENARIOS]
       .sort((p, q) => p.income - q.income)
@@ -12739,7 +12963,7 @@ function renderAnalyzeTab(): string {
       '<p class="an-say an-say-sm">Your plan now — ' +
       esc(plan.label) +
       ': ' +
-      margin(plan.income - levelSpend) +
+      margin(fit(plan)) +
       ' at ' +
       lvName +
       (planNow ? ', ' + margin(planNow.margin) + ' against a month now' : '') +
@@ -12795,9 +13019,9 @@ function renderAnalyzeTab(): string {
             '</span><span class="an-sinc">' +
             money(x.income) +
             '</span></span><span>' +
-            cell(x.income, levelSpend) +
+            cell(incomeOf(x.key, x.income), levelSpend) +
             '</span><span>' +
-            (none ? '—' : cell(x.income, real)) +
+            (none ? '—' : cell(incomeOf(x.key, x.income), real)) +
             '</span></div>',
         )
         .join('') +
@@ -12832,8 +13056,38 @@ function renderAnalyzeTab(): string {
       '</p></div>';
     const notes =
       '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
-      '<li>The incomes are your Oct 11 walkthrough: Petachya ₪120 × 22h ≈ ₪9,780 + havra’a ≈ ₪80; 2 weekly private clients ≈ ₪1,000; gan 2 on Tuesdays (8 or 5 paid hours at ₪180) (what if: no gan 2 right now); the school ₪130 × 20h. All net, estimates — real payslips can replace them.</li>' +
-      '<li>The school (Shtilim): ₪130 × 20 hours × 4.33 ≈ ₪11,258 gross a month; with Petachya ≈ ₪16,200 net — your Sep 23 numbers. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
+      '<li>The incomes are your Oct 11 walkthrough: Petachya ≈ ' +
+      money(PAY.petachya.netInApp) +
+      ' net (₪' +
+      PAY.petachya.ratePerPaidHour +
+      ' an hour × ' +
+      PAY.petachya.paidHoursWeek +
+      ' paid hours; your exact number is pending); 2 weekly private clients ≈ ' +
+      money(PAY.private.netMonth) +
+      '; gan 2 on Tuesdays (₪' +
+      PAY.gan2.perSession +
+      ' a ' +
+      PAY.gan2.minutesPerSession +
+      '-minute session, ' +
+      PAY.gan2.sessionsPerMonth +
+      ' a month; its monthly net is unverified until a payslip); the school ₪' +
+      PAY.school.ratePerPaidHour +
+      ' × ' +
+      PAY.school.paidHoursWeek +
+      'h. All net, estimates — real payslips can replace them.</li>' +
+      '<li>The school (Shtilim): ₪' +
+      PAY.school.ratePerPaidHour +
+      ' × ' +
+      PAY.school.weeksPerMonth +
+      ' × ' +
+      PAY.school.paidHoursWeek +
+      ' paid hours ≈ ' +
+      money(jobRates().schoolGross) +
+      ' gross a month for ' +
+      PAY.school.realHoursWeek +
+      ' real hours; with Petachya ≈ ' +
+      money(MIX_NET.school) +
+      ' net. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
       '<li>“Now” is this app’s income, where private is before tax.</li>' +
       "<li>August: private stops, so it's Petachya only that month (no travel pay in August).</li>" +
       '<li>Clalit money that needs you on payroll that month: Nov 5 maybe ≈ ₪6,000 (not certain: ₪10K already paid in April); the January grant ≈ ₪5,300.</li>' +
@@ -12843,23 +13097,29 @@ function renderAnalyzeTab(): string {
     const jobs =
       '<div class="an-block"><div class="an-h">Petachya + Clalit (grants, no extra hours) vs Petachya + the school</div>' +
       '<div class="an-srow an-shead"><span></span><span>Clalit</span><span>School</span></div>' +
-      JOB_COMPARE.map(
-        (j) =>
-          '<div class="an-srow"><span><span class="an-slabel">' +
-          esc(j.label) +
-          '</span><span class="an-runway">' +
-          esc(j.diff) +
-          '</span></span><span>' +
-          esc(j.clalit) +
-          '</span><span><b>' +
-          esc(j.school) +
-          '</b></span></div>',
-      ).join('') +
-      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ₪16,280, net + funds ₪18,360.</div></div>';
+      jobCompareRows()
+        .map(
+          (j) =>
+            '<div class="an-srow"><span><span class="an-slabel">' +
+            esc(j.label) +
+            '</span><span class="an-runway">' +
+            esc(j.diff) +
+            '</span></span><span>' +
+            esc(j.clalit) +
+            '</span><span><b>' +
+            esc(j.school) +
+            '</b></span></div>',
+        )
+        .join('') +
+      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it with Bracha. Without it: net ' +
+      money(MIX_NET.school) +
+      ', net + funds ' +
+      money(MIX_NET.school + PAY.school.fundsMonthNoKh) +
+      '. Per-hour rows: gross ÷ paid hours — the extra job alone, at the margin.</div></div>';
     const card = (c: (typeof CHOICES)[number]): string => {
       const hrs = c.realHrs + (_anDrive ? c.driveHrs : 0);
-      const perHr = c.net / (hrs * 4.33);
-      const rw = runway(cashLeft, c.net, levelSpend);
+      const se = seOf(c.key);
+      const rw = runway(cashLeft, c.net - se, levelSpend);
       return (
         '<div class="an-card2' +
         (c.key === 'pet2' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
@@ -12878,11 +13138,23 @@ function renderAnalyzeTab(): string {
         ' (' +
         c.paidHrs +
         ' paid)</div>' +
-        '<div>₪ <b>' +
-        money(perHr) +
-        '</b> per hour ' +
-        (_anDrive ? 'of your week' : 'you work') +
-        '</div>' +
+        perHourLines(c.key)
+          .map(
+            (l) =>
+              '<div><b>' +
+              money(l.value) +
+              '</b> an hour · ' +
+              esc(l.job) +
+              '<span class="an-sublbl">' +
+              esc(l.basis) +
+              '</span></div>',
+          )
+          .join('') +
+        (se
+          ? '<div>🇺🇸 − <b>' +
+            money(se) +
+            '</b> a month self-employment tax<span class="an-sublbl">rough, US</span></div>'
+          : '') +
         '<div>✓ sure ' +
         money(c.sure) +
         (c.likely ? ' · likely ' + money(c.likely) : '') +
@@ -12910,11 +13182,14 @@ function renderAnalyzeTab(): string {
       '<label class="an-toggle"><input type="checkbox"' +
       (_anDrive ? ' checked' : '') +
       ' onchange="setAnalyzeDrive(this.checked)"> include driving time</label>' +
+      '<label class="an-toggle"><input type="checkbox"' +
+      (_anSE ? ' checked' : '') +
+      ' onchange="setAnalyzeSE(this.checked)"> US self-employment tax on the private clients (rough, US)</label>' +
       '<div class="an-cards2">' +
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
       (_anDrive ? '; driving is an estimate' : '') +
-      '. The school isn’t signed, and there’s no gan 2 right now. Nothing here writes to your budget.</div></div>';
+      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed, and there’s no gan 2 right now. Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +
@@ -15502,6 +15777,8 @@ Object.assign(window as unknown as Record<string, unknown>, {
   setAnalyzeSub,
   setAnalyzeLevel,
   setAnalyzeDrive,
+  setAnalyzeSE,
+  PAY,
   setAnalyzeOneOff,
   toggleAnRow,
   analyzeToTop,

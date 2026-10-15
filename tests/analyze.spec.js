@@ -254,6 +254,76 @@ test.describe('Analysis section', () => {
     }
   });
 
+  test('Which week?: ₪ an hour is the job’s own gross per PAID hour, the basis beside every number', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const clalit = (
+      await page.locator('.an-card2', { hasText: 'Clalit + Petachya' }).innerText()
+    ).replace(/\s+/g, ' ');
+    expect(clalit).toMatch(/₪109 an hour · Clalit gross per paid hour, grants spread/);
+    const school = (
+      await page.locator('.an-card2', { hasText: 'Petachya + the school' }).first().innerText()
+    ).replace(/\s+/g, ' ');
+    expect(school).toMatch(/₪130 an hour · The school gross per paid hour/);
+    expect(school).toMatch(/₪18[56] an hour · The school gross per real hour/);
+    expect(school).toMatch(/₪120 an hour · Petachya gross per paid hour/);
+    // The old whole-week figure (and the money expert's ₪54) are gone.
+    const all = await page.locator('.an-section').innerText();
+    expect(all).not.toMatch(/₪54\b/);
+    expect(all).not.toMatch(/per hour you work|net per real hour/i);
+    // Every ₪-an-hour number carries its basis.
+    const lines = await page.locator('.an-c2-lines div', { hasText: 'an hour' }).count();
+    const withBasis = await page
+      .locator('.an-c2-lines div:has(.an-sublbl)', { hasText: 'an hour' })
+      .count();
+    expect(lines).toBeGreaterThan(0);
+    expect(withBasis).toBe(lines);
+  });
+
+  test('Which week?: every income mix reads the one PAY object', async ({ page }) => {
+    await openAnalyze(page, 'safe');
+    const r = await page.evaluate(() => ({
+      pay: window.PAY,
+      text: document.querySelector('.an-section').innerText.replace(/,/g, ''),
+    }));
+    const pet = r.pay.petachya.netInApp;
+    // Net a month of each card = sums of PAY (Clalit, school, school+2, all, gan 2, plan, Petachya).
+    const expected = [
+      pet + r.pay.clalit.netExtraOverPetachya,
+      pet + r.pay.school.netExtraOverPetachya,
+      pet + r.pay.school.netExtraOverPetachya + r.pay.private.netMonth,
+      pet + r.pay.gan2.netWithPetachya + r.pay.private.netMonth,
+      pet + r.pay.gan2.netWithPetachya,
+      pet + r.pay.private.netMonth,
+      pet,
+    ];
+    const nets = await page.locator('.an-c2-net').allTextContents();
+    expect(nets.map((t) => parseInt(t.replace(/[^\d]/g, ''), 10))).toEqual(expected);
+    // Today's values, so an accidental edit to PAY shows up here.
+    expect(expected).toEqual([14960, 16280, 17280, 13975, 12975, 10860, 9860]);
+  });
+
+  test('US self-employment tax: off by default, a separate rough line when switched on', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
+    await expect(planCard).not.toContainText('self-employment tax');
+    const before = await planCard.locator('.an-c2-save').innerText();
+    await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').check();
+    await expect(planCard).toContainText('self-employment tax');
+    await expect(planCard).toContainText('rough, US');
+    await expect(planCard).toContainText('₪141');
+    // Petachya alone has no private clients: no line.
+    await expect(page.locator('.an-card2', { hasText: 'if it goes wrong' })).not.toContainText(
+      'self-employment tax',
+    );
+    const after = await planCard.locator('.an-c2-save').innerText();
+    expect(after).not.toBe(before);
+    await page.evaluate(() => localStorage.removeItem('analyzeSE'));
+  });
+
   test('Where to cut: lines above minus lines under = the net on the tile', async ({ page }) => {
     await openAnalyze(page, 'cut');
     const r = await page.evaluate(() => {
