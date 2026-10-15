@@ -13440,6 +13440,7 @@ async function init() {
 // session → render the calm login screen instead of the app. Sessions persist
 // in localStorage (sb client default), so this is a no-op once logged in.
 const AUTH_DEFAULT_EMAIL = 'allisonecalt@gmail.com';
+const APP_LIVE_URL = 'https://allisonecalt-sudo.github.io/budget-2026/';
 let _authBootstrapped = false;
 
 async function bootstrap() {
@@ -13543,7 +13544,9 @@ async function handleForgotPassword() {
     return;
   }
   try {
-    const { error } = await sb.auth.resetPasswordForEmail(email);
+    // redirectTo = the live app, so the emailed link does not land on localhost
+    // (the project's Site URL is still http://localhost:3000).
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_LIVE_URL });
     if (error) {
       showLoginError(error.message || 'Could not send reset link.');
       return;
