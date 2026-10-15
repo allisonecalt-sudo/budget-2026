@@ -35,6 +35,19 @@ async function readRibbonPairs(page) {
   return prev;
 }
 
+// Wait for the app to be idle (no load in flight, no spinner) instead of sleeping.
+// Two animation frames let the render that follows the load land.
+async function settled(page) {
+  await page.waitForFunction(
+    () => window.state && !window.state.loading && !document.querySelector('.loading'),
+    null,
+    { timeout: 15000 },
+  );
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+  );
+}
+
 // v30: the month chips became a dropdown (.month-select). ONE switcher for
 // every test that walks months — a future control change only edits here.
 // go(i) selects the i-th month and returns its 3-letter name ('Jan'), which
@@ -526,7 +539,8 @@ test('year view loads without errors', async ({ page }) => {
 
   // Switch to Year tab
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(3000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const realErrors = errors.filter(
     (e) =>
@@ -544,7 +558,8 @@ test('year view total savings row uses budget values', async ({ page }) => {
 
   // Switch to Year tab
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(3000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Find Total Savings row — it should show values from budget, not months table
   const savingsRow = page.locator('tr', { hasText: 'Total Savings' });
@@ -628,7 +643,7 @@ test('budget page totals match year view for each month', async ({ page }) => {
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Read ribbon values: Budgeted and Spent (heroes + data points)
     let budgeted = null;
@@ -643,7 +658,8 @@ test('budget page totals match year view for each month', async ({ page }) => {
 
   // Now switch to Year view
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Read year view values for Total Budgeted and Total Spent rows
   const yearRows = page.locator('tr');
@@ -697,7 +713,7 @@ test('ribbon math: Income - Used = Unspent, Income - Budgeted = Unallocated', as
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Read all ribbon numbers (heroes + data points)
     const vals = {};
@@ -872,7 +888,8 @@ test('year view: Income - Budgeted = Unallocated for each month', async ({ page 
   await page.goto('/');
   await page.waitForSelector('.ptab', { timeout: 10000 });
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   // Find rows
   const findRow = async (label) => {
@@ -941,7 +958,7 @@ test('per-category budget vs spent breakdown for Jan and Feb', async ({ page }) 
 
   for (let mi = 0; mi < 2; mi++) {
     const monthName = await months.go(mi);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     // Expand ribbon snapshot
     const expandBtn = page.locator('.ribbon-toggle', { hasText: 'full view' });
@@ -1222,7 +1239,7 @@ test('search runs and shows results or no-results message', async ({ page }) => 
   await page.waitForSelector('.hdr-actions', { timeout: 10000 });
   await page.locator('.mtab[title="Search transactions"]').click();
   await page.locator('#search-input').fill('test');
-  await page.waitForTimeout(1000);
+  await expect(page.locator('#search-results')).toContainText(/result/i, { timeout: 10000 });
   const results = page.locator('#search-results');
   // Should show either results or "No results" — not the initial placeholder
   const text = await results.textContent();
@@ -1245,7 +1262,7 @@ test('search for known term shows summary with total', async ({ page }) => {
 
   // Search for "shufersal" — a store that should have transactions
   await page.locator('#search-input').fill('shufersal');
-  await page.waitForTimeout(2000);
+  await expect(page.locator('#search-results')).toContainText(/result/i, { timeout: 10000 });
 
   const resultsText = await page.locator('#search-results').textContent();
   console.log('Search results text (first 500 chars):', resultsText.slice(0, 500));
@@ -1283,7 +1300,7 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
   // Collect "Unallocated" from each month's ribbon
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2000);
+    await settled(page);
 
     let leftToBudget = null;
     for (const p of await readRibbonPairs(page)) {
@@ -1295,7 +1312,8 @@ test('month page "Unallocated" matches year view "Unallocated" for each month', 
 
   // Switch to Year view and read the "Unallocated" row
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const yearRows = page.locator('tr');
   const rowCount = await yearRows.count();
@@ -1350,7 +1368,7 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
 
   for (let i = 0; i < Math.min(monthCount, 4); i++) {
     const monthName = await months.go(i);
-    await page.waitForTimeout(2500);
+    await settled(page);
     console.log(`\n===== ${monthName} AUDIT =====`);
 
     // ── 1. Read all ribbon values (heroes + data points) ──
@@ -1586,7 +1604,8 @@ test('comprehensive math audit: all numbers add up for Jan-Apr', async ({ page }
   // ── 8. Cross-check with Year view ──
   console.log('\n===== YEAR VIEW CROSS-CHECK =====');
   await page.locator('.ptab', { hasText: 'Year' }).click();
-  await page.waitForTimeout(4000);
+  await settled(page);
+  await page.waitForSelector('tr', { timeout: 15000 });
 
   const yearRows = page.locator('tr');
   const rowCount = await yearRows.count();
