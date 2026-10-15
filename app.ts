@@ -19,7 +19,15 @@ import {
   monthNowTotals,
   billsMonthFor,
 } from './lib/analyze.js';
-import { perHour, schoolGrossMonth, sessionHourly, seTax } from './lib/pay.js';
+import {
+  perHour,
+  schoolGrossMonth,
+  sessionHourly,
+  seTax,
+  taxSetAside,
+  carmeiGatNet,
+  cashLasts,
+} from './lib/pay.js';
 import type {
   AnalyzeCatStat,
   AnalyzeFloorIn,
@@ -12989,6 +12997,91 @@ function renderAnalyzeTab(): string {
           '. Nothing is saved — it’s a what-if.'
         : 'Type an amount to see “cash lasts” move. Nothing is saved — it’s a what-if.') +
       '</div></div>';
+    // ── Three small reads (one idea each; none of them is added into any total) ──
+    const mini = (title: string, big: string, lines: string[], foot: string): string =>
+      '<div class="an-card2 an-mini"><div class="an-c2-head"><span class="an-c2-label">' +
+      title +
+      '</span></div><div class="an-c2-net">' +
+      big +
+      '</div><div class="an-c2-lines">' +
+      lines.map((l) => '<div>' + l + '</div>').join('') +
+      '</div><div class="an-c2-save an-legend">' +
+      foot +
+      '</div></div>';
+    const cg = carmeiGatNet(PAY.carmeiGat);
+    const cgCard = mini(
+      '🏠 Carmei Gat, honestly',
+      money(cg.before) + ' to ' + money(cg.withUpkeep) + '<span class="an-c2-unit"> a month</span>',
+      [
+        'Rent in ' + money(PAY.carmeiGat.rent),
+        '− mortgage ' + money(PAY.carmeiGat.mortgage),
+        '− building insurance ' +
+          money(PAY.carmeiGat.insurance) +
+          ' · mortgage life ' +
+          money(PAY.carmeiGat.mortgageLife),
+        '= ' + money(cg.before) + ' a month',
+        '− upkeep allowance ' + money(PAY.carmeiGat.upkeepAllowance) + ' = ' + money(cg.withUpkeep),
+      ],
+      'Rough, from the Oct 12 analysis. Vaad bayit and your arnona share aren’t in this number. It costs a little each month — the bet is the apartment going up.',
+    );
+    const taxLow = taxSetAside(
+      PAY.private.netMonth,
+      PAY.private.marginalRate,
+      PAY.private.taxableShare,
+    );
+    const taxHigh = taxSetAside(
+      PAY.private.netMonth,
+      PAY.private.marginalRateHigh,
+      PAY.private.taxableShare,
+    );
+    const taxCard = mini(
+      '🧾 Set aside for tax on private',
+      money(taxLow) + '<span class="an-c2-unit"> a month</span>',
+      [
+        'Tax is on ' +
+          Math.round(PAY.private.taxableShare * 100) +
+          '% of ' +
+          money(PAY.private.netMonth) +
+          ' a month of private income',
+        '× your ' + Math.round(PAY.private.marginalRate * 100) + '% rate',
+        'If gan 2 sits on top of the school: ' +
+          money(taxHigh) +
+          ' (' +
+          Math.round(PAY.private.marginalRateHigh * 100) +
+          '%)',
+      ],
+      'An estimate to park in the bank, not a number in any total. Your accountant confirms the rate.',
+    );
+    const runLeft = cashLasts(cashLeft, fit(plan), PAY.reserves.khHarel);
+    const monthsTxt = (m: number): string => (m > 60 ? 'years' : m + ' months');
+    const runCard = mini(
+      '⏳ How long cash lasts',
+      runLeft
+        ? monthsTxt(runLeft.months) + '<span class="an-c2-unit"> at ' + lvName + '</span>'
+        : 'Covered<span class="an-c2-unit"> at ' + lvName + '</span>',
+      [
+        'Total Liquid after cards ' +
+          money(cashLeft) +
+          (runLeft ? ' · short ' + money(-fit(plan)) + ' a month' : ' · nothing drawn down'),
+        'with ' + esc(plan.label),
+        runLeft
+          ? '+ ' +
+            (runLeft.extraWithReserve > 60 ? 'years' : runLeft.extraWithReserve + ' months') +
+            ' if the keren hishtalmut is used (' +
+            money(PAY.reserves.khHarel) +
+            ', never counted as cash)'
+          : 'The keren hishtalmut (' + money(PAY.reserves.khHarel) + ') stays untouched.',
+      ],
+      'Balances are the Cash tab’s' +
+        (cashDays !== null ? ', ' + cashDays + ' days old' : '') +
+        '. The KH is tax-free only after 6 years, so it’s a second line, never added.',
+    );
+    const smallCards =
+      '<div class="an-block"><div class="an-h">Three quick reads</div><div class="an-cards2">' +
+      cgCard +
+      taxCard +
+      runCard +
+      '</div></div>';
     const cell = (inc: number, spend: number): string => {
       const rw = runway(cashLeft, inc, spend);
       return (
@@ -13196,7 +13289,7 @@ function renderAnalyzeTab(): string {
       ', with months of cash</summary><div>' +
       table +
       '</div></details>';
-    return say + cards + allMixes + jobs + oneOff + cashLine + notes;
+    return say + smallCards + cards + allMixes + jobs + oneOff + cashLine + notes;
   };
 
   // ── 6 · Income — why each month was what it was ───────────────────────

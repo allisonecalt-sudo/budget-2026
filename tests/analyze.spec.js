@@ -242,7 +242,7 @@ test.describe('Analysis section', () => {
     page,
   }) => {
     await openAnalyze(page, 'safe');
-    const cards = page.locator('.an-card2');
+    const cards = page.locator('.an-card2:not(.an-mini)');
     const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
     await expect(planCard).toHaveCount(1);
     await expect(planCard).toContainText('Petachya + 2 private clients');
@@ -298,7 +298,7 @@ test.describe('Analysis section', () => {
       pet + r.pay.private.netMonth,
       pet,
     ];
-    const nets = await page.locator('.an-c2-net').allTextContents();
+    const nets = await page.locator('.an-card2:not(.an-mini) .an-c2-net').allTextContents();
     expect(nets.map((t) => parseInt(t.replace(/[^\d]/g, ''), 10))).toEqual(expected);
     // Today's values, so an accidental edit to PAY shows up here.
     expect(expected).toEqual([14960, 16280, 17280, 13975, 12975, 10860, 9860]);
@@ -322,6 +322,32 @@ test.describe('Analysis section', () => {
     const after = await planCard.locator('.an-c2-save').innerText();
     expect(after).not.toBe(before);
     await page.evaluate(() => localStorage.removeItem('analyzeSE'));
+  });
+
+  test('three quick reads: Carmei Gat net, tax set-aside, how long cash lasts (KH a second line)', async ({
+    page,
+  }) => {
+    await openAnalyze(page, 'safe');
+    const cards = page.locator('.an-card2', {
+      hasText: /Carmei Gat, honestly|Set aside for tax|How long cash lasts/,
+    });
+    await expect(cards).toHaveCount(3);
+    const cg = page.locator('.an-card2', { hasText: 'Carmei Gat, honestly' });
+    await expect(cg).toContainText('−₪86 to −₪336');
+    await expect(cg).toContainText('Oct 12 analysis');
+    const tax = page.locator('.an-card2', { hasText: 'Set aside for tax' });
+    // 70% × ₪1,000 × 31% = ₪217; at 35% = ₪245.
+    await expect(tax).toContainText('₪217');
+    await expect(tax).toContainText('₪245');
+    // Covered at Lean on the fake data: no drawdown, the KH untouched.
+    const run = page.locator('.an-card2', { hasText: 'How long cash lasts' });
+    await expect(run).toContainText('Total Liquid after cards');
+    await expect(run).toContainText('Covered');
+    // A level the plan cannot cover: months of cash, KH as a SECOND line.
+    await page.evaluate(() => window.setAnalyzeLevel('normal'));
+    await expect(run).toContainText(/\d+(\.\d)? months/);
+    await expect(run).toContainText(/\+ \d+(\.\d)? months if the keren hishtalmut is used/);
+    await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
 
   test('Where to cut: lines above minus lines under = the net on the tile', async ({ page }) => {
