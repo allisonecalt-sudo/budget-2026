@@ -23,6 +23,7 @@ import {
   perHour,
   schoolGrossMonth,
   sessionHourly,
+  gan2GrossMonth,
   seTax,
   taxSetAside,
   carmeiGatNet,
@@ -116,8 +117,11 @@ const PAY = {
   },
   gan2: {
     perSession: 180, // ₪ per session
-    sessionsPerMonth: 4,
+    sessionsPerDay: 4, // four 40-minute sessions on ONE gan day a week
+    daysPerWeek: 1,
     minutesPerSession: 40,
+    paidMonths: 10, // no July–August
+    // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
     // Net next to Petachya alone / next to the school. UNVERIFIED until a
     // payslip (built on 42 Mondays; gan 2 is Tuesdays now).
     netWithPetachya: 3115,
@@ -13225,8 +13229,14 @@ function renderAnalyzeTab(): string {
       ' a ' +
       PAY.gan2.minutesPerSession +
       '-minute session, ' +
-      PAY.gan2.sessionsPerMonth +
-      ' a month; its monthly net is unverified until a payslip); the school ₪' +
+      PAY.gan2.sessionsPerDay +
+      ' sessions on one gan day a week = ' +
+      money(PAY.gan2.perSession * PAY.gan2.sessionsPerDay) +
+      ' a day, paid ' +
+      PAY.gan2.paidMonths +
+      ' months ≈ ' +
+      money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
+      ' gross a month, rough; its net is unverified until a payslip); the school ₪' +
       PAY.school.ratePerPaidHour +
       ' × ' +
       PAY.school.paidHoursWeek +

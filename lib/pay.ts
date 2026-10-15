@@ -45,6 +45,29 @@ export function sessionHourly(perSession: number, minutes: number): number {
 }
 
 /**
+ * Gan 2 gross a month: sessions a day × ₪ a session × gan days a week × weeks
+ * in a month, paid `paidMonths` of 12 (no July–August). Rough.
+ */
+export function gan2GrossMonth(
+  g: {
+    perSession: number;
+    sessionsPerDay: number;
+    daysPerWeek: number;
+    paidMonths: number;
+  },
+  weeksPerMonth: number,
+): number {
+  return Math.round(
+    (n(g.perSession) *
+      n(g.sessionsPerDay) *
+      n(g.daysPerWeek) *
+      n(weeksPerMonth) *
+      n(g.paidMonths)) /
+      12,
+  );
+}
+
+/**
  * Rough US self-employment tax a month: rate (15.3%) on 92.35% of net private
  * income. A rough, US-side figure — never mixed into the Israeli numbers.
  */

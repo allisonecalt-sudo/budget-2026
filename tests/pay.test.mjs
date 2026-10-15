@@ -12,8 +12,16 @@ import { dirname, resolve } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const compiled = resolve(here, '..', 'dist', 'lib', 'pay.js');
 assert.ok(existsSync(compiled), 'dist/lib/pay.js is missing — run `npm run build` first.');
-const { perHour, schoolGrossMonth, sessionHourly, seTax, taxSetAside, carmeiGatNet, cashLasts } =
-  await import(pathToFileURL(compiled).href);
+const {
+  gan2GrossMonth,
+  perHour,
+  schoolGrossMonth,
+  sessionHourly,
+  seTax,
+  taxSetAside,
+  carmeiGatNet,
+  cashLasts,
+} = await import(pathToFileURL(compiled).href);
 
 test('perHour: Clalit ≈ ₪109 gross per paid hour with the grants spread', () => {
   // Glance box: ₪10,340 a month over 95.15 paid hours (22 h a week).
@@ -34,6 +42,12 @@ test('school: ₪130 × 4.33 × 20 h = ₪11,258 a month; ₪130 per paid hour, 
 test('gan 2: ₪180 for a 40-minute session is ₪270 per session hour', () => {
   assert.equal(sessionHourly(180, 40), 270);
   assert.equal(sessionHourly(180, 0), 0);
+});
+
+test('gan 2: ₪180 × 4 sessions on one day a week, paid 10 months ≈ ₪2,600 gross a month', () => {
+  const g = { perSession: 180, sessionsPerDay: 4, daysPerWeek: 1, paidMonths: 10 };
+  assert.equal(gan2GrossMonth(g, 4.33), 2598);
+  assert.equal(gan2GrossMonth({ ...g, daysPerWeek: 0 }, 4.33), 0);
 });
 
 test('seTax: 15.3% on 92.35% of net private income (rough, US)', () => {
