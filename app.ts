@@ -9051,8 +9051,11 @@ async function deleteCashAccount(id: string): Promise<void> {
 }
 
 // Reserve ladder — investing rule decided 2026-06-10 (decisions.md, second-brain).
-// Based on Holdings only: owed money isn't liquid until it lands.
-// <₪25K = red line (pause investing) · 25–35 build · 35–45 invest ₪1K/mo ·
+// Reads TOTAL LIQUID AFTER CARDS (holdings + owed to her − what the cards take):
+// her Oct 18 2026 ruling, "left after cards is fine" — ONE meaning of "left" in
+// the app (the runway on Analyze reads the same number). Until Oct 18 it read
+// Holdings only. The ₪25K line is SOFT — her words: "like around that amount".
+// ~25K soft line (pause investing) · 25–35 build · 35–45 invest ₪1K/mo ·
 // 45–55 invest ₪2K/mo · >55 invest everything above 55 (→ Schwab Individual).
 function renderReserveLadder(liquid: number, n: (v: number) => string): string {
   let status: string;
@@ -9112,7 +9115,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
     .join('');
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;margin-bottom:1.5rem;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.3rem .75rem;">
-      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder (Holdings)</span>
+      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder · reads Total Liquid after cards</span>
       <span style="font-size:.8rem;font-weight:700;color:${color};">${status}</span>
     </div>
     <div style="display:flex;gap:4px;margin-top:.6rem;">${segHtml}</div>
@@ -9206,7 +9209,7 @@ function renderCashTab(): string {
       }
     </div>
 
-    ${renderReserveLadder(totalHoldings, n)}
+    ${renderReserveLadder(totalLiquid, n)}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
       <div style="padding:.6rem .75rem;background:var(--gsoft);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">💰 Holdings</div>
