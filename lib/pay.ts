@@ -46,7 +46,7 @@ export function sessionHourly(perSession: number, minutes: number): number {
 
 /**
  * Gan 2 gross a month: sessions a day × ₪ a session × gan days a week × weeks
- * in a month, paid `paidMonths` of 12 (no July–August). Rough.
+ * in a month, paid `paidMonths` of 12 (Sep–Jun; ₪0 in July–August — shown as a 12-month average). Rough.
  */
 export function gan2GrossMonth(
   g: {

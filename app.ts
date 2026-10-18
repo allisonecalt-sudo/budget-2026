@@ -127,7 +127,7 @@ const PAY = {
     sessionsPerDay: 4, // four 40-minute sessions on ONE gan day a week
     daysPerWeek: 1,
     minutesPerSession: 40,
-    paidMonths: 10, // no July–August (her Oct 13 words). 9 is still OPEN with her — do not change until she says.
+    paidMonths: 10, // 10 of 12 in a full year: paid Sep–Jun, ₪0 in July–August (her Oct 18 2026: "nothing in July and Aug"). 2026–27 is 9 (she started Fri Oct 16) — that only touches 2026 months, which this view does not project.
     // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
     // Net = gross × netFactor: a payslip job, tax withheld at her marginal
     // rate with no tax coordination, pension only. Rough, before the year-end
@@ -13321,7 +13321,7 @@ function renderAnalyzeTab(): string {
       money(PAY.gan2.perSession * PAY.gan2.sessionsPerDay) +
       ' a day, paid ' +
       PAY.gan2.paidMonths +
-      ' months ≈ ' +
+      ' of 12 months (Sep–Jun; ₪0 in July–August), shown as a 12-month average ≈ ' +
       money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
       ' gross a month, rough, ≈ ' +
       money(GAN2_NET) +
