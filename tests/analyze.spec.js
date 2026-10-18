@@ -238,18 +238,21 @@ test.describe('Analysis section', () => {
     expect(r.text.replace(/,/g, '')).toContain(String(Math.round(r.liquid)));
   });
 
-  test('Which week?: the plan today is Petachya + 2 private clients; no gan 2 card says plan', async ({
+  test('Which week?: the plan is gan 2 + 4–5 clients (no school); today (2 clients) is secondary', async ({
     page,
   }) => {
     await openAnalyze(page, 'safe');
     const cards = page.locator('.an-card2:not(.an-mini)');
-    const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
+    const planCard = page.locator('.an-card2', { hasText: 'your plan, no school' });
     await expect(planCard).toHaveCount(1);
-    await expect(planCard).toContainText('Petachya + 2 private clients');
+    await expect(planCard).toContainText('Petachya + gan 2 (Fri) + 4–5 private clients');
     await expect(planCard).toHaveClass(/an-card2-plan/);
+    const today = page.locator('.an-card2', { hasText: 'today (2 clients)' });
+    await expect(today).toHaveCount(1);
+    await expect(today).toContainText('Petachya + 2 private clients');
+    await expect(today).not.toHaveClass(/an-card2-plan/);
     const texts = await cards.allTextContents();
-    for (const t of texts.filter((x) => x.includes('gan 2'))) {
-      expect(t).not.toMatch(/your plan/);
+    for (const t of texts.filter((x) => x.includes('gan 2') && !x.includes('your plan'))) {
       expect(t).toContain('gan 2: yes (Oct 15)');
       expect(t).not.toContain('what if');
     }
@@ -288,7 +291,10 @@ test.describe('Analysis section', () => {
       pay: window.PAY,
       text: document.querySelector('.an-section').innerText.replace(/,/g, ''),
     }));
-    const pet = r.pay.petachya.netInApp;
+    const pet = r.pay.petachya.net2027; // every mix is a 2027 view
+    expect(r.pay.petachya.netInApp).toBe(9860); // 2026 unchanged
+    const four = 3090; // her plan, 25% cancellations (checker table)
+    const five = 3912;
     const g = r.pay.gan2;
     const ganGross = Math.round(
       (g.perSession *
@@ -305,6 +311,8 @@ test.describe('Analysis section', () => {
       pet + r.pay.clalit.netExtraOverPetachya,
       pet + r.pay.school.netExtraOverPetachya,
       pet + r.pay.school.netExtraOverPetachya + r.pay.private.netMonth,
+      pet + gan + five,
+      pet + gan + four,
       pet + gan + r.pay.private.netMonth,
       pet + gan,
       pet + r.pay.private.netMonth,
@@ -313,20 +321,20 @@ test.describe('Analysis section', () => {
     const nets = await page.locator('.an-card2:not(.an-mini) .an-c2-net').allTextContents();
     expect(nets.map((t) => parseInt(t.replace(/[^\d]/g, ''), 10))).toEqual(expected);
     // Today's values, so an accidental edit to PAY shows up here.
-    expect(expected).toEqual([14960, 16280, 17280, 12679, 11679, 10860, 9860]);
+    expect(expected).toEqual([14800, 16120, 16830, 15431, 14609, 12229, 11519, 10410, 9700]);
   });
 
   test('US self-employment tax: off by default, a separate rough line when switched on', async ({
     page,
   }) => {
     await openAnalyze(page, 'safe');
-    const planCard = page.locator('.an-card2', { hasText: 'your plan today' });
+    const planCard = page.locator('.an-card2', { hasText: 'today (2 clients)' });
     await expect(planCard).not.toContainText('self-employment tax');
     const before = await planCard.locator('.an-c2-save').innerText();
     await page.locator('input[onchange="setAnalyzeSE(this.checked)"]').check();
     await expect(planCard).toContainText('self-employment tax');
     await expect(planCard).toContainText('rough, US');
-    await expect(planCard).toContainText('₪141');
+    await expect(planCard).toContainText('₪100');
     // Petachya alone has no private clients: no line.
     await expect(page.locator('.an-card2', { hasText: 'if it goes wrong' })).not.toContainText(
       'self-employment tax',
@@ -356,10 +364,11 @@ test.describe('Analysis section', () => {
     const run = page.locator('.an-card2', { hasText: 'How long cash lasts' });
     await expect(run).toContainText('Total Liquid after cards');
     await expect(run).toContainText('Covered');
-    // A level the plan cannot cover: months of cash, KH as a SECOND line.
+    // Her plan (gan 2 + 4 clients) also covers Normal; the shortfall wording
+    // (months + KH as a second line) is pinned by cashLasts in pay.test.mjs.
     await page.evaluate(() => window.setAnalyzeLevel('normal'));
-    await expect(run).toContainText(/\d+(\.\d)? months/);
-    await expect(run).toContainText(/\+ \d+(\.\d)? months if the keren hishtalmut is used/);
+    await expect(run).toContainText('Covered');
+    await expect(run).toContainText('stays untouched');
     await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
 

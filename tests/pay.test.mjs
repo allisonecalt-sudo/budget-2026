@@ -14,6 +14,8 @@ const compiled = resolve(here, '..', 'dist', 'lib', 'pay.js');
 assert.ok(existsSync(compiled), 'dist/lib/pay.js is missing — run `npm run build` first.');
 const {
   gan2GrossMonth,
+  petachyaNetMonth,
+  privateNetMonth,
   perHour,
   schoolGrossMonth,
   sessionHourly,
@@ -100,4 +102,29 @@ test('cashLasts: months of cash against a shortfall, and the extra months if the
   assert.equal(cashLasts(30000, 250, 64000), null);
   // No cash: zero months, the KH is the whole runway.
   assert.deepEqual(cashLasts(-500, -1000, 5000), { months: 0, extraWithReserve: 5 });
+});
+
+test('petachyaNetMonth: 2026 keeps its figure, 2027+ reads the 2027 one', () => {
+  const p = { netInApp: 9860, net2027: 9700 };
+  assert.equal(petachyaNetMonth(p, 2026), 9860);
+  assert.equal(petachyaNetMonth(p, 2027), 9700);
+  assert.equal(petachyaNetMonth(p, 2028), 9700);
+});
+
+test('privateNetMonth: matches the checker table (382.50, 40 weeks, 200 fixed, 20% on 70%)', () => {
+  const base = {
+    sessionNet: 382.5,
+    bookableWeeks: 40,
+    cancellations: 0.25,
+    accountantMonth: 200,
+    taxRate: 0.2,
+    taxableShare: 0.7,
+  };
+  const better = { ...base, cancellations: 0.15 };
+  assert.equal(privateNetMonth(3, base), 2267);
+  assert.equal(privateNetMonth(3, better), 2596);
+  assert.equal(privateNetMonth(4, base), 3090);
+  assert.equal(privateNetMonth(4, better), 3528);
+  assert.equal(privateNetMonth(5, base), 3912);
+  assert.equal(privateNetMonth(0, base), 0);
 });
