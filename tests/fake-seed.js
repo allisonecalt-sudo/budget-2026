@@ -326,6 +326,16 @@ function makeSeed() {
       is_debt: false,
       sort_order: 2,
     },
+    {
+      id: uid('k'),
+      name: 'Owed to you (test)',
+      amount: 2000,
+      currency: 'ILS',
+      notes: 'Owed to you',
+      is_owed: true,
+      is_debt: false,
+      sort_order: 3,
+    },
   ];
 
   const floors = ['groceries', 'transport', 'health', 'therapy', 'household'].map((category) => ({

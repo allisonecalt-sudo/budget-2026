@@ -73,8 +73,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v71';
-const BUILD_DATE = 'Oct 18, 2026 12:01';
+const APP_VERSION = 'v72';
+const BUILD_DATE = 'Oct 18, 2026 15:06';
 
 // ── PAY · every salary figure in the app, in ONE place ────────────────────
 // A payslip changes a number here and nowhere else: the Analyze scenarios
@@ -127,7 +127,7 @@ const PAY = {
     sessionsPerDay: 4, // four 40-minute sessions on ONE gan day a week
     daysPerWeek: 1,
     minutesPerSession: 40,
-    paidMonths: 10, // no July–August (her Oct 13 words). 9 is still OPEN with her — do not change until she says.
+    paidMonths: 10, // 10 of 12 in a full year: paid Sep–Jun, ₪0 in July–August (her Oct 18 2026: "nothing in July and Aug"). 2026–27 is 9 (she started Fri Oct 16) — that only touches 2026 months, which this view does not project.
     // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
     // Net = gross × netFactor: a payslip job, tax withheld at her marginal
     // rate with no tax coordination, pension only. Rough, before the year-end
@@ -9051,16 +9051,19 @@ async function deleteCashAccount(id: string): Promise<void> {
 }
 
 // Reserve ladder — investing rule decided 2026-06-10 (decisions.md, second-brain).
-// Based on Holdings only: owed money isn't liquid until it lands.
-// <₪25K = red line (pause investing) · 25–35 build · 35–45 invest ₪1K/mo ·
+// Reads TOTAL LIQUID AFTER CARDS (holdings + owed to her − what the cards take):
+// her Oct 18 2026 ruling, "left after cards is fine" — ONE meaning of "left" in
+// the app (the runway on Analyze reads the same number). Until Oct 18 it read
+// Holdings only. The ₪25K line is SOFT — her words: "like around that amount".
+// ~25K soft line (pause investing) · 25–35 build · 35–45 invest ₪1K/mo ·
 // 45–55 invest ₪2K/mo · >55 invest everything above 55 (→ Schwab Individual).
 function renderReserveLadder(liquid: number, n: (v: number) => string): string {
   let status: string;
   let color: string;
   let active: number; // index of active segment
   if (liquid < 25000) {
-    status = `Below the ₪25K red line — pause investing, rebuild to ₪35K`;
-    color = 'var(--red)';
+    status = `Under the soft line (around ₪25K) — pause investing, build back to ₪35K`;
+    color = 'var(--amber)';
     active = 0;
   } else if (liquid < 35000) {
     status = `Build zone — invest ₪0 this month`;
@@ -9080,7 +9083,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
     active = 4;
   }
   const segs = [
-    { range: '< 25K', label: 'red line' },
+    { range: '~25K', label: 'soft line' },
     { range: '25–35', label: 'build' },
     { range: '35–45', label: '+₪1,000' },
     { range: '45–55', label: '+₪2,000' },
@@ -9091,19 +9094,19 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
       const isActive = i === active;
       const bg = isActive
         ? i === 0
-          ? 'var(--rsoft)'
+          ? 'var(--ambersoft)'
           : i === 1
             ? 'var(--gsoft)'
             : 'var(--asoft)'
         : 'var(--bg)';
       const fg = isActive
         ? i === 0
-          ? 'var(--red)'
+          ? 'var(--amber)'
           : i === 1
             ? 'var(--dim)'
             : 'var(--accent)'
         : 'var(--muted)';
-      const border = isActive ? (i === 0 ? 'var(--red)' : 'var(--accent)') : 'var(--border)';
+      const border = isActive ? (i === 0 ? 'var(--amber)' : 'var(--accent)') : 'var(--border)';
       return `<div style="flex:1;text-align:center;padding:.35rem .2rem;border:1px solid ${border};border-radius:6px;background:${bg};${isActive ? 'font-weight:700;' : ''}">
         <div style="font-size:.62rem;font-family:'DM Mono',monospace;color:${fg};">${s.range}</div>
         <div style="font-size:.58rem;color:${fg};">${s.label}</div>
@@ -9112,7 +9115,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
     .join('');
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.75rem .9rem;margin-bottom:1.5rem;">
     <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.3rem .75rem;">
-      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder (Holdings)</span>
+      <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">Reserve Ladder · reads Total Liquid after cards</span>
       <span style="font-size:.8rem;font-weight:700;color:${color};">${status}</span>
     </div>
     <div style="display:flex;gap:4px;margin-top:.6rem;">${segHtml}</div>
@@ -9206,7 +9209,7 @@ function renderCashTab(): string {
       }
     </div>
 
-    ${renderReserveLadder(totalHoldings, n)}
+    ${renderReserveLadder(totalLiquid, n)}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1rem;">
       <div style="padding:.6rem .75rem;background:var(--gsoft);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);">💰 Holdings</div>
@@ -11075,7 +11078,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: PAY.school.netExtraOverPetachya + PAY.private.netMonth,
-    august: 'clients stop',
+    august: 'clients stop in August',
   },
   {
     key: 'all5',
@@ -11088,7 +11091,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + clientsNet(5),
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'all4',
@@ -11101,7 +11104,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + clientsNet(4),
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'all',
@@ -11114,7 +11117,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + PAY.private.netMonth,
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'petgan',
@@ -11127,7 +11130,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET,
-    august: 'gan 2 stops',
+    august: 'gan 2 pays ₪0 in July–August',
   },
   // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
   // driving (the 'all' minus 'petgan' drive difference).
@@ -11142,7 +11145,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: PAY.private.netMonth,
-    august: 'clients stop',
+    august: 'clients stop in August',
   },
   {
     key: 'pet',
@@ -13318,7 +13321,7 @@ function renderAnalyzeTab(): string {
       money(PAY.gan2.perSession * PAY.gan2.sessionsPerDay) +
       ' a day, paid ' +
       PAY.gan2.paidMonths +
-      ' months ≈ ' +
+      ' of 12 months (Sep–Jun; ₪0 in July–August), shown as a 12-month average ≈ ' +
       money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
       ' gross a month, rough, ≈ ' +
       money(GAN2_NET) +
@@ -13412,7 +13415,7 @@ function renderAnalyzeTab(): string {
         (c.likely ? ' · likely ' + money(c.likely) : '') +
         (c.maybe ? ' · maybe ' + money(c.maybe) : '') +
         '</div>' +
-        '<div>☀️ August: ' +
+        '<div>☀️ Summer: ' +
         esc(c.august) +
         '</div>' +
         '</div><div class="an-c2-save">At ' +
