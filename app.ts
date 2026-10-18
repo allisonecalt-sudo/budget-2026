@@ -74,7 +74,7 @@ const PT_KEY =
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
 const APP_VERSION = 'v72';
-const BUILD_DATE = 'Oct 18, 2026 14:48';
+const BUILD_DATE = 'Oct 18, 2026 15:06';
 
 // ── PAY · every salary figure in the app, in ONE place ────────────────────
 // A payslip changes a number here and nowhere else: the Analyze scenarios
@@ -9094,7 +9094,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
       const isActive = i === active;
       const bg = isActive
         ? i === 0
-          ? 'var(--asoft)'
+          ? 'var(--ambersoft)'
           : i === 1
             ? 'var(--gsoft)'
             : 'var(--asoft)'
@@ -11078,7 +11078,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: PAY.school.netExtraOverPetachya + PAY.private.netMonth,
-    august: 'clients stop',
+    august: 'clients stop in August',
   },
   {
     key: 'all5',
@@ -11091,7 +11091,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + clientsNet(5),
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'all4',
@@ -11104,7 +11104,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + clientsNet(4),
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'all',
@@ -11117,7 +11117,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET + PAY.private.netMonth,
-    august: 'gan 2 and clients stop',
+    august: 'gan 2 pays ₪0 in July–August; clients stop in August',
   },
   {
     key: 'petgan',
@@ -11130,7 +11130,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: GAN2_NET,
-    august: 'gan 2 stops',
+    august: 'gan 2 pays ₪0 in July–August',
   },
   // Derived from 'pet': +2 sessions (~1¼ h each = 2.5 h real and paid), +1.5 h
   // driving (the 'all' minus 'petgan' drive difference).
@@ -11145,7 +11145,7 @@ const CHOICES: {
     sure: PET_NET,
     likely: 0,
     maybe: PAY.private.netMonth,
-    august: 'clients stop',
+    august: 'clients stop in August',
   },
   {
     key: 'pet',
@@ -13415,7 +13415,7 @@ function renderAnalyzeTab(): string {
         (c.likely ? ' · likely ' + money(c.likely) : '') +
         (c.maybe ? ' · maybe ' + money(c.maybe) : '') +
         '</div>' +
-        '<div>☀️ August: ' +
+        '<div>☀️ Summer: ' +
         esc(c.august) +
         '</div>' +
         '</div><div class="an-c2-save">At ' +
