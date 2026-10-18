@@ -26,7 +26,7 @@ import {
   gan2GrossMonth,
   gan2NetMonth,
   petachyaNetMonth,
-  privateNetFor,
+  privateNetMonth,
   seTax,
   taxSetAside,
   carmeiGatNet,
@@ -127,7 +127,7 @@ const PAY = {
     sessionsPerDay: 4, // four 40-minute sessions on ONE gan day a week
     daysPerWeek: 1,
     minutesPerSession: 40,
-    paidMonths: 10, // no July–August
+    paidMonths: 10, // no July–August (her Oct 13 words). 9 is still OPEN with her — do not change until she says.
     // Gross a month is derived (gan2GrossMonth): ₪720 a day × 4.33 × 10 ÷ 12.
     // Net = gross × netFactor: a payslip job, tax withheld at her marginal
     // rate with no tax coordination, pension only. Rough, before the year-end
@@ -135,8 +135,18 @@ const PAY = {
     netFactor: 0.7,
   },
   private: {
-    netMonth: 1000, // 2 weekly clients, after the accountant (the mixes' number)
-    clientsInNetMonth: 2, // netMonth ÷ this = net per client (the 4- and 5-client mixes)
+    // TODAY'S PACE: 2 clients at her real 2026 session pace ≈ ₪710/mo net
+    // (self/private-practice.md#private_net_month_2027). Not her plan.
+    netMonth: 710,
+    // HER PLAN if no school (Oct 18: "4–5"): the checked formula, privateNetMonth()
+    // — ₪382.50 net a session, 40 bookable weeks, 25% cancellations as the BASE
+    // (15% the better case), accountant ₪200/mo FIXED, 20% tax on 70%.
+    sessionNet: 382.5,
+    bookableWeeks: 40,
+    cancellations: 0.25,
+    cancellationsBetter: 0.15,
+    accountantMonth: 200,
+    incomeTaxRate: 0.2,
     // TURNOVER, which the 70% rule applies to (not the net above): 2026 ≈
     // ₪14.2–14.9K a year (self/tax.md) ≈ ₪1,200 a month. Rough.
     turnoverMonth: 1200,
@@ -166,8 +176,15 @@ const GAN2_NET = gan2NetMonth(
 // Petachya net a month for the year the mixes look at: every mix is a 2027 view
 // (after Feb 7), so they read the 2027 figure; 2026 keeps PAY.petachya.netInApp.
 const PET_NET = petachyaNetMonth(PAY.petachya, 2027);
-const clientsNet = (clients: number): number =>
-  privateNetFor(PAY.private.netMonth, PAY.private.clientsInNetMonth, clients);
+const clientsNet = (clients: number, better = false): number =>
+  privateNetMonth(clients, {
+    sessionNet: PAY.private.sessionNet,
+    bookableWeeks: PAY.private.bookableWeeks,
+    cancellations: better ? PAY.private.cancellationsBetter : PAY.private.cancellations,
+    accountantMonth: PAY.private.accountantMonth,
+    taxRate: PAY.private.incomeTaxRate,
+    taxableShare: PAY.private.taxableShare,
+  });
 // Net a month of every income mix after Feb 7 — sums of PAY, never typed twice.
 const MIX_NET = {
   pet: PET_NET,
@@ -184,6 +201,9 @@ const MIX_NET = {
 // The mixes that include the private clients (the US self-employment tax line).
 // Mixes that carry private clients, and how many (the US self-employment tax line).
 const PRIVATE_MIXES: Record<string, number> = { pet2: 2, all: 2, school2: 2, all4: 4, all5: 5 };
+// Net private income of each of those mixes (2 = today's pace; 4/5 = her plan formula).
+const privateNetOf = (key: string): number =>
+  PRIVATE_MIXES[key] >= 4 ? clientsNet(PRIVATE_MIXES[key]) : PAY.private.netMonth;
 
 const MONTHS = [
   'January',
@@ -10962,26 +10982,33 @@ function cashTotals(): {
 
 // "If it goes wrong": income mixes from her Sep 4 money model
 // (second-brain projects/leaving-clalit/money-model-2026-09-04-1002.md), net
-// a month after tax, ב.ל. and her pension/KH share. Petachya at ₪120 as her
-// only payslip ≈ 9,780 (§1.6); 2 weekly private clients ≈ 1,000 (§4b, 25%
-// cancellations, after OPS); gan 2 = derived from PAY.gan2 (was ₪890 × 42 Mondays).
+// a month after tax, ב.ל. and her pension/KH share. Petachya 2027 = PAY.petachya.net2027
+// (havra'a excluded — a yearly lump); 2 private clients = today's pace ₪710
+// (PAY.private.netMonth); 4–5 clients = privateNetMonth() (her plan); gan 2 = derived from PAY.gan2 (was ₪890 × 42 Mondays).
 // The model predates gan 2 starting and the Feb 7 last day — labelled so.
-// Oct 15 2026: gan 2 is a YES (start date and day to confirm); on Oct 12 it was "no gan 2 right now". The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
+// Oct 15 2026: gan 2 is a YES (Fridays, 4 kids — her Oct 18 words); on Oct 12 it was "no gan 2 right now". The ₪9,780 'only payslip' premise is wrong: Petachya already taxes her as sole income (verified normal net ≈ ₪9,660–9,730 + havra'a).
 const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
-  // Net a month, year 1, incl. Petachya's havra'a (~₪80). Her walkthrough
+  // Net a month, year 1 (2027), Petachya WITHOUT havra'a (a yearly lump). Her walkthrough
   // 2026-10-11 20:19–20:23 (second-brain projects/budget-app/
   // lean-floor-walkthrough-2026-10-11.md): Petachya ₪120 × 22h ≈ 9,780 as
-  // the only payslip; 2 weekly private clients ≈ 1,000 (31% bracket next to
-  // two salaries ≈ 1,000 too); gan 2 on Fridays ≈ ₪890/day × ~42 ÷ 12 with
+  // the only payslip; 2 weekly private clients ≈ 710 (today's pace); gan 2 on Fridays ≈ ₪890/day × ~42 ÷ 12 with
   // Petachya alone, ≈ 52% kept as a third salary (8 paid hrs ≈ 2,200/mo,
   // (gan 2 is now derived, PAY.gan2); the school ₪130 × 20h × 4.33 = ₪11,258 gross,
   // ≈ 16,200 net with Petachya (Sep 23 model). ESTIMATES.
   { key: 'pet', label: 'Petachya only', income: MIX_NET.pet },
-  { key: 'pet2', label: 'Petachya + 2 private clients', income: MIX_NET.pet2 },
+  { key: 'pet2', label: 'Petachya + 2 private clients (today’s pace)', income: MIX_NET.pet2 },
   { key: 'petgan', label: 'Petachya + gan 2 (Fri)', income: MIX_NET.petgan },
   { key: 'all', label: 'Petachya + gan 2 (Fri) + 2 clients', income: MIX_NET.all },
-  { key: 'all4', label: 'Petachya + gan 2 (Fri) + 4 private clients', income: MIX_NET.all4 },
-  { key: 'all5', label: 'Petachya + gan 2 (Fri) + 5 private clients', income: MIX_NET.all5 },
+  {
+    key: 'all4',
+    label: 'Petachya + gan 2 (Fri) + 4 private clients (no-school plan, 4–5 clients)',
+    income: MIX_NET.all4,
+  },
+  {
+    key: 'all5',
+    label: 'Petachya + gan 2 (Fri) + 5 private clients (no-school plan, 4–5 clients)',
+    income: MIX_NET.all5,
+  },
   { key: 'school', label: 'Petachya + the school', income: MIX_NET.school },
   { key: 'school2', label: 'Petachya + school + 2 clients', income: MIX_NET.school2 },
   { key: 'schoolgan', label: 'Petachya + school + gan 2', income: MIX_NET.schoolgan },
@@ -10992,7 +11019,7 @@ const SAFE_SCENARIOS: { key: string; label: string; income: number }[] = [
 // live floor (spend_floors), so the app reads Lean from the table and these
 // three from here until the floors table gets a level column (her go).
 // "Which week?" — one card per way 2027 could look (consultant pass, Oct 11
-// 20:42; her numbers 20:19–20:30). Net a month incl. havra'a; hours a week:
+// 20:42; her numbers 20:19–20:30). Net a month, 2027, Petachya without havra'a; hours a week:
 // real (in the room) and paid, her words — Clalit 22 + Petachya 12.5, school
 // 14 real for 20 paid, gan 2 ~5 real for 8 paid, a private session ~1¼ h.
 // Driving ≈ Pisgat Ze'ev 30–40 min each way ×3, Rehovot ~50 min ×2, Neve
@@ -11053,7 +11080,7 @@ const CHOICES: {
   {
     key: 'all5',
     label: 'Petachya + gan 2 (Fri) + 5 private clients',
-    note: 'gan 2: yes (Oct 15), Fridays, 4 kids · the no-school plan: 4–5 clients',
+    note: 'gan 2: yes (Oct 15), Fridays, 4 kids · no-school plan (4–5 clients) · 5 clients',
     net: MIX_NET.all5,
     realHrs: 23.8,
     paidHrs: 36.3,
@@ -11065,8 +11092,8 @@ const CHOICES: {
   },
   {
     key: 'all4',
-    label: 'Petachya + gan 2 (Fri) + 4 private clients',
-    note: 'gan 2: yes (Oct 15), Fridays, 4 kids · the no-school plan: 4–5 clients',
+    label: 'Petachya + gan 2 (Fri) + 4–5 private clients',
+    note: 'your plan, no school (4–5 clients) · gan 2: yes (Oct 15), Fridays, 4 kids · 4 clients shown (25% cancellations)',
     net: MIX_NET.all4,
     realHrs: 22.5,
     paidHrs: 35,
@@ -11107,7 +11134,7 @@ const CHOICES: {
   {
     key: 'pet2',
     label: 'Petachya + 2 private clients',
-    note: 'your plan today',
+    note: 'today (2 clients) · today’s pace',
     net: MIX_NET.pet2,
     realHrs: 15,
     paidHrs: 24.5,
@@ -11991,14 +12018,15 @@ function renderAnalyzeTab(): string {
   const cash = cashTotals();
   const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
   const pet = SAFE_SCENARIOS[0];
-  const plan = SAFE_SCENARIOS.find((x) => x.key === 'pet2') || pet;
+  const plan = SAFE_SCENARIOS.find((x) => x.key === 'all4') || pet;
   const cashLeft = cash.liquid - _anOneOff;
   const petReal = runway(cashLeft, pet.income, s.realAvg);
   // US self-employment tax (rough), only when she switches it on, only on the
   // mixes that carry the private clients.
-  const seMonthly = _anSE ? seTax(PAY.private.netMonth, PAY.private.seRate, PAY.private.seBase) : 0;
   const seOf = (key: string): number =>
-    PRIVATE_MIXES[key] ? seMonthly * (clientsNet(PRIVATE_MIXES[key]) / PAY.private.netMonth) : 0;
+    _anSE && PRIVATE_MIXES[key]
+      ? seTax(privateNetOf(key), PAY.private.seRate, PAY.private.seBase)
+      : 0;
   const incomeOf = (key: string, income: number): number => income - seOf(key);
   const planNow = mNow ? runway(cashLeft, incomeOf(plan.key, plan.income), mNow.total) : null;
   const margin = (v: number): string =>
@@ -13346,7 +13374,7 @@ function renderAnalyzeTab(): string {
       const rw = runway(cashLeft, c.net - se, levelSpend);
       return (
         '<div class="an-card2' +
-        (c.key === 'pet2' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
+        (c.key === 'all4' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
         '"><div class="an-c2-head"><span class="an-c2-label">' +
         esc(c.label) +
         '</span>' +

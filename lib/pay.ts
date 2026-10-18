@@ -16,8 +16,8 @@
 //     her marginal rate (31%, or 35% when a third salary pushes her over).
 // What's built: perHour, schoolGrossMonth, seTax, taxSetAside, carmeiGatNet,
 //   cashLasts.
-// What's next: the Petachya figure (9,860) is pending her exact number — one
-//   edit in PAY, nothing here changes.
+// What's next: Petachya is year-aware (petachyaNetMonth: 2026 keeps its figure,
+//   2027+ reads net2027); a payslip changes one edit in PAY, nothing here changes.
 // Links: tests/pay.test.mjs · app.ts (PAY) · second-brain self/petachya-pay.md,
 //   projects/clalit/pay-system-decoded-2026-07-15.md, self/tax.md, self/carmei-gat.md.
 
@@ -135,8 +135,29 @@ export function petachyaNetMonth(p: { netInApp: number; net2027: number }, year:
   return n(year) >= 2027 ? n(p.net2027) : n(p.netInApp);
 }
 
-/** Private-client net for `clients` weekly clients, from a known net for `knownClients`. */
-export function privateNetFor(netKnown: number, knownClients: number, clients: number): number {
-  const k = n(knownClients);
-  return k > 0 ? Math.round((n(netKnown) / k) * Math.max(0, n(clients))) : 0;
+/**
+ * Private practice net a month for `clients` weekly clients, from her home
+ * (second-brain self/private-practice.md + the Oct 13 19:50 checker table):
+ * net per session × bookable weeks a year × (1 − cancellations) ÷ 12 per client,
+ * × her clients; income tax on the taxable share (20% on 70%) comes off that;
+ * the accountant is a FIXED monthly fee (not scaled by clients, not taxed).
+ * Checker table (₪382.50, 40 weeks, ₪200): 3 clients 25% = 2,267 · 15% = 2,596;
+ * 4 clients 25% = 3,090 · 15% = 3,528.
+ */
+export function privateNetMonth(
+  clients: number,
+  p: {
+    sessionNet: number;
+    bookableWeeks: number;
+    cancellations: number;
+    accountantMonth: number;
+    taxRate: number;
+    taxableShare: number;
+  },
+): number {
+  const k = Math.max(0, n(clients));
+  if (k === 0) return 0;
+  const turnover = (k * n(p.sessionNet) * n(p.bookableWeeks) * (1 - n(p.cancellations))) / 12;
+  const tax = turnover * n(p.taxRate) * n(p.taxableShare);
+  return Math.round(turnover - tax - n(p.accountantMonth));
 }
