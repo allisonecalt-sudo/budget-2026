@@ -13441,7 +13441,7 @@ function renderAnalyzeTab(): string {
       CHOICES.map(card).join('') +
       '</div><div class="an-legend">Hours are your words' +
       (_anDrive ? '; driving is an estimate' : '') +
-      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed; gan 2 is a yes (Oct 15), start date and day still to confirm. Nothing here writes to your budget.</div></div>';
+      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed; gan 2 is a yes: Fridays, 4 kids, since Oct 16 (the first payslip will set its real net). Nothing here writes to your budget.</div></div>';
     const allMixes =
       '<details class="an-how"><summary>Every mix vs ' +
       lvName +
