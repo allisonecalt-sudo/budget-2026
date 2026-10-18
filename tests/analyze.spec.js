@@ -663,4 +663,29 @@ test.describe('Analysis section', () => {
     }
     await page.evaluate(() => window.setAnalyzeLevel('lean'));
   });
+
+  test('Cash tab ladder reads Total Liquid after cards, and the ₪25K line is soft', async ({
+    page,
+  }) => {
+    const errors = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(m.text());
+    });
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.setViewportSize({ width: 412, height: 892 });
+    await openApp(page);
+    await page.evaluate(() => window.switchTab('cash'));
+    await page.waitForFunction(() => !document.querySelector('.loading'), null, {
+      timeout: 30000,
+    });
+    const ladder = page.locator('div', { hasText: 'Reserve Ladder' }).last();
+    await expect(ladder).toContainText('reads Total Liquid after cards');
+    // Holdings 24,000 would give the under-25K status; liquid 26,000 (24,000 + 2,000 owed) = build.
+    await expect(ladder).toContainText('Build zone — invest ₪0 this month');
+    await expect(ladder).not.toContainText('Under the soft line');
+    const text = await page.locator('body').innerText();
+    expect(text).toContain('soft line');
+    expect(text).not.toContain('red line');
+    expect(errors).toEqual([]);
+  });
 });

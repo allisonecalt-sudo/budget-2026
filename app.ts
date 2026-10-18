@@ -9062,8 +9062,8 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
   let color: string;
   let active: number; // index of active segment
   if (liquid < 25000) {
-    status = `Below the ₪25K red line — pause investing, rebuild to ₪35K`;
-    color = 'var(--red)';
+    status = `Under the soft line (around ₪25K) — pause investing, build back to ₪35K`;
+    color = 'var(--amber)';
     active = 0;
   } else if (liquid < 35000) {
     status = `Build zone — invest ₪0 this month`;
@@ -9083,7 +9083,7 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
     active = 4;
   }
   const segs = [
-    { range: '< 25K', label: 'red line' },
+    { range: '~25K', label: 'soft line' },
     { range: '25–35', label: 'build' },
     { range: '35–45', label: '+₪1,000' },
     { range: '45–55', label: '+₪2,000' },
@@ -9094,19 +9094,19 @@ function renderReserveLadder(liquid: number, n: (v: number) => string): string {
       const isActive = i === active;
       const bg = isActive
         ? i === 0
-          ? 'var(--rsoft)'
+          ? 'var(--asoft)'
           : i === 1
             ? 'var(--gsoft)'
             : 'var(--asoft)'
         : 'var(--bg)';
       const fg = isActive
         ? i === 0
-          ? 'var(--red)'
+          ? 'var(--amber)'
           : i === 1
             ? 'var(--dim)'
             : 'var(--accent)'
         : 'var(--muted)';
-      const border = isActive ? (i === 0 ? 'var(--red)' : 'var(--accent)') : 'var(--border)';
+      const border = isActive ? (i === 0 ? 'var(--amber)' : 'var(--accent)') : 'var(--border)';
       return `<div style="flex:1;text-align:center;padding:.35rem .2rem;border:1px solid ${border};border-radius:6px;background:${bg};${isActive ? 'font-weight:700;' : ''}">
         <div style="font-size:.62rem;font-family:'DM Mono',monospace;color:${fg};">${s.range}</div>
         <div style="font-size:.58rem;color:${fg};">${s.label}</div>
