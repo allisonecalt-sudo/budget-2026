@@ -125,3 +125,18 @@ export function cashLasts(
     Math.round(((Math.max(0, n(cash)) + Math.max(0, n(reserve))) / draw) * 10) / 10;
   return { months: base, extraWithReserve: Math.round((withReserve - base) * 10) / 10 };
 }
+
+/**
+ * Petachya net a month for a year. 2026 keeps the figure the app carries today;
+ * 2027 and later use the 2027 figure (travel in; havra'a is a separate yearly
+ * lump, never spread into the month).
+ */
+export function petachyaNetMonth(p: { netInApp: number; net2027: number }, year: number): number {
+  return n(year) >= 2027 ? n(p.net2027) : n(p.netInApp);
+}
+
+/** Private-client net for `clients` weekly clients, from a known net for `knownClients`. */
+export function privateNetFor(netKnown: number, knownClients: number, clients: number): number {
+  const k = n(knownClients);
+  return k > 0 ? Math.round((n(netKnown) / k) * Math.max(0, n(clients))) : 0;
+}

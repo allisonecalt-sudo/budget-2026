@@ -14,6 +14,8 @@ const compiled = resolve(here, '..', 'dist', 'lib', 'pay.js');
 assert.ok(existsSync(compiled), 'dist/lib/pay.js is missing — run `npm run build` first.');
 const {
   gan2GrossMonth,
+  petachyaNetMonth,
+  privateNetFor,
   perHour,
   schoolGrossMonth,
   sessionHourly,
@@ -100,4 +102,18 @@ test('cashLasts: months of cash against a shortfall, and the extra months if the
   assert.equal(cashLasts(30000, 250, 64000), null);
   // No cash: zero months, the KH is the whole runway.
   assert.deepEqual(cashLasts(-500, -1000, 5000), { months: 0, extraWithReserve: 5 });
+});
+
+test('petachyaNetMonth: 2026 keeps its figure, 2027+ reads the 2027 one', () => {
+  const p = { netInApp: 9860, net2027: 9700 };
+  assert.equal(petachyaNetMonth(p, 2026), 9860);
+  assert.equal(petachyaNetMonth(p, 2027), 9700);
+  assert.equal(petachyaNetMonth(p, 2028), 9700);
+});
+
+test('privateNetFor: per-client net from the 2-client figure', () => {
+  assert.equal(privateNetFor(1000, 2, 2), 1000);
+  assert.equal(privateNetFor(1000, 2, 4), 2000);
+  assert.equal(privateNetFor(1000, 2, 5), 2500);
+  assert.equal(privateNetFor(1000, 0, 5), 0);
 });
