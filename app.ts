@@ -73,8 +73,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v71';
-const BUILD_DATE = 'Oct 18, 2026 12:01';
+const APP_VERSION = 'v72';
+const BUILD_DATE = 'Oct 18, 2026 14:48';
 
 // ── PAY · every salary figure in the app, in ONE place ────────────────────
 // A payslip changes a number here and nowhere else: the Analyze scenarios
