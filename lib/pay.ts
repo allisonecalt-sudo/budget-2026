@@ -14,7 +14,7 @@
 //     Default OFF; shown as its own line, labelled "rough, US".
 //   - Tax set-aside on private income: 70% of turnover (the עוסק זעיר track) ×
 //     her marginal rate (31%, or 35% when a third salary pushes her over).
-// What's built: perHour, schoolGrossMonth, seTax, taxSetAside, carmeiGatNet,
+// What's built: perHour, schoolGrossMonth, seTax, taxSetAside, carmeiGatNet, month-aware gan2NetForMonth / privateNetForMonth / petachyaNetForMonth (v73),
 //   cashLasts.
 // What's next: Petachya is year-aware (petachyaNetMonth: 2026 keeps its figure,
 //   2027+ reads net2027); a payslip changes one edit in PAY, nothing here changes.
@@ -160,4 +160,69 @@ export function privateNetMonth(
   const turnover = (k * n(p.sessionNet) * n(p.bookableWeeks) * (1 - n(p.cancellations))) / 12;
   const tax = turnover * n(p.taxRate) * n(p.taxableShare);
   return Math.round(turnover - tax - n(p.accountantMonth));
+}
+
+/**
+ * Gan 2 net in one month: ₪0 in its unpaid months (July–August), otherwise a
+ * full paid month (no ÷12 average) — session pay × sessions × gan days × weeks
+ * × the rough net factor, to whole shekels.
+ */
+export function gan2NetForMonth(
+  g: { perSession: number; sessionsPerDay: number; daysPerWeek: number; unpaidMonths: number[] },
+  weeksPerMonth: number,
+  netFactor: number,
+  month: number,
+): number {
+  if (g.unpaidMonths.includes(month)) return 0;
+  return Math.round(
+    n(g.perSession) * n(g.sessionsPerDay) * n(g.daysPerWeek) * n(weeksPerMonth) * n(netFactor),
+  );
+}
+
+/**
+ * Private net in one month for `clients`: no turnover in `stopMonths` (August),
+ * the year's turnover spread over the other months; the accountant is charged
+ * every month. No clients → no practice → 0.
+ */
+export function privateNetForMonth(
+  clients: number,
+  p: {
+    sessionNet: number;
+    bookableWeeks: number;
+    cancellations: number;
+    accountantMonth: number;
+    taxRate: number;
+    taxableShare: number;
+    stopMonths: number[];
+  },
+  month: number,
+): number {
+  const k = Math.max(0, n(clients));
+  if (k === 0) return 0;
+  if (p.stopMonths.includes(month)) return -n(p.accountantMonth);
+  const turnover =
+    (k * n(p.sessionNet) * n(p.bookableWeeks) * (1 - n(p.cancellations))) /
+    (12 - p.stopMonths.length);
+  return Math.round(turnover - turnover * n(p.taxRate) * n(p.taxableShare) - n(p.accountantMonth));
+}
+
+/**
+ * Petachya net in one month. 2026 = netInApp, flat. 2027+: August = netNoTravel2027
+ * (no travel), the havra'a month = net2027 + havraa2027, every other month = net2027.
+ */
+export function petachyaNetForMonth(
+  p: {
+    netInApp: number;
+    net2027: number;
+    netNoTravel2027: number;
+    havraa2027: number;
+    havraaMonth: number;
+  },
+  year: number,
+  month: number,
+): number {
+  if (n(year) < 2027) return n(p.netInApp);
+  if (month === 8) return n(p.netNoTravel2027);
+  if (month === p.havraaMonth) return n(p.net2027) + n(p.havraa2027);
+  return n(p.net2027);
 }

@@ -1,4 +1,5 @@
 // Read-only checks for the Analysis section (v56: five question tiles).
+// Classic page (kept one version at ?analyze=classic in v73).
 //
 // RULES (per feedback_playwright_tests_isolate_db): the page is local but the
 // data is her real Supabase project. This spec NEVER fills, presses or clicks a
@@ -18,7 +19,7 @@ async function openApp(page) {
   await page.route('**/rest/v1/**', (route) =>
     route.request().method() === 'GET' ? route.fallback() : route.abort(),
   );
-  await page.goto('/');
+  await page.goto('/?analyze=classic');
   await expect(page).toHaveTitle(/Budget/);
   await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
   const onLogin = await page.evaluate(() => !!document.querySelector('#login-email'));

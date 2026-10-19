@@ -23,6 +23,9 @@ const {
   taxSetAside,
   carmeiGatNet,
   cashLasts,
+  gan2NetForMonth,
+  privateNetForMonth,
+  petachyaNetForMonth,
 } = await import(pathToFileURL(compiled).href);
 
 test('perHour: Clalit ≈ ₪109 gross per paid hour with the grants spread', () => {
@@ -62,10 +65,19 @@ test('gan 2 net is below its gross and derived once; no mix carries a hard-coded
   assert.equal(net, 1819);
   assert.ok(net < gross);
   const { readFileSync } = await import('node:fs');
-  const src = readFileSync(resolve(here, '..', 'app.ts'), 'utf8');
+  const appSrc = readFileSync(resolve(here, '..', 'app.ts'), 'utf8');
+  const src = readFileSync(resolve(here, '..', 'lib', 'scenarios.ts'), 'utf8');
   // The old hard-coded gan 2 nets are gone; every gan 2 mix reads GAN2_NET.
-  for (const old of ['netWithPetachya:', 'netWithSchool8h', 'netWithSchool5h', ': 3115', ': 1370'])
-    assert.ok(!src.includes(old), 'app.ts still has ' + old);
+  for (const old of [
+    'netWithPetachya:',
+    'netWithSchool8h',
+    'netWithSchool5h',
+    ': 3115',
+    ': 1370',
+  ]) {
+    assert.ok(!appSrc.includes(old), 'app.ts still has ' + old);
+    assert.ok(!src.includes(old), 'lib/scenarios.ts still has ' + old);
+  }
   for (const key of ['petgan', 'all', 'schoolgan'])
     assert.match(src, new RegExp('  ' + key + ':[^\n]*GAN2_NET'));
 });
@@ -127,4 +139,51 @@ test('privateNetMonth: matches the checker table (382.50, 40 weeks, 200 fixed, 2
   assert.equal(privateNetMonth(4, better), 3528);
   assert.equal(privateNetMonth(5, base), 3912);
   assert.equal(privateNetMonth(0, base), 0);
+});
+
+const GAN2 = { perSession: 180, sessionsPerDay: 4, daysPerWeek: 1, unpaidMonths: [7, 8] };
+
+test('gan2NetForMonth: a paid month is ₪2,182, July and August are ₪0, the year ≈ the 12-month average', () => {
+  assert.equal(gan2NetForMonth(GAN2, 4.33, 0.7, 3), 2182);
+  assert.equal(gan2NetForMonth(GAN2, 4.33, 0.7, 7), 0);
+  assert.equal(gan2NetForMonth(GAN2, 4.33, 0.7, 8), 0);
+  let year = 0;
+  for (let m = 1; m <= 12; m++) year += gan2NetForMonth(GAN2, 4.33, 0.7, m);
+  // 1,819 × 12 = 21,828 (the average the mixes use).
+  assert.ok(Math.abs(year - 12 * 1819) <= 12, 'year total ' + year);
+});
+
+const PRIV = {
+  sessionNet: 382.5,
+  bookableWeeks: 40,
+  cancellations: 0.25,
+  accountantMonth: 200,
+  taxRate: 0.2,
+  taxableShare: 0.7,
+  stopMonths: [8],
+};
+
+test('privateNetForMonth: clients stop in August (the accountant stays), the year adds up to the average', () => {
+  assert.equal(privateNetForMonth(4, PRIV, 3), 3389);
+  assert.equal(privateNetForMonth(5, PRIV, 3), 4286);
+  assert.equal(privateNetForMonth(4, PRIV, 8), -200);
+  assert.equal(privateNetForMonth(0, PRIV, 3), 0);
+  let year = 0;
+  for (let m = 1; m <= 12; m++) year += privateNetForMonth(4, PRIV, m);
+  // 12 × privateNetMonth(4, base) = 12 × 3,090 = 37,080.
+  assert.ok(Math.abs(year - 37080) <= 12, 'year total ' + year);
+});
+
+test('petachyaNetForMonth: 2026 flat, 2027 ₪9,700, August without travel ₪9,185, September + havra’a ₪11,080', () => {
+  const p = {
+    netInApp: 9860,
+    net2027: 9700,
+    netNoTravel2027: 9185,
+    havraa2027: 1380,
+    havraaMonth: 9,
+  };
+  assert.equal(petachyaNetForMonth(p, 2027, 8), 9185);
+  assert.equal(petachyaNetForMonth(p, 2027, 9), 11080);
+  assert.equal(petachyaNetForMonth(p, 2027, 3), 9700);
+  assert.equal(petachyaNetForMonth(p, 2026, 8), 9860);
 });

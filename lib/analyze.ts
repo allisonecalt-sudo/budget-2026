@@ -148,6 +148,8 @@ export interface AnalyzeMonth {
   actualByCat: Record<string, number>;
   /** Envelopes at what is actually logged (transactions only), any status. */
   envelopeActual: number;
+  /** What the envelopes were budgeted for (the money given an everyday job), any status. */
+  envelopeBudget: number;
   /**
    * real split into the "why so high" drivers (keys: BUCKETS). Sums to real.
    * Fixed money is split three ways: rent, lines that have ENDED (money in a
@@ -414,6 +416,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
     let fixed = 0,
       envelope = 0,
       envelopeActual = 0,
+      envelopeBudgeted = 0,
       pots = 0,
       charity = 0;
     for (const c of cats) {
@@ -426,6 +429,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
         v = status === 'past' ? actual : status === 'future' ? budget : Math.max(actual, budget);
         envelope += v;
         envelopeActual += actual;
+        envelopeBudgeted += budget;
         addPart(bucketOf(c), v);
       } else if (kind === 'fixed') {
         v = Math.max(bi(m.id, c.key), actual);
@@ -471,6 +475,7 @@ export function analyzeYear(input: AnalyzeInput): AnalyzeResult {
       byCat,
       actualByCat,
       envelopeActual: ag(envelopeActual),
+      envelopeBudget: ag(envelopeBudgeted),
       parts,
       entries: txCount[m.id] || 0,
     };

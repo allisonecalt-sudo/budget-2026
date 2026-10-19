@@ -665,3 +665,14 @@ test('a year that has not started reads its FIRST month as the reference, not De
   // A year all in the past keeps reading the last month.
   assert.equal(run({ todayMonth: 13 }).summary.referenceMonth, 4);
 });
+
+test('Z5: envelopeBudget is what the everyday envelopes were budgeted for, any status; the gap splits exactly', () => {
+  const r = run();
+  // groceries 900 + retail 250 budgeted every month, whatever was spent.
+  for (const m of r.months) assert.equal(m.envelopeBudget, 1150);
+  // income − savings − real = (income − everything budgeted) + (envelopes budgeted − logged), a past month exactly.
+  const jan = r.months.find((m) => m.month_num === 1);
+  const budgeted = jan.fixed + jan.envelopeBudget + jan.pots + jan.charity + jan.savings;
+  const gap = jan.income - jan.savings - jan.real;
+  assert.equal(gap, jan.income - budgeted + (jan.envelopeBudget - jan.envelopeActual));
+});

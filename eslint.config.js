@@ -142,7 +142,7 @@ module.exports = [
     },
   },
   {
-    files: ['app.ts', 'lib/**/*.ts'],
+    files: ['app.ts', 'lib/**/*.ts', 'tabs/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2022,

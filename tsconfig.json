@@ -17,6 +17,6 @@
     "rootDir": ".",
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
-  "include": ["app.ts", "lib/**/*.ts"],
+  "include": ["app.ts", "lib/**/*.ts", "tabs/**/*.ts"],
   "exclude": ["node_modules", "dist", "tests", "playwright.config.js"]
 }
