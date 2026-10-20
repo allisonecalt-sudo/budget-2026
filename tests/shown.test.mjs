@@ -27,6 +27,7 @@ test('there is no half-away-from-zero helper and no apportioning any more', () =
   assert.equal(S.whole, undefined);
   assert.equal(S.apportion, undefined);
   assert.equal(S.ROUNDING_LABEL, 'agorot, rounded');
+  assert.equal(S.ROUNDING_LABEL_AVG, 'rounding'); // gaps from averages / ÷ 12
 });
 
 test('trueSum / totalOf: exact to the agorot, then rounded ONCE with the app’s rule (Math.round)', () => {
@@ -169,7 +170,7 @@ test('yearWayShown: whole-year pill case - income not yet budgeted + budgeted-no
   assert.equal(y.kind, 'split');
 });
 
-test('yearWayShown: the classic page’s gap is the TRUE gap rounded - 19,501 − 7,992 prints 11,508 with a −1 row', () => {
+test('yearWayShown: the old page’s gap is the TRUE gap rounded - 19,501 − 7,992 prints 11,508 with a −1 row', () => {
   const y = S.yearWayShown({
     partsAvg: [7992.4],
     incomeAvg: 21001,

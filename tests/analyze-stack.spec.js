@@ -1,7 +1,7 @@
 // The Analyze card stack (v73): 💰 Left to Budget, 🧭 After Feb 7, 💵 Cash,
 // 💼 Income after Feb 7, 📅 A month now, 🪜 My levels, ✈️📋 Trips & one-offs,
-// 🏠 Bills now, 🧾 This year so far. The default Analyze page since C3; the v72
-// page is at ?analyze=classic.
+// 🏠 Bills now, 🧾 This year so far. The only Analyze page (v74 deleted the v72 page;
+// ?analyze=classic and ?analyze=stack simply show the stack).
 //
 // Read-only like analyze.spec.js: the fixture gives every test its own in-memory
 // fake Supabase, and every non-GET to /rest/v1/ is aborted, so a regression that
@@ -209,25 +209,28 @@ test.describe('Analyze stack · the answer half', () => {
     expect(await page.locator('[data-an2-card="income"]').innerText()).not.toContain('₪54');
   });
 
-  test('the stack is the default; the classic page is only at ?analyze=classic', async ({
+  test('the stack is the only page: no query, ?analyze=stack and the old ?analyze=classic all show it', async ({
     page,
   }) => {
     await page.route('**/rest/v1/**', (r) =>
       r.request().method() === 'GET' ? r.fallback() : r.abort(),
     );
-    const open = async (url) => {
+    const errs = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') errs.push(m.text());
+    });
+    page.on('pageerror', (e) => errs.push(String(e)));
+    for (const url of ['/', '/?analyze=stack', '/?analyze=classic']) {
       await page.goto(url);
       await page.waitForFunction(() => !document.querySelector('.loading'), null, {
         timeout: 30000,
       });
       await page.evaluate(() => window.switchTab('analyze'));
-    };
-    await open('/?analyze=classic');
-    await page.waitForSelector('.an-wrap .an-tiles', { timeout: 30000 });
-    await expect(page.locator('.an2-wrap')).toHaveCount(0);
-    await open('/');
-    await page.waitForSelector('.an2-wrap [data-an2-card="answer"]', { timeout: 30000 });
-    await expect(page.locator('.an-tiles')).toHaveCount(0);
+      await page.waitForSelector('.an2-wrap [data-an2-card="answer"]', { timeout: 30000 });
+      await expect(page.locator('.an-tiles')).toHaveCount(0);
+      expect(await page.evaluate(() => typeof window.renderAnalyzeTab), url).toBe('undefined');
+    }
+    expect(errs).toEqual([]);
   });
 
   // ── C4 · the whole stack on a phone ─────────────────────────────────────
@@ -456,22 +459,6 @@ test.describe('Analyze stack · the answer half', () => {
     expect(writes).toEqual([]);
   });
 
-  test('classic still renders at ?analyze=classic, with a clean console', async ({ page }) => {
-    const errs = [];
-    page.on('console', (m) => {
-      if (m.type() === 'error') errs.push(m.text());
-    });
-    page.on('pageerror', (e) => errs.push(String(e)));
-    await page.route('**/rest/v1/**', (r) =>
-      r.request().method() === 'GET' ? r.fallback() : r.abort(),
-    );
-    await page.goto('/?analyze=classic');
-    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
-    await page.evaluate(() => window.switchTab('analyze'));
-    await page.waitForSelector('.an-wrap .an-tiles', { timeout: 30000 });
-    expect(errs).toEqual([]);
-  });
-
   test('screenshots for the checker: the top of the stack and the whole page, collapsed', async ({
     page,
   }) => {
@@ -517,15 +504,6 @@ test.describe('Analyze stack · the answer half', () => {
     );
     expect(nums.netPlusFunds).toBeGreaterThan(nums.net);
     expect(t).not.toContain('confirm it with');
-    // The classic legend too.
-    await page.evaluate(() => localStorage.setItem('analyzeSub', 'safe'));
-    await page.goto('/?analyze=classic');
-    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
-    await page.evaluate(() => window.switchTab('analyze'));
-    await page.waitForSelector('.an-wrap .an-tiles', { timeout: 30000 });
-    const classic = await page.locator('.an-section').innerText();
-    expect(classic).toContain('confirm it before counting on it');
-    expect(classic).not.toContain('confirm it with');
   });
 
   test('Y5: “No balances set” only when there are no cash accounts', async ({ page, db }) => {
@@ -744,14 +722,14 @@ test.describe('v73 fix round', () => {
         ' ',
       );
       const m = face.match(
-        /₪([\d,]+) a month (≈ )?₪([\d,]+) bills, everyday and charity \+ ₪([\d,]+) trips/,
+        /₪([\d,]+) a month ₪([\d,]+) bills, everyday and charity \+ ₪([\d,]+) trips[^·]*\)( · ±₪([\d,]+) rounding)?/,
       );
       expect(m, face).not.toBeNull();
-      const [big, p1, p2] = [m[1], m[3], m[4]].map((x) => Number(x.replace(/,/g, '')));
+      const [big, p1, p2] = [m[1], m[2], m[3]].map((x) => Number(x.replace(/,/g, '')));
       // Each part prints its own rounding. When they do not add to the month, the face says "≈"
-      // and the detail has ONE "agorot, rounded" row that closes it - never a silent mismatch.
-      const approx = !!m[2];
-      expect(approx, face).toBe(p1 + p2 !== big);
+      // and the detail has ONE rounding row ("rounding" here: it comes from averages and ÷ 12) that closes it - never a silent mismatch.
+      expect(!!m[4], face).toBe(p1 + p2 !== big); // the marker, exactly when they do not add
+      if (m[4]) expect(Number(m[5]), face).toBe(Math.abs(p1 + p2 - big));
       if (variant === 'the fake seed') expect([p1, p2, big]).toEqual([7091, 2101, 9191]);
       // The detail: bills + everyday + charity (+ its rounding row) = the base, then base +
       // trips (+ its rounding row) = the month.
@@ -768,7 +746,7 @@ test.describe('v73 fix round', () => {
       const rounding = (from, to) =>
         rows
           .slice(from, to)
-          .filter((x) => x.startsWith('agorot, rounded'))
+          .filter((x) => x.startsWith('agorot, rounded') || x.startsWith('rounding'))
           .reduce((a, x) => a + (/−/.test(x) ? -1 : 1) * nums(x).pop(), 0);
       const iBase = at('Bills + everyday + charity');
       const iMonth = at('A month now');
@@ -1098,6 +1076,41 @@ test.describe('v73 fix round', () => {
     await expectAboveFold(page, '2027 view + what-if');
   });
 
+  // S4: the 2027 view, truly COLLAPSED (no card open), on the plain and the agorot seed. A card left
+  // open in the 2026 view stays open after the year switch (open/closed is view state), which pushes
+  // the results to 779 px - that is an open card, not a longer label.
+  for (const agorot of [false, true]) {
+    test(
+      'S4: 2027 view collapsed - the four results end at or above 600 px (' +
+        (agorot ? 'agorot' : 'plain') +
+        ' seed)',
+      async ({ page, db }) => {
+        if (agorot) allAgorot(db);
+        await openStack(page, { allowWrites: true });
+        await view2027(page);
+        expect(
+          await page.locator('[data-an2-toggle][aria-expanded="true"]').count(),
+          'nothing is open',
+        ).toBe(0);
+        await expectAboveFold(page, '2027 collapsed ' + (agorot ? 'agorot' : 'plain'));
+        const b = await resultBottoms(page);
+        expect(Math.max(...b.map((x) => x.bottom))).toBeLessThanOrEqual(600);
+        // The state the last checker measured: a card left open before switching year.
+        await page.evaluate(() => window.switchYear(2026));
+        await page.waitForFunction(
+          () => window.state.currentYear === 2026 && !window.state.loading,
+        );
+        await page.locator('[data-an2-card="left"] .an2-more').click();
+        await view2027(page);
+        const open = await resultBottoms(page);
+        expect(
+          Math.max(...open.map((x) => x.bottom)),
+          'an open 💰 card pushes them down',
+        ).toBeGreaterThan(600);
+      },
+    );
+  }
+
   test('Z3: default and what-if stay above 600 px, and text stays 12 px, taps 44 px', async ({
     page,
   }) => {
@@ -1155,22 +1168,486 @@ test.describe('v73 fix round', () => {
       const face = await text(page, '[data-an2-card="year"] .an2-face');
       expect(face, 'window ' + w).not.toMatch(/given a job/);
       const m = face.match(
-        /your way \(income − savings\): ₪([\d,]+) · (≈ )?₪([\d,]+) (more|less) than real spend(?:: (≈ )?₪([\d,-]+) income not yet budgeted \+ ₪([\d,-]+) budgeted, not spent| \(you spent more than you budgeted\))?/,
+        /your way \(income − savings\): ₪([\d,]+) · ₪([\d,]+) (more|less) than real spend(?:: ₪([\d,-]+) income not yet budgeted \+ ₪([\d,-]+) budgeted, not spent| \(you spent more than you budgeted\))?( · .*rounding)?/,
       );
       expect(m, face).not.toBeNull();
-      if (m[6] !== undefined) {
+      if (m[4] !== undefined) {
         const n = (x) => Number(x.replace(/,/g, ''));
-        // Each part prints its own rounding; "≈" says they do not add to the gap exactly (the
-        // detail has the "agorot, rounded" row), and without it they must add.
-        if (!m[5]) expect(n(m[6]) + n(m[7]), 'window ' + w).toBe(n(m[3]));
-        expect(n(m[6]), 'parts are never negative').toBeGreaterThanOrEqual(0);
-        expect(n(m[7])).toBeGreaterThanOrEqual(0);
+        // Each part prints its own rounding; the caption ends with a rounding marker exactly
+        // when they do not add to the gap (the detail has the rounding row).
+        const adds = n(m[4]) + n(m[5]) === n(m[2]);
+        if (adds) expect(m[6] || '', 'window ' + w).not.toMatch(/and/);
+        expect(n(m[4]), 'parts are never negative').toBeGreaterThanOrEqual(0);
+        expect(n(m[5])).toBeGreaterThanOrEqual(0);
       }
       seen[w] = face.replace(/^.*your way/, 'your way');
     }
     console.log('W4 windows', JSON.stringify(seen, null, 1));
     // Whole year on the fake seed: income not yet budgeted + budgeted-not-spent.
     expect(seen[-1]).toMatch(/₪8,100 income not yet budgeted \+ ₪2,563 budgeted, not spent/);
+  });
+
+  // ── V3a · the 📅 envelope rows, "What moved" and 🪜 "your pace now" print ONE pace ────
+  // Each envelope row is roundZ(its true pace) - apportioning the everyday rounding onto a row
+  // makes it read a shekel off the "What moved" line (same key) and off the true pace here.
+  test('V3a: 📅 each envelope row is its own rounding of the pace, and "What moved" prints the same', async ({
+    page,
+    db,
+  }) => {
+    allAgorot(db);
+    // Groceries ran hot in the last two complete months, so its pace moves against the average.
+    for (const t of db.table('transactions'))
+      if (t.category === 'groceries' && /0[89a]$/.test(t.month_id)) t.amount += 300.37;
+    await openStack(page, { allowWrites: true });
+    await page.locator('[data-an2-card="month"] .an2-more').click();
+    const want = await page.evaluate(async () => {
+      const { monthNow, billsMonthFor } = await import('/dist/lib/analyze.js');
+      const ctx = window.buildStackCtx();
+      const rules = ctx.text.MONTH_NOW_RULES[ctx.base.year] || { fromMonth: {}, zero: [] };
+      const mNow = monthNow(ctx.base.r, {
+        billsMonth: billsMonthFor(ctx.base.r.summary.referenceMonth),
+        recentN: 6,
+        fromMonth: rules.fromMonth,
+        zero: rules.zero,
+      });
+      const r0 = (x) => (Math.round(x) === 0 ? 0 : Math.round(x));
+      return Object.fromEntries(Object.entries(mNow.byCat).map(([k, v]) => [k, r0(v)]));
+    });
+    const prints = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-qty^="pace:"]')].map((e) => ({
+        key: e.dataset.qty,
+        text: e.textContent,
+      })),
+    );
+    expect(prints.length).toBeGreaterThan(6);
+    for (const p of prints)
+      expect(digits(p.text), p.key).toBe(want[p.key.replace('pace:2026:', '')]);
+    // Groceries prints on its envelope row AND in "What moved": two prints of one number.
+    expect(prints.filter((p) => p.key === 'pace:2026:groceries').length).toBe(2);
+  });
+
+  // ── V3b · the 🧾 split, both parts, against the months (not against the page) ──────
+  // Income not yet budgeted = roundZ(true gap − true unspent) and budgeted-not-spent =
+  // roundZ(true unspent): each its own rounding. A split that apportions one onto the other
+  // (not yet budgeted = shown gap − shown unspent) reads one shekel off on some window.
+  test('V3b: 🧾 the split is each part rounded on its own, on every window (agorot everywhere)', async ({
+    page,
+    db,
+  }) => {
+    allAgorot(db);
+    await openStack(page, { allowWrites: true });
+    const n = (x) => Number(x.replace(/,/g, ''));
+    let compared = 0;
+    for (const w of [0, 3, 6, -1]) {
+      await page.evaluate((k) => window.setAnalyzeAvgWindow(k), w);
+      const want = await page.evaluate(() => {
+        const r = window.buildStackCtx().base.r;
+        const set = new Set(r.summary.avgMonths);
+        const ms = r.months.filter((m) => set.has(m.month_num));
+        const avg = (f) => ms.reduce((a, m) => a + f(m), 0) / ms.length;
+        const gap =
+          avg((m) => m.income) -
+          avg((m) => m.savings) -
+          (avg((m) => m.fixed) +
+            avg((m) => m.envelope) +
+            avg((m) => m.pots) +
+            avg((m) => m.charity));
+        const unspent = avg((m) => m.envelopeBudget - m.envelope);
+        const r0 = (x) => (Math.round(x) === 0 ? 0 : Math.round(x));
+        return { notBudgeted: r0(gap - unspent), unspent: r0(unspent), gap: r0(gap) };
+      });
+      const face = await text(page, '[data-an2-card="year"] .an2-face');
+      const m = face.match(/₪([\d,-]+) income not yet budgeted \+ ₪([\d,-]+) budgeted, not spent/);
+      if (want.gap < 50 || !m) continue; // not a split on this window
+      compared++;
+      expect(n(m[1]), 'face, window ' + w).toBe(want.notBudgeted);
+      expect(n(m[2]), 'face, window ' + w).toBe(want.unspent);
+      if (!(await page.locator('[data-an2-card="year"] .an2-detail').count()))
+        await page.locator('[data-an2-card="year"] .an2-more').click();
+      const detail = await text(page, '[data-an2-card="year"] .an2-detail');
+      const d1 = detail.match(/Income not yet budgeted ₪([\d,-]+)/);
+      const d2 = detail.match(/Budgeted for an everyday envelope, not spent ₪([\d,-]+)/);
+      expect(n(d1[1]), 'detail, window ' + w).toBe(want.notBudgeted);
+      expect(n(d2[1]), 'detail, window ' + w).toBe(want.unspent);
+    }
+    expect(compared, 'windows where the gap splits').toBeGreaterThan(1);
+  });
+
+  // ── V3c · the what-if is whole shekels the moment it is typed, on a value that shows it ──
+  test('V3c: a what-if of ₪0.60 is ₪1 - Left now is the Cash tab’s ₪1,000 minus 1, not minus 0.60', async ({
+    page,
+    db,
+  }) => {
+    const cash = db.table('cash_accounts');
+    cash[0].amount = 1000.4;
+    cash[1].amount = 0;
+    cash[2].amount = 0;
+    await openStack(page, { allowWrites: true });
+    await page.evaluate(() => window.setAnalyzeOneOff('0.6'));
+    // Raw: 1,000.4 − 0.6 = 999.8 → ₪1,000. Whole at entry: ₪1,000 (the Cash tab) − ₪1 = ₪999.
+    expect(digits(await text(page, '#an2-cash-now'))).toBe(999);
+    await page.locator('[data-an2-card="cash"] .an2-more').click();
+    expect(await page.locator('#an2-oneoff').inputValue()).toBe('1');
+    // 1,000.5 stays the half that rounds up, and a what-if of 1,000.5 is ₪1,001 (not 1,000.5).
+    await page.evaluate(() => window.setAnalyzeOneOff('1000.5'));
+    expect(await page.locator('#an2-oneoff').inputValue()).toBe('1001');
+    expect(digits(await text(page, '#an2-cash-now'))).toBe(-1); // ₪1,000 − ₪1,001
+  });
+
+  // ── V5 · a SHORT result is one signed figure on three cards ──────────────────────
+  // 🧭 tile, 🧭 "The result" row and 💼 "At your levels" print the same result; when it is
+  // negative the 💼 line says "short ₪N" (a positive number): data-qty-sign reads it as −N.
+  test('V5: a short Lean result reads −N on the tile, the result row and as “short N” on 💼', async ({
+    page,
+    db,
+  }) => {
+    const g = db.table('spend_floors').find((f) => f.year === 2026 && f.category === 'groceries');
+    Object.assign(g, { amount: 30000 });
+    await openStack(page, { allowWrites: true });
+    await page.locator('.an2-lv[data-level="lean"]').click();
+    await page.locator('[data-an2-card="income"] .an2-more').click();
+    const prints = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-qty~="planres:low:lean:se0"]')].map((e) => {
+        const m = e.textContent.match(/([−-])?\s*₪?\s*([\d,]+)/);
+        const n = Number(m[2].replace(/,/g, ''));
+        const neg = !!m[1] || e.dataset.qtySign === '-';
+        return { text: e.textContent.trim(), v: neg ? -n : n, signAttr: e.dataset.qtySign || '' };
+      }),
+    );
+    expect(prints.length).toBeGreaterThanOrEqual(3);
+    expect(prints[0].v).toBeLessThan(0);
+    expect(new Set(prints.map((p) => p.v)).size, JSON.stringify(prints)).toBe(1);
+    expect(prints.some((p) => p.signAttr === '-')).toBe(true); // the 💼 “short N”
+  });
+
+  // ── U3 · 🧾 never says “the Year tab says” a number the Year tab does not print ─────────
+  test('U3: the bridge starts from the Year tab’s own Total Used: ₪9,254 − savings ₪1,500 = ₪7,754', async ({
+    page,
+  }) => {
+    await openStack(page);
+    await page.locator('[data-an2-card="year"] .an2-more').click();
+    const d = await text(page, '[data-an2-card="year"] .an2-detail');
+    expect(d.toLowerCase()).toContain(
+      'the year tab (full year, projected) says total used ₪9,254 a month — savings included',
+    );
+    expect(d).toMatch(/Year tab · Total Used, all 12 months ÷ 12 ₪9,254/);
+    expect(d).toMatch(/− your savings, all 12 months ÷ 12 ₪1,500/);
+    expect(d).toMatch(/= without savings \(what this card compares\) ₪7,754/);
+    expect(d).not.toMatch(/the year tab says ₪/i);
+  });
+
+  // ── S1 · the 💵 Admin subtotal is “still to pay”, with its OWN key ──────────────────────
+  // Cash still to go out: each item's max(0, planned − paid), crumbs under ₪1 dropped. The Admin
+  // tab's Remaining is budget − everything paid (an overpaid item offsets another), a different
+  // quantity - so the subtotal makes no claim about that tab and shares no key with it.
+  test('S1: 💵 “of these, Admin items still to pay” - an overpaid item adds nothing, no claim about the Admin tab', async ({
+    page,
+    db,
+  }) => {
+    const course = db.table('admin_items').find((i) => i.label === 'Course fees');
+    // Course fees planned ₪1,200, paid ₪1,250: overpaid by ₪50.
+    db.table('admin_sub_items').push({
+      id: 'sub-over',
+      item_id: course.id,
+      label: 'Fee',
+      amount: 1250,
+      is_paid: true,
+      month_num: 5,
+    });
+    await openStack(page, { allowWrites: true });
+    await page.locator('[data-an2-card="cash"] .an2-more').click();
+    const row = page.locator('[data-an2-card="cash"] .an2-row-subtotal');
+    await expect(row).toHaveCount(1);
+    const t = (await row.innerText()).replace(/\s+/g, ' ');
+    expect(t).toContain('of these, Admin items still to pay');
+    expect(t).toContain('₪100');
+    expect(t).not.toMatch(/Remaining/);
+    // Course fees is not listed (nothing left to pay); Postage is the whole subtotal.
+    const detail = await text(page, '[data-an2-card="cash"] .an2-detail');
+    expect(detail).not.toMatch(/Course fees ₪/);
+    // The Admin tab's own number is another quantity: the stack row shares no key with it.
+    expect(await page.locator('[data-qty="admindue:2026"]').count()).toBe(1);
+    expect(await page.locator('[data-qty^="adminremaining"]').count()).toBe(0);
+    // The Admin tab keeps its own tag (the cross test below visits it): budget − everything paid.
+    await page.evaluate(() => window.switchTab('admin'));
+    await page.waitForSelector('[data-qty="adminremaining:2026"]', { timeout: 30000 });
+    expect(digits(await text(page, '[data-qty="adminremaining:2026"]'))).toBe(50); // 1,900 − 1,850
+  });
+
+  // ── S2 · the subtotal row looks like a subtotal ─────────────────────────────────────────
+  test('S2: the Admin subtotal is indented, dim, ruled off, 12 px or more, and not a part of the pots-due sum', async ({
+    page,
+  }) => {
+    await openStack(page, { allowWrites: true });
+    await page.locator('[data-an2-card="cash"] .an2-more').click();
+    const look = await page.evaluate(() => {
+      const sub = document.querySelector('.an2-row-subtotal');
+      const item = [...document.querySelectorAll('[data-an2-card="cash"] .an2-row-sub')].find((r) =>
+        /Course fees/.test(r.textContent),
+      );
+      const cs = getComputedStyle(sub);
+      const ci = getComputedStyle(item);
+      return {
+        indent: parseFloat(cs.marginLeft) - parseFloat(ci.marginLeft),
+        rule: cs.borderTopStyle + ' ' + cs.borderTopWidth,
+        size: parseFloat(cs.fontSize),
+        color: cs.color,
+        itemColor: ci.color,
+        inSum: !!sub.querySelector('[data-sum-group="pots-due"]'),
+      };
+    });
+    expect(look.indent).toBeGreaterThan(8);
+    expect(look.rule).toMatch(/solid 1px/);
+    expect(look.size).toBeGreaterThanOrEqual(12);
+    expect(look.inSum, 'the subtotal is not a part of the pots-due sum').toBe(false);
+  });
+
+  // ── R1 · the 💵 Admin subtotal is a sum of its own: lines as printed + a rounding row = subtotal ──
+  for (const agorot of [false, true]) {
+    test(
+      'R1: 💵 Admin still-to-pay subtotal adds up as shown (' +
+        (agorot ? 'agorot' : 'plain') +
+        ' seed)',
+      async ({ page, db }) => {
+        if (agorot) allAgorot(db);
+        await openStack(page, { allowWrites: true });
+        await page.locator('[data-an2-card="cash"] .an2-more').click();
+        const parts = await page.evaluate(() =>
+          [...document.querySelectorAll('[data-sum-group="admindue-2026"][data-part]')].map((e) =>
+            e.textContent.trim(),
+          ),
+        );
+        const totals = await page.evaluate(() =>
+          [...document.querySelectorAll('[data-sum-group="admindue-2026"][data-total]')].map((e) =>
+            e.textContent.trim(),
+          ),
+        );
+        const num = (t) => digits(t);
+        expect(totals.length, 'one subtotal').toBe(1);
+        const sum = parts.map(num).reduce((a, b) => a + b, 0);
+        expect(sum, 'parts ' + parts.join(' + ') + ' = ' + totals[0]).toBe(num(totals[0]));
+        const cash = await text(page, '[data-an2-card="cash"] .an2-detail');
+        if (agorot) {
+          // Each Admin line prints its own rounding (₪1,200 + ₪100 + ₪20 = ₪1,320); the subtotal is the
+          // true sum rounded once (₪1,321); the visible row closes the ₪1.
+          expect(totals[0]).toBe('₪1,321');
+          expect(cash).toMatch(/agorot, rounded \+₪1 of these, Admin items still to pay ₪1,321/);
+        } else {
+          expect(totals[0]).toBe('₪1,300');
+          expect(cash).not.toMatch(/rounded[^₪]*₪[^ ]* of these, Admin items/);
+          expect(cash).toMatch(/of these, Admin items still to pay ₪1,300/);
+        }
+        // The subtotal is not a part of the trips & one-offs sum: that sum's parts are the lines only.
+        const inPots = await page.evaluate(
+          () =>
+            [...document.querySelectorAll('[data-sum-group="pots-due"][data-part]')].filter((e) =>
+              e.closest('.an2-row-subtotal'),
+            ).length,
+        );
+        expect(inPots).toBe(0);
+      },
+    );
+  }
+
+  // ── T2 (restored) · the exact marker words on the seed state where it shows ──────────────────────
+  test('T2: marker words - agorot seed, Jan–Sep: “±₪1 rounding in 2 sums” on 🧾; plain seed Apr–Sep: “±₪1 rounding”', async ({
+    page,
+    db,
+  }) => {
+    allAgorot(db);
+    await openStack(page, { allowWrites: true });
+    await page.evaluate(() => window.setAnalyzeAvgWindow(0));
+    const yr = await text(page, '[data-an2-card="year"] .an2-face');
+    expect(yr).toContain(' · ±₪1 rounding in 2 sums');
+    expect(yr).not.toMatch(/ and /);
+    expect(await text(page, '[data-an2-card="month"] .an2-face')).toContain(' · ±₪1 rounding');
+    expect(await text(page, '[data-an2-card="bills"] .an2-face')).toContain(' · ±₪1 rounding');
+  });
+
+  // ── V7 · what the rounding row is called ─────────────────────────────────────────
+  // ── U1 · no “≈” on a face; one “· ±₪N rounding” marker when shown parts ≠ shown total ──────
+  // Faces that list parts: 📅 (bills… + trips), 🏠 (its categories), 🧾 (your way, the gap, its
+  // split). Every figure prints plain, and the caption ends with the marker EXACTLY when the
+  // shown parts do not add to the shown total, N = the shown difference.
+  const faceChecks = (faces, label) => {
+    const n = (x) => Number(String(x).replace(/,/g, ''));
+    const marks = {};
+    for (const f of faces) {
+      if (!['month', 'bills', 'year'].includes(f.card)) continue;
+      expect(f.t, label + ' ' + f.card).not.toContain('≈');
+    }
+    // 📅
+    const mo = faces.find((f) => f.card === 'month').t;
+    const m1 = mo.match(
+      /₪([\d,]+) a month ₪([\d,]+) bills, everyday and charity \+ ₪([\d,]+) trips/,
+    );
+    if (m1) {
+      const diff = Math.abs(n(m1[2]) + n(m1[3]) - n(m1[1]));
+      const mk = mo.match(/±₪([\d,]+) rounding/);
+      expect(mk ? n(mk[1]) : 0, label + ' 📅 ' + mo).toBe(diff);
+      marks.month = diff;
+    }
+    // 🏠
+    const bi = faces.find((f) => f.card === 'bills').t;
+    const total = n((bi.match(/₪([\d,]+) a month/) || [])[1]);
+    const cats = [...bi.matchAll(/(?:housing|recurring|[a-z ]+) ₪([\d,]+)/g)]
+      .map((x) => n(x[1]))
+      .slice(1);
+    if (cats.length) {
+      const diff = Math.abs(cats.reduce((a, b) => a + b, 0) - total);
+      const mk = bi.match(/±₪([\d,]+) rounding/);
+      expect(mk ? n(mk[1]) : 0, label + ' 🏠 ' + bi).toBe(diff);
+      marks.bills = diff;
+    }
+    // 🧾
+    const yr = faces.find((f) => f.card === 'year').t;
+    const real = n((yr.match(/₪([\d,]+) a month real spend/) || [])[1]);
+    const way = yr.match(
+      /your way \(income − savings\): ₪([\d,]+)(?: ✓)?(?: · ₪([\d,]+) (more|less) than real spend)?/,
+    );
+    if (way && way[2]) {
+      const gap = way[3] === 'more' ? n(way[2]) : -n(way[2]);
+      const want = [Math.abs(n(way[1]) - real - gap)];
+      const sp = yr.match(/₪([\d,-]+) income not yet budgeted \+ ₪([\d,-]+) budgeted, not spent/);
+      if (sp) want.push(Math.abs(n(sp[1]) + n(sp[2]) - gap));
+      // T2: ONE marker saying how many sums are off: “±₪N rounding” (one sum), “±₪N rounding in
+      // K sums” (K sums, each N), “rounding in K sums (up to ±₪M)” (K sums, different amounts).
+      const nz = want.filter((d) => d > 0);
+      const fmt = (d) => '±₪' + d.toLocaleString('en-US');
+      const exp = !nz.length
+        ? null
+        : nz.length === 1
+          ? fmt(nz[0]) + ' rounding'
+          : nz.every((d) => d === nz[0])
+            ? fmt(nz[0]) + ' rounding in ' + nz.length + ' sums'
+            : 'rounding in ' + nz.length + ' sums (up to ' + fmt(Math.max(...nz)) + ')';
+      const found = yr.match(
+        / · (±₪[\d,]+ rounding(?: in \d+ sums)?|rounding in \d+ sums \(up to ±₪[\d,]+\))/,
+      );
+      expect(found ? found[1] : null, label + ' 🧾 ' + yr).toBe(exp);
+      expect((yr.match(/rounding/g) || []).length, 'one marker only').toBeLessThanOrEqual(1);
+      marks.year = want;
+    }
+    return marks;
+  };
+  const readFaces = (page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[data-an2-card] .an2-face')].map((f) => ({
+        card: f.closest('[data-an2-card]').dataset.an2Card,
+        // The “≈” on the Carmei Gat / tax lines marks a real ESTIMATE (they carry the estimate chip),
+        // not a rounding: they are left out; every other figure on a face must be plain.
+        t: [...f.childNodes]
+          .filter((c) => !(c.classList && c.classList.contains('an2-est')))
+          .map((c) => c.innerText || c.textContent)
+          .join(' ')
+          .replace(/\s+/g, ' '),
+      })),
+    );
+  for (const seed of ['plain', 'agorot']) {
+    test(
+      'U1: no “≈” on a face and the rounding marker is exact (' + seed + ' seed, all windows)',
+      async ({ page, db }) => {
+        if (seed === 'agorot') allAgorot(db);
+        await openStack(page, { allowWrites: true });
+        let markers = 0;
+        for (const w of [0, 3, 6, -1]) {
+          await page.evaluate((k) => window.setAnalyzeAvgWindow(k), w);
+          const marks = faceChecks(await readFaces(page), seed + ' w' + w);
+          markers += Object.values(marks)
+            .flat()
+            .filter((d) => d > 0).length;
+        }
+        // A marker that never appeared would pass vacuously.
+        expect(markers, seed + ' seed shows at least one marker').toBeGreaterThan(0);
+      },
+    );
+  }
+
+  // ── S3 · the “you spent more than you budgeted” branch of the 🧾 face ────────────────────
+  // Income is cut to ₪0 so your way (income − savings) falls below real spend: the gap is NEGATIVE
+  // and the face says “less than real spend (you spent more than you budgeted)”. The marker must
+  // appear exactly when your way − real spend is not the printed gap.
+  for (const agorot of [false, true]) {
+    test(
+      'S3: negative gap - the rounding marker is exact (' +
+        (agorot ? 'agorot' : 'plain') +
+        ' seed)',
+      async ({ page, db }) => {
+        if (agorot) allAgorot(db);
+        for (const m of db.table('months'))
+          Object.assign(m, {
+            income_petachya: 0,
+            income_clalit: 0,
+            income_private: 0,
+            income_other: 0,
+          });
+        for (const i of db.table('income_items')) i.amount = 0;
+        await openStack(page, { allowWrites: true });
+        let overFaces = 0;
+        let markers = 0;
+        for (const w of [0, 3, 6, -1]) {
+          await page.evaluate((k) => window.setAnalyzeAvgWindow(k), w);
+          const faces = await readFaces(page);
+          const yr = faces.find((f) => f.card === 'year').t;
+          const n = (x) => Number(String(x).replace(/,/g, ''));
+          const m = yr.match(
+            /your way \(income − savings\): (−?)₪([\d,]+)[^·]*· ₪([\d,]+) less than real spend \(you spent more than you budgeted\)( · ±₪([\d,]+) rounding)?/,
+          );
+          if (!m) continue;
+          overFaces++;
+          const real = n((yr.match(/₪([\d,]+) a month real spend/) || [])[1]);
+          const way = (m[1] ? -1 : 1) * n(m[2]);
+          const printedGap = -n(m[3]); // “less than”: the gap is negative
+          const diff = Math.abs(way - real - printedGap);
+          expect(m[4] ? n(m[5]) : 0, 'window ' + w + ': ' + yr).toBe(diff);
+          if (diff) markers++;
+          expect((yr.match(/rounding/g) || []).length).toBeLessThanOrEqual(1);
+        }
+        expect(overFaces, 'the negative-gap face is reached').toBeGreaterThan(0);
+        // On the agorot seed at least one window really is off, so the marker is not vacuous.
+        if (agorot) expect(markers, 'a marker shows in the negative-gap face').toBeGreaterThan(0);
+      },
+    );
+  }
+
+  test('V7: the rounding row says “rounding” when the gap comes from averages, “agorot, rounded” when from agorot', async ({
+    page,
+    db,
+  }) => {
+    allAgorot(db);
+    await openStack(page, { allowWrites: true });
+    await openEverything(page);
+    const rowsOf = (card) =>
+      page.evaluate(
+        (c) =>
+          [
+            ...document.querySelectorAll(
+              '[data-an2-card="' + c + '"] .an2-row-sub span:first-child',
+            ),
+          ]
+            .map((e) => e.textContent.trim())
+            .filter((t) => /^(rounding|agorot, rounded)/.test(t)),
+        card,
+      );
+    // (🧭 and 💼 mix both kinds: the Lean floors and the income months really carry agorot.)
+    const avgCards = ['month', 'year'];
+    const seen = [];
+    for (const c of avgCards) {
+      const r = await rowsOf(c);
+      seen.push(...r);
+      expect(
+        r.filter((t) => t.startsWith('agorot, rounded')),
+        c + ' is from averages',
+      ).toEqual([]);
+    }
+    expect(seen.length, 'some averaged card needed a rounding row').toBeGreaterThan(0);
+    expect(seen.every((t) => t.startsWith('rounding'))).toBe(true);
+    // Agorot in her data keep the old words.
+    expect(
+      (await rowsOf('cash'))
+        .concat(await rowsOf('left'))
+        .some((t) => t.startsWith('agorot, rounded')),
+    ).toBe(true);
   });
 
   // ── Z7 · "KH" is spelled out where the stack first prints it ──────────────
@@ -1211,7 +1688,8 @@ test.describe('v73 fix round', () => {
     const face = (k) => text(page, `[data-an2-card="${k}"] .an2-face`);
     const month = await face('month');
     expect(month).toContain('₪9,191 a month');
-    expect(month).toContain('≈ ₪7,091 bills, everyday and charity + ₪2,101 trips & one-offs'); // 7,091 + 2,101 = 9,192 vs the true 9,191: the detail has the −₪1 row
+    expect(month).toContain('₪7,091 bills, everyday and charity + ₪2,101 trips & one-offs');
+    expect(month).toContain('· ±₪1 rounding'); // 7,091 + 2,101 = 9,192 vs the true 9,191: the detail has the −₪1 row
     expect(month).toContain('Carmei Gat ≈ −₪86 a month (−₪336 with upkeep)');
     expect(month).toContain('Set aside for tax on private ≈ ₪260 a month');
     const year = await face('year');
@@ -1361,7 +1839,6 @@ test.describe('W2 · every sum on the page adds up as shown (agorot everywhere)'
     'mn-month',
     'cg-a',
     'cg-b',
-    'room-groceries',
     'pots0-all',
     'pots1-all',
     'bills-total',
@@ -1504,7 +1981,7 @@ test.describe('W6 / W7 · Feb 7 and the bills fallback', () => {
 
 // ── W9 · the stack's totals ARE the other tabs' numbers (agorot everywhere) ──
 // Her rules: Left to Budget is the ribbon's number (D1), Left now is the Cash tab's Total
-// Liquid (v72), and every other total that exists on the classic page reads the same there.
+// Liquid (v72). (The v72 page's other totals were checked here until v74 deleted it.)
 test.describe('W9 · one meaning of each number, on data full of agorot', () => {
   const digitsOf = (t) => digits(String(t).match(/[−-]?\s*₪?[\d,]+/)[0]);
   const stackBig = (page, sel) => text(page, sel);
@@ -1562,54 +2039,6 @@ test.describe('W9 · one meaning of each number, on data full of agorot', () => 
     );
     expect(first).toBeTruthy();
     expect(await page.evaluate(() => window.buildStackCtx().feb7.result.start)).toBe(liquid - 1234);
-  });
-
-  test('📅 🪜 🧾 🏠 ✈️📋 totals === the classic page’s, to the shekel', async ({ page, db }) => {
-    allAgorot(db);
-    await openStack(page, { allowWrites: true });
-    const face = (k) => text(page, `[data-an2-card="${k}"] .an2-face`);
-    const n = (re, t) => Number((t.match(re) || [])[1].replace(/,/g, ''));
-    const stack = {};
-    const month = await face('month');
-    stack.month = n(/^[^₪]*₪([\d,]+) a month/, month);
-    stack.monthBase = n(/₪([\d,]+) bills, everyday and charity/, month);
-    const year = await face('year');
-    stack.real = n(/₪([\d,]+) a month real spend/, year);
-    stack.saved = n(/saved ₪([\d,]+) a month/, year);
-    stack.herWay = n(/your way \(income − savings\): ₪([\d,]+)/, year);
-    stack.lean = n(/Lean ₪([\d,]+) a month/, await face('levels'));
-    stack.bills = n(/₪([\d,]+) a month/, await face('bills'));
-    stack.pots = n(/₪([\d,]+) →/, await face('pots'));
-    await page.locator('[data-an2-card="year"] .an2-more').click();
-    stack.yearTab = n(
-      /THE YEAR TAB SAYS ₪([\d,]+)/i,
-      await text(page, '[data-an2-card="year"] .an2-detail'),
-    );
-    await openEverything(page, '[data-an2-card="year"]');
-    stack.why = n(/₪([\d,]+) (?:more|less)\./, await text(page, '[data-an2-card="year"] details'));
-
-    await page.goto('/?analyze=classic');
-    await page.waitForFunction(() => !document.querySelector('.loading'), null, { timeout: 30000 });
-    await page.evaluate(() => window.switchTab('analyze'));
-    await page.waitForSelector('.an-tiles', { timeout: 30000 });
-    const c = (await page.locator('#root').innerText()).replace(/\s+/g, ' ');
-    const classic = {
-      month: n(/WHAT DOES A MONTH COST\? ₪([\d,]+)/, c),
-      monthBase: n(/₪([\d,]+) \+ trips & one-offs \(lean plan\)/, c),
-      real: n(/real spend ₪([\d,]+)/, c),
-      saved: n(/DID I SAVE\? ₪([\d,]+)/, c),
-      herWay: n(/= ₪([\d,]+) — /, c),
-      lean: n(/MY LADDER ₪([\d,]+)/, c),
-      bills: n(/Bills ₪([\d,]+)\/mo/, c),
-      pots: n(/Travel & admin ₪([\d,]+)\/yr/, c),
-      yearTab: n(/The Year tab says ₪([\d,]+)/, c),
-      why: n(/Why so high \+₪([\d,]+)/, c),
-    };
-    test.info().annotations.push({
-      type: 'stack vs classic',
-      description: JSON.stringify({ stack, classic }),
-    });
-    expect(stack).toEqual(classic);
   });
 });
 
@@ -1722,21 +2151,29 @@ test.describe('R2 / R4 / R5 / R7 / R8 · the round 3 rule, pinned', () => {
       }
     }
     expect(both, 'at least one line prints the average twice').toBeGreaterThan(0);
-    // Room is the printed average minus the printed Lean, every line.
-    const lines = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-an2-card="levels"] .an2-frow')].map((r) => {
+    // V2 · each figure its own rounding: the average is roundZ(true average) and room is
+    // roundZ(true average − true Lean) - NOT the shown average minus the shown Lean.
+    const lines = await page.evaluate(() => {
+      const cats = window.buildStackCtx().r.cats;
+      return [...document.querySelectorAll('[data-an2-card="levels"] .an2-frow')].map((r) => {
         const t = r.innerText.replace(/\s+/g, ' ');
-        const avg = Number(((t.match(/average ₪([\d,]+)/) || [])[1] || '').replace(/,/g, ''));
+        const c = cats.find((x) => x.key === r.dataset.cat);
         const room = t.match(/room ([−+]?)₪([\d,]+)/);
-        const inp = r.querySelector('input');
+        const avg = (t.match(/average ₪([\d,]+)/) || [])[1];
+        const r0 = (n) => (Math.round(n) === 0 ? 0 : Math.round(n));
         return {
-          avg,
+          cat: r.dataset.cat,
+          avg: avg === undefined ? null : Number(avg.replace(/,/g, '')),
+          avgWant: r0(c.avg),
           room: room ? (room[1] === '−' ? -1 : 1) * Number(room[2].replace(/,/g, '')) : null,
-          lean: Number(inp.value || inp.placeholder),
+          roomWant: r0(c.avg - c.floor),
         };
-      }),
-    );
-    for (const l of lines) expect(l.avg - l.lean).toBe(l.room);
+      });
+    });
+    for (const l of lines) {
+      expect(l.avg, l.cat + ' average').toBe(l.avgWant);
+      expect(l.room, l.cat + ' room').toBe(l.roomWant);
+    }
   });
 
   test('R5: bill lines that do not add when rounded one by one: the category prints its own total and ONE rounding row', async ({
@@ -1842,7 +2279,7 @@ test.describe('R2 / R4 / R5 / R7 / R8 · the round 3 rule, pinned', () => {
 // Every figure that names a quantity carries a stable data-qty key (e.g. bills:2026-10:recurring,
 // cash:holdings, income:2026-10, potdue:Postage, floor:2026:household:avg). This visits the stack
 // (collapsed and fully expanded, with a what-if), the Budget ribbon, the Cash tab, the Year tab and
-// the classic page, and asserts that EVERY element with the same key prints the same number across
+// and asserts that EVERY element with the same key prints the same number across
 // the whole app. Round 2's apportionment printed one bill 1,153 here and 1,154 there; this is the
 // test that finds the next such split.
 test.describe('R3 · one figure, one print, across the whole app (agorot everywhere)', () => {
@@ -1852,11 +2289,16 @@ test.describe('R3 · one figure, one print, across the whole app (agorot everywh
       document.querySelectorAll('[data-qty]').forEach((el) => {
         if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return; // hidden
         let t = el.tagName === 'INPUT' ? el.value || el.placeholder : el.textContent;
+        // An amount box holds the raw number (1000.5): read it as the whole shekels it stands for.
+        if (el.tagName === 'INPUT' && el.type === 'number' && el.value !== '')
+          t = String(Math.round(Number(el.value)));
         const m = String(t).match(/([−-])?\s*₪?\s*([−-])?([\d,]+)/);
         const v = m
           ? (m[1] || m[2] ? '-' : '') + m[3].replace(/,/g, '')
           : 'NaN:' + String(t).trim();
-        for (const key of el.dataset.qty.split(' ')) out.push({ key, v, t: String(t).trim() });
+        // data-qty-sign="-": printed as a positive number ("short ₪150") for a negative value.
+        const sv = el.dataset.qtySign === '-' && !v.startsWith('-') && v !== '0' ? '-' + v : v;
+        for (const key of el.dataset.qty.split(' ')) out.push({ key, v: sv, t: String(t).trim() });
       });
       return out;
     });
@@ -1888,10 +2330,69 @@ test.describe('R3 · one figure, one print, across the whole app (agorot everywh
   for (const year of [2026, 2027]) {
     test('every data-qty key prints one number in ' + year, async ({ page, db }) => {
       allAgorot(db);
+      // An overpaid Admin item (Course fees planned ₪1,200, paid ₪1,250): the stack's still-to-pay and
+      // the Admin tab's Remaining (budget − all paid) differ here, so a shared key would be caught.
+      const course = db.table('admin_items').find((i) => i.label === 'Course fees');
+      db.table('admin_sub_items').push({
+        id: 'sub-over',
+        item_id: course.id,
+        label: 'Fee',
+        amount: 1250,
+        is_paid: true,
+        month_num: 5,
+      });
       await openStack(page, { allowWrites: true });
       if (year === 2027) await goYear(page, 2027);
+      // U2/T4: every averaging window x US-tax off/on x year state goes into the SAME store as the
+      // other tabs: a key names everything it depends on, so one key must print one number across
+      // ALL of these states - a key that forgot the window, the US-tax state or the Lean's year
+      // meets a different number from another state and fails here.
       const store = {};
       const whatIf = {};
+      const roomOnly = (st) =>
+        Object.fromEntries(Object.entries(st).filter(([k]) => /:room:/.test(k)));
+      for (const w of [0, 3, 6, -1])
+        for (const se of [false, true]) {
+          await page.evaluate(
+            ([k, on]) => {
+              window.setAnalyzeAvgWindow(k);
+              window.setAnalyzeSE(on);
+            },
+            [w, se],
+          );
+          await gather(page, 'stack collapsed', store);
+          await openEverything(page);
+          await gather(page, 'stack expanded', store);
+        }
+      if (year === 2027) {
+        // A second Lean state: one 2027 line set, so its room is measured against 2027's Lean now
+        // (not 2026's). The room keys of both states are compared in one store.
+        await page.evaluate(() => {
+          window.setAnalyzeAvgWindow(0);
+          window.setAnalyzeSE(false);
+        });
+        const before = roomOnly(store);
+        await page.evaluate(() => window.saveSpendFloor('groceries', '777'));
+        await page.waitForTimeout(600);
+        const after = {};
+        await openEverything(page);
+        await gather(page, 'stack lean-set', after);
+        const merged = {};
+        for (const st of [before, roomOnly(after)])
+          for (const [k, v] of Object.entries(st)) (merged[k] ||= []).push(...v);
+        expect(wrong(merged), 'room keys across the 2026-Lean and 2027-Lean states').toEqual([]);
+        expect(
+          Object.keys(roomOnly(after)).some((k) => /groceries:room:0:lean2027/.test(k)),
+          'the set line is measured against 2027’s Lean',
+        ).toBe(true);
+        // Put the Lean back for the rest of the run.
+        await page.evaluate(() => window.saveSpendFloor('groceries', ''));
+        await page.waitForTimeout(600);
+      }
+      await page.evaluate(() => {
+        window.setAnalyzeAvgWindow(0);
+        window.setAnalyzeSE(false);
+      });
       await gather(page, 'stack collapsed', store);
       await openEverything(page);
       await gather(page, 'stack expanded', store);
@@ -1900,21 +2401,47 @@ test.describe('R3 · one figure, one print, across the whole app (agorot everywh
       await openEverything(page);
       await gather(page, 'stack what-if', whatIf);
       await page.evaluate(() => window.setAnalyzeOneOff('0'));
+      // U4: on the Whole-year window the 🧾 saved + income averages mean what the Year tab's
+      // Avg/mo means, so that window's prints join the cross-app store too.
+      await page.evaluate(() => window.setAnalyzeAvgWindow(-1));
+      await openEverything(page);
+      await gather(page, 'stack wholeyear', store);
+      await page.evaluate(() => window.setAnalyzeAvgWindow(0));
       await goTab(page, 'budget', '.ribbon-stat.rs-key .ribbon-val');
       await gather(page, 'ribbon', store);
+      // The bill lines sit in the housing / recurring sections: open them so their boxes are read.
+      await page.evaluate(() => {
+        for (const k of ['housing', 'recurring'])
+          if (!window.state.openCats.has(k)) window.toggleCat(k);
+      });
+      await gather(page, 'budget lines', store);
       await goTab(page, 'cash', '.year-sum-card');
       await gather(page, 'cash tab', store);
+      // T1: the Year tab through BOTH of its views. Its keys end :full (projected) or :actual
+      // ("Actual Only" zeroes future months); the stack's figures are the full-year projected ones.
       await goTab(page, 'year', '.year-mobile');
-      await gather(page, 'year tab', store);
-      if (year === 2026) {
-        await page.goto('/?analyze=classic');
-        await page.waitForFunction(() => !document.querySelector('.loading'), null, {
-          timeout: 30000,
-        });
-        await page.evaluate(() => window.switchTab('analyze'));
-        await page.waitForSelector('.an-tiles', { timeout: 30000 });
-        await gather(page, 'classic', store);
+      for (const view of ['projected', 'actual']) {
+        await page.evaluate((v) => {
+          localStorage.setItem('yearViewMode', v);
+          window.renderApp();
+        }, view);
+        await page.waitForSelector('.year-mobile', { timeout: 30000 });
+        await gather(page, 'year tab', store);
+        // The Year tab's Avg/mo column and income ribbon are on the wide layout.
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await gather(page, 'year wide', store);
+        await page.setViewportSize({ width: 412, height: 892 });
       }
+      await page.evaluate(() => {
+        localStorage.setItem('yearViewMode', 'projected');
+        window.renderApp();
+      });
+      // S1: the Admin tab's Remaining (budget − all paid) is visited too: no stack figure may share
+      // its key (the seed has an overpaid item, where it and the stack's still-to-pay differ).
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await goTab(page, 'admin', '[data-qty="adminremaining:' + year + '"]');
+      await gather(page, 'admin', store);
+      await page.setViewportSize({ width: 412, height: 892 });
       const keys = Object.keys(store);
       expect(keys.length, 'keys seen: ' + keys.join(' ')).toBeGreaterThan(20);
       expect(wrong(store), year + ': the same figure prints two numbers').toEqual([]);
@@ -1933,18 +2460,18 @@ test.describe('R3 · one figure, one print, across the whole app (agorot everywh
               'budgeted:2026-10': ['stack', 'ribbon'],
               'bills:2026-10:recurring': ['stack', 'year'],
               'bills:2026-10:housing': ['stack', 'year'],
-              'bills:2026-10': ['stack', 'classic'],
-              'level:lean:2026': ['stack', 'classic'],
-              'real:2026:0': ['stack', 'classic'],
-              'saved:2026:0': ['stack', 'classic'],
-              'herway:2026:0': ['stack', 'classic'],
-              'incomeavg:2026:0': ['stack', 'classic'],
-              'gap:2026:0': ['stack', 'classic'],
-              'yeartab:2026:0': ['stack', 'classic'],
-              'monthnow:2026': ['stack', 'classic'],
-              'monthbase:2026': ['stack', 'classic'],
-              'pots:2026': ['stack', 'classic'],
-              'whymove:2026:0': ['stack', 'classic'],
+              // V5: a bill line is also an amount box on the Budget tab; a month's savings is the
+              // Year tab's Total Savings.
+              'billline:2026-10:housing:Rent': ['stack', 'budget'],
+              'billline:2026-10:recurring:Phone': ['stack', 'budget'],
+              'billline:2026-10:recurring:Cloud%20storage': ['stack', 'budget'],
+              'monthsaved:2026-10:full': ['stack', 'year'],
+              // U3/U4: the Year tab's own Total Used avg/mo, savings avg/mo, income avg/mo and the
+              // month's charity are printed on the stack too.
+              'yeartab:used:2026:full': ['stack', 'year'],
+              'saved:2026:-1:full': ['stack', 'year'],
+              'incomeavg:2026:-1:full': ['stack', 'year'],
+              'charity:2026-10:full': ['stack', 'year'],
             }
           : {
               'cash:holdings': ['stack', 'cash'],
@@ -1960,10 +2487,39 @@ test.describe('R3 · one figure, one print, across the whole app (agorot everywh
       // Several prints inside the stack itself: the potdue pair, the 🪜 averages, the what-if.
       if (year === 2026) {
         expect((store['potdue:Postage'] || []).length, 'potdue:Postage').toBeGreaterThan(1);
+        // T1: "Actual Only" reads another number for the same words (future months are 0), so it
+        // has its OWN key and never meets the stack's full-year figure.
+        const actual = (store['saved:2026:-1:actual'] || [])[0];
+        const full = (store['saved:2026:-1:full'] || []).find((p) => p.where.startsWith('stack'));
+        expect(actual, 'the Year tab prints its Actual-Only savings average').toBeTruthy();
+        expect(actual.v, 'Actual Only is a different number').not.toBe(full.v);
+        // V4: a name with a space keeps one key (percent-encoded), and still prints twice.
+        expect((store['potdue:Summer%20trip'] || []).length, 'potdue:Summer trip').toBeGreaterThan(
+          1,
+        );
         expect(
-          Object.keys(store).filter((k) => /^floor:2026:.*:avg$/.test(k)).length,
+          Object.keys(store).filter((k) => /^floor:2026:.*:avg:0$/.test(k)).length,
           'floor averages tagged',
         ).toBeGreaterThan(3);
+        // V3a: the everyday pace prints on the 📅 envelope row, in "What moved" and as the 🪜
+        // "your pace now" (the second and third only when this month's numbers call for them -
+        // V3a pins that case); every envelope row carries its key.
+        const paceKeys = Object.keys(store).filter((k) => /^pace:2026:/.test(k));
+        expect(paceKeys.length, 'pace keys tagged').toBeGreaterThan(1);
+        // V5: the 💼 face range, the 🧭 "Income · 4/5 clients" rows, the 🧭 tiles and 💼 "At your
+        // levels" are the same figures; the 🧾 "what moved" averages print in the sentence and a row.
+        for (const [k, n] of [
+          ['planincome:low:se0', 5],
+          ['planincome:high:se0', 5],
+          ['planres:low:lean:se0', 3],
+          ['planres:high:normal:se0', 3],
+          ['whyrecent:2026:0', 2],
+          ['whyearly:2026:0', 2],
+        ])
+          expect((store[k] || []).length, k).toBeGreaterThanOrEqual(n);
+        // V3b: both parts of the 🧾 split print on the face and again in the detail.
+        for (const k of ['notbudgeted:2026:0', 'unspent:2026:0'])
+          expect((store[k] || []).length, k).toBeGreaterThan(1);
         expect((whatIf['cash:oneoff'] || []).length, 'cash:oneoff').toBeGreaterThan(2);
         expect(new Set((whatIf['cash:oneoff'] || []).map((p) => p.v))).toEqual(new Set(['1235']));
       }

@@ -7,19 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
 import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
-import {
-  analyzeYear,
-  yearTabGap,
-  whyBridge,
-  runway,
-  WHOLE_YEAR,
-  billLines,
-  potYear,
-  monthNow,
-  monthNowTotals,
-  billsMonthFor,
-} from './lib/analyze.js';
-import { gan2GrossMonth, seTax, taxSetAside, carmeiGatNet, cashLasts } from './lib/pay.js';
+import { analyzeYear, WHOLE_YEAR, potYear } from './lib/analyze.js';
+import { seTax, taxSetAside, carmeiGatNet } from './lib/pay.js';
 import { feb7Passed, projectFeb7, buildFeb7Input, answerByLevel } from './lib/feb7.js';
 import {
   cashShown,
@@ -36,33 +25,24 @@ import {
   PET_NET,
   MIX_NET,
   SCENARIOS,
-  scenario,
   planIncomeForMonth,
   clientsNet,
-  planCaption,
   privateNetOf,
   LEVEL_META,
   spendLevelLines,
   spendLevelTotal,
-  potPlanFor,
   POT_PLAN,
-  jobRates,
   perHourLines,
   jobCompareRows,
 } from './lib/scenarios.js';
-import type { LevelKey, ScenarioRow } from './lib/scenarios.js';
 import { renderAnalyzeStack } from './tabs/analyze.js';
 import type { StackCtx, StackIncomeMonth } from './tabs/analyze.js';
 import type {
-  AnalyzeCatStat,
   AnalyzeFloorIn,
   AnalyzeInput,
-  AnalyzeMonth,
   AnalyzeResult,
-  BillLine,
   PotItemIn,
   PotPaidIn,
-  PotRow,
   PotYear,
 } from './lib/analyze.js';
 
@@ -95,8 +75,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v73';
-const BUILD_DATE = 'Oct 19, 2026 12:50';
+const APP_VERSION = 'v74';
+const BUILD_DATE = 'Oct 20, 2026 03:59';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
@@ -3775,6 +3755,11 @@ function renderCategoryGroups(
                     };
                     const subcatOpts = c.key === 'housing' ? HOUSING_SUBCATS : RECURRING_SUBCATS;
                     const isGridCat = c.key === 'housing' || c.key === 'recurring';
+                    const billMonth = state.months.find((m) => m.id === state.currentMonthId);
+                    const billYm =
+                      state.currentYear +
+                      '-' +
+                      String(billMonth ? billMonth.month_num : 0).padStart(2, '0');
                     const renderBudgetItemRow = (item: BudgetItemRow): string => {
                       // Subcat picker: per-row select. On mobile the section
                       // banner already conveys the subcategory, so hide it
@@ -3812,7 +3797,18 @@ function renderCategoryGroups(
                         item.id +
                         "','label',this.value)\">" +
                         subSel +
-                        '<input type="number" class="bi-amount" value="' +
+                        '<input type="number" class="bi-amount"' +
+                        // data-qty (tabs/analyze.ts): this line is also printed on the Analyze 🏠 card.
+                        (c.hasLines && !c.hasTab
+                          ? ' data-qty="billline:' +
+                            billYm +
+                            ':' +
+                            c.key +
+                            ':' +
+                            encodeURIComponent(item.label || '') +
+                            '"'
+                          : '') +
+                        ' value="' +
                         (item.amount || '') +
                         '" placeholder="0" min="0" step="1" onclick="event.stopPropagation()" onchange="saveBudgetItem(\'' +
                         item.id +
@@ -4241,9 +4237,7 @@ function renderApp() {
           : state.activeTab === 'year'
             ? renderYearSnapshot()
             : state.activeTab === 'analyze'
-              ? analyzeMode() === 'stack'
-                ? renderAnalyzeStackView()
-                : renderAnalyzeTab()
+              ? renderAnalyzeStackView()
               : state.activeTab === 'cash'
                 ? renderCashTab()
                 : state.activeTab === 'charity'
@@ -7648,7 +7642,7 @@ function renderAdminTab() {
       </div>
       <div style="background:var(--surface);border:1px solid ${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};border-radius:var(--rl);padding:1rem;box-shadow:var(--shadow);">
         <div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};margin-bottom:.4rem;">Remaining</div>
-        <div style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
+        <div data-qty="adminremaining:${state.currentYear}" style="font-family:'DM Mono',monospace;font-size:1.4rem;font-weight:500;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--accent)'};">${remaining < 0 ? fmtA(Math.abs(remaining)) : fmtA(remaining)}</div>
         <div style="font-size:.68rem;color:${roundZ(remaining) < 0 ? 'var(--red)' : 'var(--dim)'};margin-top:.2rem;">${roundZ(remaining) < 0 ? 'over budget' : 'not yet paid'}</div>
       </div>
     </div>
@@ -9514,6 +9508,9 @@ function renderYearSnapshot(): string {
   const months = [...state.months].sort((a, b) => a.month_num - b.month_num);
   const todayMonth = todayMonthForYear();
   const showProjected = localStorage.getItem('yearViewMode') !== 'actual';
+  // data-qty keys on this tab name the VIEW they read: "Actual Only" zeroes future months, so its
+  // Avg/mo is not the full-year projected figure the Analyze stack prints (keys end :full / :actual).
+  const qView = showProjected ? 'full' : 'actual';
   const LEISURE = ['takeout', 'eatingout', 'entertainment', 'retail', 'holiday', 'gifts'];
 
   const txSum = (mid: string, cats: string[]): number =>
@@ -9725,6 +9722,7 @@ function renderYearSnapshot(): string {
       type: 'row',
       bold: true,
       label: 'Total Used',
+      avgQty: 'yeartab:used:{y}:{v}',
       valFn: (m: MonthRow, f: boolean) => totalSpentFor(m, f),
       sectionGroup: 'overview',
     },
@@ -9746,6 +9744,8 @@ function renderYearSnapshot(): string {
       type: 'row',
       bold: true,
       label: 'Total Savings',
+      qty: 'monthsaved:{ym}:{v}',
+      avgQty: 'saved:{y}:-1:{v}',
       valFn: (m: MonthRow, f: boolean) =>
         !showProjected && f
           ? 0
@@ -9772,6 +9772,7 @@ function renderYearSnapshot(): string {
     {
       type: 'row',
       label: 'Set aside',
+      qty: 'charity:{ym}:{v}',
       valFn: (m: MonthRow, f: boolean) => charityV(m.month_num, f),
       sectionGroup: 'charity',
     },
@@ -9862,6 +9863,7 @@ function renderYearSnapshot(): string {
     {
       type: 'row',
       label: '\u{1F49A} Charity',
+      qty: 'charity:{ym}:{v}',
       valFn: (m: MonthRow, f: boolean) => charityV(m.month_num, f),
       sectionGroup: 'spending',
     },
@@ -9951,7 +9953,11 @@ function renderYearSnapshot(): string {
     fmtY(totalAnnInc) +
     '</strong></span>' +
     '<span class="yr-sep">·</span>' +
-    '<span class="yr-stat">Avg <strong>' +
+    '<span class="yr-stat">Avg <strong data-qty="incomeavg:' +
+    state.currentYear +
+    ':-1:' +
+    qView +
+    '">' +
     fmtY(totalAnnInc / 12) +
     '</strong>/mo</span>' +
     '<span class="yr-sep">|</span>' +
@@ -10152,7 +10158,13 @@ function renderYearSnapshot(): string {
         totCls +
         '">' +
         fmtYZ(total) +
-        '</td><td class="year-cell-avg">' +
+        '</td><td class="year-cell-avg"' +
+        (row.avgQty
+          ? ' data-qty="' +
+            row.avgQty.replace('{y}', String(state.currentYear)).replace('{v}', qView) +
+            '"'
+          : '') +
+        '>' +
         fmtYZ(avg) +
         '</td><td class="year-cell-pct">' +
         pct +
@@ -10331,7 +10343,9 @@ function renderYearSnapshot(): string {
       '</span><span class="ym-dots"></span><span class="ym-val"' +
       (row.qty
         ? ' data-qty="' +
-          row.qty.replace('{ym}', state.currentYear + '-' + String(selMonthNum).padStart(2, '0')) +
+          row.qty
+            .replace('{ym}', state.currentYear + '-' + String(selMonthNum).padStart(2, '0'))
+            .replace('{v}', qView) +
           '"'
         : '') +
       '>' +
@@ -10595,7 +10609,7 @@ function setAnalyzeAvgWindow(n: number): void {
 
 // Z4 (the stack only): which of the viewed year's Lean lines still read the prior
 // year's floor, line by line. `all` = the viewed year has no floor row at all.
-// The classic page keeps its all-or-nothing rule (loadFloors is untouched).
+// (loadFloors itself is untouched: it still loads only the viewed year's rows.)
 function floorFallbackLines(): { fromYear: number; keys: string[]; all: boolean } | null {
   const f = _stackFloorBase;
   if (!f || f.forYear !== state.currentYear || !state.floors) return null;
@@ -10732,10 +10746,7 @@ async function floorWriteGate(catKey: string): Promise<number | null> {
 // still in flight (its completion renders). Otherwise render now.
 let _floorWritesInFlight = 0;
 function isFloorControl(x: unknown): x is HTMLElement {
-  return (
-    x instanceof HTMLElement &&
-    (x.classList.contains('an-floor') || x.classList.contains('an-nsel'))
-  );
+  return x instanceof HTMLElement && x.classList.contains('an-floor');
 }
 function deferRenderToBlur(el: HTMLElement): void {
   if (el.dataset.rerenderOnBlur) return;
@@ -10980,40 +10991,6 @@ async function setFloorAvgN(catKey: string, nRaw: string | number): Promise<void
 //   = the Cash tab's Total Liquid (cashTotals), never a third meaning.
 // What's next: a cross-year view for January 2027; scenario incomes she can
 //   edit (needs a table — her go).
-type AnSub = 'real' | 'now' | 'why' | 'floor' | 'cut' | 'safe' | 'income' | 'bills' | 'pots';
-const AN_SUBS: AnSub[] = ['real', 'now', 'why', 'floor', 'cut', 'safe', 'income', 'bills', 'pots'];
-function analyzeSub(): AnSub {
-  let v = '';
-  try {
-    v = localStorage.getItem('analyzeSub') || '';
-  } catch {
-    v = '';
-  }
-  return (AN_SUBS as string[]).includes(v) ? (v as AnSub) : 'real';
-}
-// Which Analyze page renders: the card stack (tabs/analyze.ts) or the v72 page.
-// v73: the card stack is the default; the v72 page stays one version at ?analyze=classic
-// (v74 deletes renderAnalyzeTab and its CSS).
-function analyzeMode(): 'stack' | 'classic' {
-  return new URLSearchParams(location.search).get('analyze') === 'classic' ? 'classic' : 'stack';
-}
-function setAnalyzeSub(s: string): void {
-  if (!(AN_SUBS as string[]).includes(s)) return;
-  try {
-    localStorage.setItem('analyzeSub', s);
-  } catch {
-    /* view state only */
-  }
-  renderApp();
-  requestAnimationFrame(() => {
-    const el = document.querySelector('.an-section');
-    if (el && el.getBoundingClientRect().top > window.innerHeight * 0.6)
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-}
-function analyzeToTop(): void {
-  document.querySelector('.an-tiles')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
 // Which rows are opened ("what is this made of"). View state, never stored.
 const _anOpen = new Set<string>();
 // "What if" one-off (her: "but eggfreezing is 8000", Oct 9). Held in memory
@@ -11091,24 +11068,6 @@ function setAnalyzeSE(on: boolean): void {
   }
   renderApp();
 }
-let _anLevel: LevelKey = 'lean';
-try {
-  const v = localStorage.getItem('analyzeLevel');
-  if (v === 'temp' || v === 'lean' || v === 'middle' || v === 'normal') _anLevel = v;
-} catch {
-  /* view state only */
-}
-function setAnalyzeLevel(v: string): void {
-  if (v !== 'temp' && v !== 'lean' && v !== 'middle' && v !== 'normal') return;
-  _anLevel = v;
-  try {
-    localStorage.setItem('analyzeLevel', v);
-  } catch {
-    /* view state only */
-  }
-  renderApp();
-}
-
 // "Why so high" — the drivers in her order, and the PROPOSED tag on each,
 // with where the tag came from. She changes a tag by saying so in chat.
 const WHY_ROWS: { key: string; label: string; tag: string; why: string }[] = [
@@ -11656,44 +11615,6 @@ async function loadFeb7Data(): Promise<void> {
   }
 }
 
-// Classic page only (v73 keeps it one version at ?analyze=classic; v74 deletes it):
-const CHOICES = SCENARIOS.filter((s) => s.key !== 'schoolgan').map((s) => ({
-  key: s.key,
-  label: s.label,
-  note: s.note,
-  net: s.net,
-  realHrs: s.real_hours,
-  paidHrs: s.paid_hours,
-  driveHrs: s.drive_hours,
-  sure: s.sure,
-  likely: s.likely,
-  maybe: s.maybe,
-  august: s.summer_note,
-}));
-const SAFE_SCENARIOS = [
-  'pet',
-  'pet2',
-  'petgan',
-  'all',
-  'all4',
-  'all5',
-  'school',
-  'school2',
-  'schoolgan',
-].map((k) => ({ key: k, label: scenario(k).label, income: scenario(k).net }));
-// Must not throw: the classic table adds a 'now' row that is in no list.
-const classicPrivate = (key: string): number =>
-  SCENARIOS.find((s: ScenarioRow) => s.key === key)?.private_clients || 0;
-const LEVEL_ORDER: LevelKey[] = LEVEL_META.map((l) => l.key);
-const LEVEL_NAME = Object.fromEntries(LEVEL_META.map((l) => [l.key, l.name])) as Record<
-  LevelKey,
-  string
->;
-const LEVEL_NOTE = Object.fromEntries(LEVEL_META.map((l) => [l.key, l.note])) as Record<
-  LevelKey,
-  string
->;
-
 // The card stack's data: plain numbers and strings, assembled here once so
 // tabs/analyze.ts never reads `state`. null while the year is still loading.
 function buildStackCtx(): StackCtx | null {
@@ -11790,8 +11711,8 @@ function buildStackCtx(): StackCtx | null {
   const highRow = scenarios.find((x) => x.key === 'all5')!;
 
   // The four levels, in order. Lean is her editable floor; the rest are the Oct 11 rows.
-  // Each Lean line prints its own rounding; the total is the true sum rounded (the classic
-  // page's number); if the lines on screen do not add to it, one "agorot, rounded" row closes it.
+  // Each Lean line prints its own rounding; the total is the true sum rounded (the same
+  // number the rest of the app prints); if the lines on screen do not add to it, one "agorot, rounded" row closes it.
   const lean = shownByKey(Object.fromEntries(r.cats.map((c) => [c.key, c.floor])));
   const leanLines = lean.lines;
   const leanTotal = lean.total;
@@ -11890,7 +11811,8 @@ function buildStackCtx(): StackCtx | null {
     .sort((a, b) => a.month_num - b.month_num)
     .map((m) => {
       const w = whyYear[m.month_num] || {};
-      // W1: each source in whole shekels first, the month's total is their sum.
+      // Rounding rule: each source prints its own rounding; the month's total is the true sum
+      // rounded once (shownSum), with one rounding row if the printed parts do not add.
       const parts = shownSum(incomeSrcs.map((x) => inc(m, x.key)));
       const rows = incomeSrcs
         .map((x, k) => ({ label: x.label, value: parts.parts[k], why: w[x.key] || [] }))
@@ -12004,8 +11926,9 @@ function buildStackCtx(): StackCtx | null {
     },
   };
 }
-// W1: Carmei Gat's two chains in whole shekels - rent − mortgage − insurance − life = a month,
-// a month − upkeep = with upkeep - so each printed total is the sum of its printed parts.
+// Carmei Gat's two chains (rent − mortgage − insurance − life = a month, a month − upkeep =
+// with upkeep): each figure prints its own rounding and each result is the chain's true result
+// rounded once (shownChain); the card prints a rounding row if the printed parts do not add.
 function carmeiShown(): StackCtx['carmei'] {
   const cg = PAY.carmeiGat;
   const net = carmeiGatNet(cg);
@@ -12033,2038 +11956,6 @@ function renderAnalyzeStackView(): string {
   return ctx
     ? renderAnalyzeStack(ctx)
     : '<div class="an2-wrap" data-analyze="stack"><p class="an2-cap">Loading…</p></div>';
-}
-
-function renderAnalyzeTab(): string {
-  const r = computeAnalyze();
-  if (!r) return '<div style="text-align:center;padding:3rem;color:var(--dim)">Loading...</div>';
-  const { months, cats, summary: s } = r;
-  const sub = analyzeSub();
-  const win = analyzeAvgWindow();
-  // Floors not loaded for this year yet: the math above ran on none, so every
-  // floor-derived number is a placeholder — say so, never show a default as hers.
-  const floorsLoading = !state.floors;
-  const floorsFrom = floorsFromPriorYear();
-  const LOADING = '<span class="an-loading">loading…</span>';
-  // Never ₪-x: a minus sits in front of the shekel sign.
-  const money = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v || 0));
-  // data-qty: a stable key on a figure that names a quantity, so the cross-group test can assert
-  // every print of one quantity reads the same across the whole app (attribute only).
-  const qty = (html: string, key: string): string =>
-    '<span data-qty="' + key + '">' + html + '</span>';
-  const qk = state.currentYear + ':' + analyzeAvgWindow();
-  // A negative reads as −₪x, never ₪-x.
-  const signed = (v: number): string =>
-    roundZ(v) < 0 ? '−' + shekels(-v) : roundZ(v) > 0 ? '+' + shekels(v) : shekels(0);
-  const pctStr = (v: number): string => Math.round((v || 0) * 100) + '%';
-  const abbr = (mn: number | null): string => (mn ? MONTH_ABBR[mn - 1] || '?' : '?');
-  const span = (ms: number[]): string =>
-    !ms.length
-      ? 'no complete months yet'
-      : ms.length === 1
-        ? abbr(ms[0])
-        : abbr(ms[0]) + '–' + abbr(ms[ms.length - 1]);
-  const esc = (t: unknown): string =>
-    String(t ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/"/g, '&quot;');
-  // Hebrew words inside an English line keep their own direction (קליטה,
-  // היקף) — without <bdi> the bidi algorithm reorders the shekels around them.
-  const bidi = (t: unknown): string =>
-    esc(t).replace(/[֐-׿][֐-׿\s"'׳״-]*[֐-׿]|[֐-׿]/g, '<bdi>$&</bdi>');
-  // Whole year (v57): every month, the ones still ahead counted as budgeted —
-  // and every label says which months are budgeted, never passed off as real.
-  const whole = win === WHOLE_YEAR && months.some((m) => m.status === 'past');
-  const aheadNums = months.filter((m) => m.status !== 'past').map((m) => m.month_num);
-  const avgSpan =
-    span(s.avgMonths) + (whole && aheadNums.length ? ', ' + span(aheadNums) + ' budgeted' : '');
-  const avgSet = new Set(s.avgMonths);
-  const inAvg = months.filter((m) => avgSet.has(m.month_num));
-  const mean = (xs: number[]): number =>
-    xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-  const avgOf = (pick: (m: AnalyzeMonth) => number): number => mean(inAvg.map(pick));
-  const row = (label: string, val: string, cls = ''): string =>
-    '<div class="ym-row' +
-    (cls ? ' ' + cls : '') +
-    '"><span class="ym-label">' +
-    label +
-    '</span><span class="ym-dots"></span><span class="ym-val">' +
-    val +
-    '</span></div>';
-  // A row that opens to show what it is made of (her "is that true").
-  const openRow = (key: string, label: string, val: string, body: string, cls = ''): string => {
-    const open = _anOpen.has(key);
-    return (
-      '<button type="button" class="an-open' +
-      (open ? ' open' : '') +
-      '" aria-expanded="' +
-      open +
-      '" onclick="toggleAnRow(\'' +
-      key +
-      '\')">' +
-      row('<span class="an-caret">' + (open ? '▾' : '▸') + '</span>' + label, val, cls) +
-      '</button>' +
-      (open ? '<div class="an-detail">' + body + '</div>' : '')
-    );
-  };
-  const monthChips = (pick: (m: AnalyzeMonth) => number, ms: AnalyzeMonth[]): string =>
-    '<div class="an-mlist">' +
-    ms
-      .map(
-        (m) =>
-          '<span class="an-mchip an-mchip-ro' +
-          (m.status !== 'past' ? ' proj' : '') +
-          '">' +
-          abbr(m.month_num) +
-          ' ' +
-          money(pick(m)) +
-          '</span>',
-      )
-      .join('') +
-    '</div>';
-  const back =
-    '<button type="button" class="an-back" onclick="analyzeToTop()">↑ the questions</button>';
-  const how = (text: string): string =>
-    '<details class="an-how"><summary>How this is figured</summary><div>' +
-    text +
-    '</div></details>';
-  const none = s.avgMonths.length === 0;
-  const noneNote =
-    '<p class="an-say">Nothing in ' +
-    state.currentYear +
-    ' is complete yet, so there is no real spend to read here. ' +
-    (state.currentYear > 2026
-      ? 'Switch to ' + (state.currentYear - 1) + ' for the year that happened.'
-      : 'Budgets fill the months ahead.') +
-    '</p>';
-
-  // ── Shared numbers ────────────────────────────────────────────────────
-  const savingsAvg = avgOf((m) => m.savings);
-  const incomeSum = inAvg.reduce((a, m) => a + m.income, 0);
-  const savingsRate = incomeSum ? inAvg.reduce((a, m) => a + m.savings, 0) / incomeSum : 0;
-  const gap = yearTabGap(r);
-  const why = whyBridge(
-    r,
-    WHY_ROWS.map((w) => w.key),
-    whole,
-  );
-  // A span in "why" that reaches into months not yet happened says so.
-  const wspan = (ms: number[]): string =>
-    span(ms) + (why && ms.some((x) => why.projected.includes(x)) ? ' (budgeted)' : '');
-  const nowRules = MONTH_NOW_RULES[state.currentYear] || { fromMonth: {}, zero: [] };
-  const refNum = billsMonthFor(s.referenceMonth);
-  const mNow = none
-    ? null
-    : monthNow(r, {
-        billsMonth: refNum,
-        recentN: 6,
-        fromMonth: nowRules.fromMonth,
-        zero: nowRules.zero,
-      });
-  const planNext = potPlanFor(state.currentYear + 1);
-  const oneOffsMo = planNext.reduce((a, p) => a + p.amount, 0) / 12;
-  const oneOffsLeanMo = planNext.reduce((a, p) => a + (p.lean ?? p.amount), 0) / 12;
-  // ONE computation for A month now: the tile and the section both read it.
-  const nowTotals = mNow ? monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo) : null;
-  const levelTotal = (lv: LevelKey): number =>
-    lv === 'lean' ? s.floorTotal : Object.values(spendLevelLines(lv)).reduce((a, v) => a + v, 0);
-  const levelSpend = levelTotal(_anLevel);
-  const cash = cashTotals();
-  const cashDays = cash.oldest ? Math.floor((Date.now() - cash.oldest.getTime()) / 86400000) : null;
-  const pet = SAFE_SCENARIOS[0];
-  const plan = SAFE_SCENARIOS.find((x) => x.key === 'all4') || pet;
-  const cashLeft = cash.liquid - _anOneOff;
-  const petReal = runway(cashLeft, pet.income, s.realAvg);
-  // US self-employment tax (rough), only when she switches it on, only on the
-  // mixes that carry the private clients.
-  const seOf = (key: string): number =>
-    _anSE && classicPrivate(key)
-      ? seTax(privateNetOf(scenario(key)), PAY.private.seRate, PAY.private.seBase)
-      : 0;
-  const incomeOf = (key: string, income: number): number => income - seOf(key);
-  const planNow = mNow ? runway(cashLeft, incomeOf(plan.key, plan.income), mNow.total) : null;
-  const margin = (v: number): string =>
-    v >= 0
-      ? '<span class="an-pos">+' + money(v) + '</span>'
-      : '<span class="an-short">short ' + money(-v) + '</span>';
-
-  // ── Head: the year + the averaging window, named by its months ───────
-  const pastNums = months.filter((m) => m.status === 'past').map((m) => m.month_num);
-  const winSpan = (n: number): string =>
-    span(n > 0 && pastNums.length > n ? pastNums.slice(pastNums.length - n) : pastNums);
-  const pills: string[] = [];
-  const seen = new Set<string>();
-  for (const n of [0, 3, 6]) {
-    const label = winSpan(n);
-    if (seen.has(label)) continue;
-    seen.add(label);
-    pills.push(
-      '<button class="yr-pillbtn an-winbtn' +
-        (win === n ? ' active' : '') +
-        '" onclick="setAnalyzeAvgWindow(' +
-        n +
-        ')" title="Average over ' +
-        label +
-        '">' +
-        label +
-        '</button>',
-    );
-  }
-  if (aheadNums.length && pastNums.length)
-    pills.push(
-      '<button class="yr-pillbtn an-winbtn' +
-        (whole ? ' active' : '') +
-        '" onclick="setAnalyzeAvgWindow(' +
-        WHOLE_YEAR +
-        ')" title="All 12 months — ' +
-        span(aheadNums) +
-        ' as budgeted">Whole year</button>',
-    );
-  const usesWindow = sub === 'real' || sub === 'why' || sub === 'floor' || sub === 'cut';
-  const savingsLine = none
-    ? ''
-    : '<p class="an-score">🏦 You saved <b>' +
-      money(savingsAvg) +
-      '</b> a month — ' +
-      pctStr(savingsRate) +
-      ' of what came in (' +
-      avgSpan +
-      ').</p>';
-  const head =
-    savingsLine +
-    '<div class="an-head"><div class="an-stamp">' +
-    state.currentYear +
-    (sub === 'why' && why
-      ? ' · compares <b>' + wspan(why.early) + '</b> with <b>' + wspan(why.recent) + '</b>'
-      : usesWindow
-        ? ' · averages over <b>' + avgSpan + '</b>'
-        : sub === 'now'
-          ? ' · from here on'
-          : sub === 'pots'
-            ? ' · this year vs next'
-            : sub === 'safe'
-              ? ' · after Feb 7'
-              : ' · month by month') +
-    '</div>' +
-    (usesWindow && pills.length > 1 ? '<div class="an-win">' + pills.join('') + '</div>' : '') +
-    '</div>';
-
-  // ── The five question tiles ───────────────────────────────────────────
-  const tile = (key: AnSub, q: string, val: string, note: string): string =>
-    '<button type="button" class="an-qtile' +
-    (sub === key ? ' active' : '') +
-    '" aria-pressed="' +
-    (sub === key) +
-    '" onclick="setAnalyzeSub(\'' +
-    key +
-    '\')"><span class="an-q">' +
-    q +
-    '</span><span class="an-a">' +
-    val +
-    '</span><span class="an-qn">' +
-    note +
-    '</span></button>';
-  const chip = (key: AnSub, label: string, val: string): string =>
-    '<button type="button" class="an-chip' +
-    (sub === key ? ' active' : '') +
-    '" aria-pressed="' +
-    (sub === key) +
-    '" onclick="setAnalyzeSub(\'' +
-    key +
-    '\')">' +
-    label +
-    (val ? ' <b>' + val + '</b>' : '') +
-    '</button>';
-  // One source with the cards: income after the (optional) US self-employment tax.
-  const choiceFit = (c: { key: string; net: number }): number =>
-    incomeOf(c.key, c.net) - levelSpend;
-  const fitting = CHOICES.filter((c) => choiceFit(c) >= 0).length;
-  const tiles =
-    '<div class="an-tiles an-tiles4">' +
-    tile(
-      'real',
-      'Did I save?',
-      none ? '—' : qty(money(savingsAvg), 'saved:' + qk),
-      none
-        ? 'nothing has happened yet'
-        : 'a month · real spend ' + qty(money(s.realAvg), 'real:' + qk) + ', ' + avgSpan,
-    ) +
-    tile(
-      'now',
-      'What does a month cost?',
-      nowTotals ? qty(money(nowTotals.headline), 'monthnow:' + state.currentYear) : '—',
-      mNow
-        ? oneOffsMo
-          ? qty(money(nowTotals ? nowTotals.base : 0), 'monthbase:' + state.currentYear) +
-            ' + trips & one-offs (lean plan)'
-          : 'bills, everyday and charity'
-        : 'needs a complete month',
-    ) +
-    tile(
-      'floor',
-      'My ladder',
-      floorsLoading
-        ? LOADING
-        : none && !floorsFrom
-          ? '—'
-          : qty(money(s.floorTotal), 'level:lean:' + state.currentYear),
-      floorsLoading || (none && !floorsFrom)
-        ? ''
-        : 'Lean' +
-            (floorsFrom ? ' (from ' + floorsFrom + ')' : '') +
-            ' · Temp ' +
-            money(levelTotal('temp')) +
-            ' · Normal ' +
-            money(levelTotal('normal')),
-    ) +
-    tile(
-      'safe',
-      'Which week?',
-      floorsLoading || (none && !floorsFrom) ? '—' : fitting + ' of ' + CHOICES.length,
-      floorsLoading || (none && !floorsFrom)
-        ? ''
-        : 'options that cover ' + LEVEL_NAME[_anLevel] + ' · after Feb 7',
-    ) +
-    '</div>' +
-    '<div class="an-chips"><span class="an-closer">Look closer</span>' +
-    chip('why', 'Why so high', why ? qty(signed(why.delta), 'whymove:' + qk) : '') +
-    chip('cut', 'Where to cut', floorsLoading || none ? '' : money(Math.max(0, s.aboveFloor))) +
-    chip(
-      'income',
-      'Income',
-      none ? '' : qty(money(avgOf((m) => m.income)), 'incomeavg:' + qk) + '/mo',
-    ) +
-    chip(
-      'bills',
-      'Bills',
-      qty(
-        money(months.find((m) => m.month_num === refNum)?.fixed || 0),
-        'bills:' + state.currentYear + '-' + String(refNum).padStart(2, '0'),
-      ) + '/mo',
-    ) +
-    chip(
-      'pots',
-      'Travel & admin',
-      state.potsCmp && state.potsCmp.years[0] === state.currentYear
-        ? qty(
-            money(
-              [...state.potsCmp.travel[0].rows, ...state.potsCmp.admin[0].rows].reduce(
-                (a, r) => a + Math.max(r.planned, r.paid),
-                0,
-              ),
-            ),
-            'pots:' + state.currentYear,
-          ) + '/yr'
-        : '',
-    ) +
-    '</div>';
-
-  // ── 1 · Real spend ────────────────────────────────────────────────────
-  const realSection = (): string => {
-    if (none) return noneNote;
-    // Savings leads — it is the score (her words, Sep 4).
-    const say =
-      '<p class="an-say">' +
-      (whole ? 'Across the whole year, savings come to <b>' : 'Saved: <b>') +
-      qty(money(savingsAvg), 'saved:' + qk) +
-      '</b> a month — ' +
-      pctStr(savingsRate) +
-      ' of what came in. <b>' +
-      qty(money(s.realAvg), 'real:' + qk) +
-      '</b> a month went to living (' +
-      avgSpan +
-      ').</p>';
-    // Her own way of working it out (Sep 7, Oct 9): income − savings.
-    const incomeAvg = avgOf((m) => m.income);
-    const herWay = incomeAvg - savingsAvg;
-    const herDiff = herWay - s.realAvg;
-    const herLine =
-      '<p class="an-say an-say-sm">Your way: ' +
-      qty(money(incomeAvg), 'incomeavg:' + qk) +
-      ' came in − ' +
-      qty(money(savingsAvg), 'saved:' + qk) +
-      ' saved = <b>' +
-      qty(money(herWay), 'herway:' + qk) +
-      '</b>' +
-      (Math.abs(herDiff) < 1
-        ? ' — the same as this tab <span class="an-ok">✓</span>'
-        : ' — ' +
-          qty(money(Math.abs(herDiff)), 'gap:' + qk) +
-          (herDiff > 0
-            ? ' more than this tab: income that hasn’t been given a job.'
-            : ' less than this tab: spending beyond what came in.')) +
-      '</p>';
-    let gapBlock = '';
-    if (gap && Math.abs(gap.yearTabAvg - gap.windowAvg) >= 1) {
-      const bridged = gap.windowAvg + gap.windowEffect + gap.envEffect + gap.otherEffect;
-      const unexplained = gap.yearTabAvg - bridged;
-      const open = gap.openMonths.length ? span(gap.openMonths) : '';
-      const body =
-        row('This tab · ' + avgSpan + ' ÷ ' + s.avgMonths.length, money(gap.windowAvg)) +
-        (Math.abs(gap.windowEffect) >= 1
-          ? row(
-              'Switching to every complete month (' + span(pastNums) + ')',
-              signed(gap.windowEffect),
-              'ym-row-sub',
-            )
-          : '') +
-        (open
-          ? row(
-              open + ' everyday spending — only what’s logged so far',
-              signed(gap.envEffect),
-              'ym-row-sub',
-            ) +
-            row(
-              open + ' bills, pots and charity — counted in full',
-              signed(gap.otherEffect),
-              'ym-row-sub',
-            )
-          : '') +
-        row(
-          'Year tab · all 12 months ÷ 12',
-          money(gap.yearTabAvg) +
-            (Math.abs(unexplained) < 1
-              ? ' <span class="an-ok">adds up ✓</span>'
-              : ' <span class="an-short">' +
-                money(Math.abs(unexplained)) +
-                ' not explained</span>'),
-          'ym-row-bold',
-        );
-      gapBlock =
-        '<div class="an-block">' +
-        openRow(
-          'real:gap',
-          'The Year tab says ' +
-            qty(money(gap.yearTabAvg), 'yeartab:' + qk) +
-            ' — same money, different months',
-          '',
-          body,
-          'an-gaprow',
-        ) +
-        '</div>';
-    }
-    const parts: { key: string; label: string; pick: (m: AnalyzeMonth) => number; cls?: string }[] =
-      [
-        { key: 'fixed', label: '🏠 Bills (housing + recurring)', pick: (m) => m.fixed },
-        { key: 'envelope', label: '🛒 Everyday (envelopes)', pick: (m) => m.envelope },
-        { key: 'pots', label: '✈️📋 Pots (travel + admin)', pick: (m) => m.pots },
-        { key: 'charity', label: '💚 Charity', pick: (m) => m.charity },
-      ];
-    const where =
-      '<div class="an-block"><div class="an-h">Where it went · a month, ' +
-      avgSpan +
-      '</div>' +
-      parts
-        .map((p) =>
-          openRow('real:' + p.key, p.label, money(avgOf(p.pick)), monthChips(p.pick, inAvg)),
-        )
-        .join('') +
-      row('Real spend', money(s.realAvg), 'ym-row-bold') +
-      openRow(
-        'real:savings',
-        '🏦 Savings — the score',
-        money(savingsAvg),
-        monthChips((m) => m.savings, inAvg),
-      ) +
-      '</div>';
-    // Month by month: one row per month on the phone, the full grid on desktop.
-    const phoneMonths =
-      '<div class="an-block an-phone"><div class="an-h">Month by month · real spend · savings</div>' +
-      months
-        .map((m) =>
-          row(
-            abbr(m.month_num) + (m.status === 'current' ? ' ◉' : ''),
-            '<span class="' +
-              (m.status === 'past' ? '' : 'an-proj') +
-              '">' +
-              money(m.real) +
-              ' · ' +
-              money(m.savings) +
-              '</span>',
-          ),
-        )
-        .join('') +
-      '<div class="an-legend">italic = from the budget, not yet happened · ◉ this month</div></div>';
-    const colCls = (m: AnalyzeMonth): string =>
-      'year-cell' +
-      (m.status === 'future' ? ' future' : '') +
-      (m.status === 'current' ? ' current-col' : '');
-    const rowDefs: { label: string; pick: (m: AnalyzeMonth) => number; cls?: string }[] = [
-      { label: '\u{1F4C8} Income', pick: (m) => m.income },
-      { label: '\u{1F3E0} Bills', pick: (m) => m.fixed, cls: 'year-row-sub' },
-      { label: '\u{1F6D2} Everyday', pick: (m) => m.envelope, cls: 'year-row-sub' },
-      { label: '✈️\u{1F4CB} Pots', pick: (m) => m.pots, cls: 'year-row-sub' },
-      { label: '\u{1F49A} Charity', pick: (m) => m.charity, cls: 'year-row-sub' },
-      { label: 'Real spend', pick: (m) => m.real, cls: 'year-row-bold' },
-      { label: '\u{1F3E6} Savings', pick: (m) => m.savings },
-    ];
-    const grid =
-      '<div class="an-block an-desk"><div class="an-h">Month by month</div>' +
-      '<div class="year-table-wrap"><table class="year-table an-table"><thead><tr><th class="year-th-label">₪ / month</th>' +
-      months
-        .map(
-          (m) =>
-            '<th class="year-th-month' +
-            (m.status === 'current'
-              ? ' current-month'
-              : m.status === 'future'
-                ? ' future-month'
-                : '') +
-            '">' +
-            m.name +
-            (m.status === 'current' ? ' ◉' : '') +
-            '</th>',
-        )
-        .join('') +
-      '<th class="year-th-extra">Avg</th><th class="year-th-extra">Year</th></tr></thead><tbody>' +
-      rowDefs
-        .map(
-          (d) =>
-            '<tr class="' +
-            (d.cls || 'year-row') +
-            '"><td class="year-col-label">' +
-            d.label +
-            '</td>' +
-            months
-              .map((m) => '<td class="' + colCls(m) + '">' + money(d.pick(m)) + '</td>')
-              .join('') +
-            '<td class="year-cell-avg">' +
-            money(avgOf(d.pick)) +
-            '</td><td class="year-cell-extra">' +
-            money(months.reduce((a, m) => a + d.pick(m), 0)) +
-            '</td></tr>',
-        )
-        .join('') +
-      '</tbody></table></div>' +
-      '<div class="an-legend">italics = from the budget, not yet happened · ◉ ' +
-      abbr(s.referenceMonth) +
-      ' in progress · Avg = ' +
-      avgSpan +
-      ' · Year = ' +
-      money(s.yearRealActual) +
-      ' spent so far + ' +
-      money(s.yearRealProjected) +
-      ' still budgeted</div></div>';
-    return (
-      say +
-      herLine +
-      gapBlock +
-      where +
-      phoneMonths +
-      grid +
-      how(
-        'Real spend = bills + everyday + pots + charity. Savings is not spend — it is the score. Averages use complete months only; the month in progress is half-logged by definition. Bills count the higher of the line and what was paid; pots and charity count what was set aside.',
-      )
-    );
-  };
-
-  // ── 2 · Why so high ───────────────────────────────────────────────────
-  const whySection = (): string => {
-    if (!why)
-      return '<p class="an-say">This compares your first months with your latest ones, so it needs at least 4 complete months.</p>';
-    const meta = (k: string): (typeof WHY_ROWS)[number] =>
-      WHY_ROWS.find((w) => w.key === k) || { key: k, label: k, tag: 'ongoing', why: '' };
-    const rows = why.rows.filter((x) => Math.round(x.early) !== 0 || Math.round(x.recent) !== 0);
-    const byTag: Record<string, number> = {};
-    for (const x of rows) byTag[meta(x.key).tag] = (byTag[meta(x.key).tag] || 0) + x.delta;
-    const pastMonths = months.filter((m) => m.status === 'past');
-    const rowsSum = why.rows.reduce((a, x) => a + x.delta, 0);
-    const tagLine = ['one-off', 'ended', 'choice', 'ongoing']
-      .filter((t) => byTag[t] !== undefined && Math.round(byTag[t]) !== 0)
-      .map((t) => TAG_LABEL[t] + ' <b>' + signed(byTag[t]) + '</b>')
-      .join(' · ');
-    const say =
-      '<p class="an-say">' +
-      wspan(why.recent) +
-      ' cost <b>' +
-      money(why.recentReal) +
-      '</b> a month; ' +
-      wspan(why.early) +
-      ' cost <b>' +
-      money(why.earlyReal) +
-      '</b> — ' +
-      (why.delta >= 0 ? money(why.delta) + ' more' : money(-why.delta) + ' less') +
-      '. By kind: ' +
-      tagLine +
-      '.</p>';
-    const thin = why.thin.length
-      ? '<p class="an-flag">' +
-        why.thin.map(abbr).join(', ') +
-        ' had fewer entries than your usual month — away, or not everything logged. Their everyday numbers read low; when you’re abroad, food can sit in the travel pot instead.</p>'
-      : '';
-    const bridge =
-      '<div class="an-block"><div class="an-h">' +
-      wspan(why.early) +
-      ' → ' +
-      wspan(why.recent) +
-      ', driver by driver · a month</div>' +
-      row(wspan(why.early) + ' average', money(why.earlyReal), 'ym-row-bold') +
-      rows
-        .map((x) => {
-          const m = meta(x.key);
-          const body =
-            (m.why ? '<div class="an-why">' + esc(m.why) + '</div>' : '') +
-            '<div class="an-why">' +
-            money(x.early) +
-            ' → ' +
-            money(x.recent) +
-            '</div>' +
-            monthChips((mm) => mm.parts[x.key] || 0, whole ? months : pastMonths);
-          return openRow(
-            'why:' + x.key,
-            m.label +
-              ' <span class="an-tagchip t-' +
-              m.tag.replace(/[^a-z]/g, '') +
-              '">' +
-              TAG_LABEL[m.tag] +
-              '</span>',
-            signed(x.delta),
-            body,
-            m.tag === 'ended' ? 'an-dim' : '',
-          );
-        })
-        .join('') +
-      row(
-        wspan(why.recent) + ' average',
-        money(why.recentReal) +
-          (Math.abs(rowsSum - why.delta) < 1
-            ? ' <span class="an-ok">adds up ✓</span>'
-            : ' <span class="an-short">' +
-              money(Math.abs(rowsSum - why.delta)) +
-              ' not explained</span>'),
-        'ym-row-bold',
-      ) +
-      '<div class="an-legend">Tags are a proposal from your own words and your data — say so in chat and I’ll change one.</div></div>';
-    const ref = months.find((m) => m.status === 'current');
-    // Everyday two ways: this month's budget, and what everyday really cost
-    // on average — a budget can sit far under real, so both are shown.
-    const realEveryday = mean(pastMonths.map((m) => m.envelope));
-    const running = ref
-      ? '<div class="an-block"><div class="an-h">Running now, without trips and one-offs · a month</div>' +
-        row('🏠 Bills · ' + abbr(ref.month_num), money(ref.fixed), 'ym-row-sub') +
-        row('🛒 Everyday · ' + abbr(ref.month_num) + ' budget', money(ref.envelope), 'ym-row-sub') +
-        row(
-          '🛒 Everyday · your real average ' + span(pastMonths.map((m) => m.month_num)),
-          money(realEveryday),
-          'ym-row-sub',
-        ) +
-        row('💚 Charity · ' + abbr(ref.month_num), money(ref.charity), 'ym-row-sub') +
-        row(
-          'Still running a month',
-          money(ref.fixed + ref.envelope + ref.charity) +
-            ' – ' +
-            money(ref.fixed + realEveryday + ref.charity),
-          'ym-row-bold',
-        ) +
-        '<div class="an-legend">Low end = everyday at this month’s budget; high end = everyday at what it really cost. The pots (trips, one-offs) are left out because they come and go; ended bills are already gone.</div></div>'
-      : '';
-    const rate =
-      '<p class="an-say an-say-sm">Savings rate: <b>' +
-      pctStr(why.earlySavingsRate) +
-      '</b> of income in ' +
-      wspan(why.early) +
-      ' → <b>' +
-      pctStr(why.recentSavingsRate) +
-      '</b> in ' +
-      wspan(why.recent) +
-      '.</p>';
-    return (
-      say +
-      thin +
-      bridge +
-      rate +
-      running +
-      how(
-        'Each row is that driver’s monthly average in your ' +
-          (whole
-            ? 'last ' +
-              why.recent.length +
-              ' months of the year (as budgeted where they haven’t happened)'
-            : 'latest ' + why.recent.length + ' complete months') +
-          ' minus your first ' +
-          why.early.length +
-          '. The rows add up to the difference exactly. A bill has “ended” when it had money in a past month and has none from this month on; a renamed bill (Claude Pro → Claude Max) still counts as running.',
-      )
-    );
-  };
-
-  // ── 3 · Floor ─────────────────────────────────────────────────────────
-  const kindOrder: { kind: AnalyzeCatStat['kind']; title: string; note: string }[] = [
-    {
-      kind: 'envelope',
-      title: 'Everyday',
-      note: 'suggestion = average of your lowest normal months',
-    },
-    { kind: 'fixed', title: 'Bills', note: 'suggestion = this month’s lines' },
-    { kind: 'pot', title: 'Pots', note: 'suggestion = 0 — your call' },
-    { kind: 'charity', title: 'Charity', note: 'suggestion = your average' },
-  ];
-  const monthAmount = (c: AnalyzeCatStat, mn: number): number => {
-    const m = months.find((x) => x.month_num === mn);
-    return m ? m.actualByCat[c.key] || 0 : 0;
-  };
-  const vetoChip = (c: AnalyzeCatStat, mn: number, amt: number, out: boolean): string => {
-    const thin = why && why.thin.includes(mn);
-    return (
-      '<button type="button" class="an-mchip' +
-      (out ? ' out' : '') +
-      '"' +
-      (floorsLoading ? ' disabled' : '') +
-      ' onclick="event.stopPropagation();toggleFloorMonth(\'' +
-      c.key +
-      "', " +
-      mn +
-      ')" title="' +
-      (out ? 'Tap to count this month again' : 'Tap to leave this month out') +
-      '" aria-label="' +
-      esc(c.label) +
-      ' ' +
-      abbr(mn) +
-      (out ? ': left out, tap to count it again' : ': tap to leave it out') +
-      '">' +
-      abbr(mn) +
-      ' ' +
-      money(amt) +
-      (thin && !out ? ' · few entries' : '') +
-      '</button>'
-    );
-  };
-  const floorInput = (c: AnalyzeCatStat): string =>
-    '<input type="number" class="budget-inline an-floor' +
-    (c.floorSet && !floorsLoading ? ' set' : '') +
-    '" value="' +
-    (c.floorSet && !floorsLoading ? roundZ(c.floor) : '') +
-    '" placeholder="' +
-    (floorsLoading ? '…' : roundZ(c.floorDefault)) +
-    '" min="0" step="1" inputmode="decimal" aria-label="Floor for ' +
-    esc(c.label) +
-    '" data-floor-cat="' +
-    c.key +
-    '"' +
-    (floorsLoading ? ' disabled' : '') +
-    ' onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
-    c.key +
-    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">';
-  const floorDetail = (c: AnalyzeCatStat): string => {
-    const lowHigh =
-      '<div class="an-why">' +
-      (c.low
-        ? 'Low ' + money(c.low.amount) + ' ' + abbr(c.low.month_num)
-        : 'No complete months yet') +
-      (c.high ? ' · high ' + money(c.high.amount) + ' ' + abbr(c.high.month_num) : '') +
-      (c.floorSet ? ' · suggestion ' + money(c.floorDefault) : '') +
-      '</div>';
-    if (c.kind !== 'envelope') return lowHigh;
-    const seg =
-      '<div class="an-seg" role="group" aria-label="How many lowest months to average">' +
-      '<span class="an-seglbl">Suggestion = average of the lowest</span>' +
-      [3, 4, 5, 6]
-        .map(
-          (n) =>
-            '<button type="button" class="an-segbtn' +
-            (c.avgN === n ? ' active' : '') +
-            '"' +
-            (floorsLoading ? ' disabled' : '') +
-            ' onclick="setFloorAvgN(\'' +
-            c.key +
-            "', " +
-            n +
-            ')">' +
-            n +
-            '</button>',
-        )
-        .join('') +
-      '</div>';
-    const used = c.floorMonths.map((x) => vetoChip(c, x.month_num, x.amount, false)).join('');
-    const out = c.excluded
-      .filter((mn) => months.some((m) => m.month_num === mn))
-      .map((mn) => vetoChip(c, mn, monthAmount(c, mn), true))
-      .join('');
-    return (
-      lowHigh +
-      seg +
-      '<div class="an-why">The months it averages — tap one that wasn’t a normal month to leave it out:</div>' +
-      '<div class="an-mlist">' +
-      (used || out ? used + out : '<span class="an-suggested">no complete months yet</span>') +
-      '</div>'
-    );
-  };
-  const floorRow = (c: AnalyzeCatStat): string => {
-    const key = 'floor:' + c.key;
-    const open = _anOpen.has(key);
-    return (
-      '<div class="an-frow' +
-      (open ? ' open' : '') +
-      '"><button type="button" class="an-flabel" aria-expanded="' +
-      open +
-      '" onclick="toggleAnRow(\'' +
-      key +
-      '\')"><span class="an-caret">' +
-      (open ? '▾' : '▸') +
-      '</span>' +
-      c.emoji +
-      ' ' +
-      esc(c.label) +
-      (floorsLoading ? '' : '<span class="an-sublbl">' + levelTxt(c) + '</span>') +
-      '</button><span class="an-fin">' +
-      floorInput(c) +
-      (floorsLoading ? '' : c.floorSet ? '' : '<span class="an-suggested">suggested</span>') +
-      '</span><span class="an-favg">' +
-      money(c.avg) +
-      '</span></div>' +
-      (open ? '<div class="an-detail">' + floorDetail(c) + '</div>' : '')
-    );
-  };
-  // ── Floor audit (v63): each line against what the data says ───────────
-  // Her ask 2026-10-11 17:56: "can you actually understand the floor… assess
-  // what I wrote and what is written". A floor line is read against its
-  // bill NOW (bills) or her own months (everything else): the average, and
-  // the 3 lowest normal months (months with few entries left out).
-  const pastMs = months.filter((m) => m.status === 'past');
-  const entryCounts = pastMs.map((m) => m.entries).sort((a, b) => a - b);
-  const medEntries = entryCounts[Math.floor(entryCounts.length / 2)] || 0;
-  const thinSet = new Set(
-    pastMs.filter((m) => medEntries > 0 && m.entries < 0.6 * medEntries).map((m) => m.month_num),
-  );
-  const billNow = (c: AnalyzeCatStat): number => {
-    const bm = mNow ? months.find((m) => m.month_num === mNow.billsMonth) : null;
-    return bm ? bm.byCat[c.key] || 0 : c.now;
-  };
-  const lowNormal = (c: AnalyzeCatStat): number => {
-    const vals = pastMs
-      .filter((m) => !thinSet.has(m.month_num))
-      .map((m) => (c.kind === 'envelope' ? m.actualByCat[c.key] || 0 : m.byCat[c.key] || 0))
-      .sort((a, b) => a - b)
-      .slice(0, 3);
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-  };
-  type Level =
-    | 'unset'
-    | 'below-now'
-    | 'about-now'
-    | 'bill-now'
-    | 'normal'
-    | 'pace-now'
-    | 'lean'
-    | 'leanest';
-  const levelOf = (c: AnalyzeCatStat): Level => {
-    if (!c.floorSet) return 'unset';
-    if (c.kind === 'fixed') {
-      const b = billNow(c);
-      if (c.floor >= b) return 'bill-now';
-      return b - c.floor <= Math.max(50, b * 0.02) ? 'about-now' : 'below-now';
-    }
-    if (c.avg > 0 && c.floor >= 0.85 * c.avg) return 'normal';
-    // Her pace now (the recent months, with her own rules — health since
-    // Mounjaro stopped) can sit far below the year's average.
-    const pace = mNow ? mNow.byCat[c.key] : undefined;
-    if (pace !== undefined && pace > 0 && c.floor >= 0.85 * pace && c.floor <= 1.2 * pace)
-      return 'pace-now';
-    if (c.floor <= lowNormal(c) * 1.05) return 'leanest';
-    return 'lean';
-  };
-  const levelTxt = (c: AnalyzeCatStat): string => {
-    const lv = levelOf(c);
-    if (lv === 'unset') return 'not set — counts as ₪0';
-    if (lv === 'below-now') return 'below the bill now (' + money(billNow(c)) + ')';
-    if (lv === 'bill-now') return 'covers the bill now (' + money(billNow(c)) + ')';
-    if (lv === 'about-now') return 'about the bill now (' + money(billNow(c)) + ')';
-    if (lv === 'pace-now')
-      return 'your pace now (' + money(mNow ? mNow.byCat[c.key] || 0 : 0) + ')';
-    if (lv === 'normal') return 'a normal month (avg ' + money(c.avg) + ')';
-    if (lv === 'leanest') return 'your leanest months or less (' + money(lowNormal(c)) + ')';
-    return 'lean (avg ' + money(c.avg) + ', leanest ' + money(lowNormal(c)) + ')';
-  };
-
-  // ── 1b · A month now — what a month costs from here on ────────────────
-  const nowSection = (): string => {
-    if (!mNow) return noneNote;
-    const bmName = abbr(mNow.billsMonth);
-    const potsAvg = avgOf((m) => m.pots);
-    const nt = nowTotals || monthNowTotals(mNow.total, oneOffsMo, oneOffsLeanMo);
-    const say =
-      '<p class="an-say">From here on, a month costs about <b>' +
-      money(nt.headline) +
-      '</b> — ' +
-      (oneOffsMo
-        ? money(nt.base) +
-          ' for bills as they are now, everyday at your recent pace and charity, plus ' +
-          money(oneOffsLeanMo) +
-          ' of the trips and one-offs in your lean ' +
-          (state.currentYear + 1) +
-          ' plan (your normal plan: ' +
-          money(nt.withNormal) +
-          ').'
-        : 'bills as they are now, everyday at your recent pace, and charity.') +
-      '</p>' +
-      '<p class="an-say an-say-sm">Your ' +
-      avgSpan +
-      ' real spend was ' +
-      money(s.realAvg) +
-      ' — ' +
-      money(s.realAvg - potsAvg) +
-      ' without its trips and one-offs.</p>';
-    const env = cats.filter((c) => c.kind === 'envelope');
-    const envRows = env
-      .filter((c) => Math.round(mNow.byCat[c.key] || 0) !== 0 || nowRules.zero.includes(c.key))
-      .sort((a, b) => (mNow.byCat[b.key] || 0) - (mNow.byCat[a.key] || 0))
-      .map((c) =>
-        row(
-          c.emoji +
-            ' ' +
-            esc(c.label) +
-            (nowRules.fromMonth[c.key]
-              ? '<span class="an-sublbl">from ' +
-                abbr(nowRules.fromMonth[c.key]) +
-                ' on — Mounjaro stopped (your words, Oct 9)</span>'
-              : nowRules.zero.includes(c.key)
-                ? '<span class="an-sublbl">0 unless you go back (your words, Oct 9)</span>'
-                : ''),
-          money(mNow.byCat[c.key] || 0),
-          'ym-row-sub',
-        ),
-      )
-      .join('');
-    const go = (key: AnSub, label: string): string =>
-      '<button type="button" class="an-go" onclick="setAnalyzeSub(\'' +
-      key +
-      '\')">' +
-      label +
-      ' ›</button>';
-    const list =
-      '<div class="an-block"><div class="an-h">A month now</div>' +
-      row('🏠 Bills · ' + bmName + ', as budgeted', money(mNow.bills)) +
-      go('bills', 'every bill, line by line') +
-      openRow(
-        'now:env',
-        '🛒 Everyday · your ' + span(mNow.everydayMonths) + ' average',
-        money(mNow.everyday),
-        envRows,
-      ) +
-      row('💚 Charity · ' + bmName, money(mNow.charity)) +
-      row(
-        oneOffsMo ? 'Bills + everyday + charity' : 'A month now',
-        money(nt.base),
-        oneOffsMo ? '' : 'ym-row-bold',
-      ) +
-      (oneOffsMo
-        ? row(
-            '✈️📋 Trips + one-offs · your lean ' + (state.currentYear + 1) + ' plan',
-            '+' + money(oneOffsLeanMo),
-          ) +
-          go('pots', 'travel & admin, this year vs next') +
-          row('A month now, with trips and one-offs', money(nt.headline), 'ym-row-bold') +
-          row('your normal plan instead', money(nt.withNormal), 'ym-row-sub')
-        : '') +
-      '</div>';
-    // What moved against the window average — biggest first.
-    const moves: { label: string; was: number; now: number }[] = [
-      { label: '🏠 Bills', was: avgOf((m) => m.fixed), now: mNow.bills },
-      ...env.map((c) => ({
-        label: c.emoji + ' ' + c.label,
-        was: c.avg,
-        now: mNow.byCat[c.key] || 0,
-      })),
-      { label: '💚 Charity', was: avgOf((m) => m.charity), now: mNow.charity },
-    ]
-      .filter((x) => Math.abs(x.now - x.was) >= 50)
-      .sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was))
-      .slice(0, 6);
-    const movesBlock = moves.length
-      ? '<div class="an-block"><div class="an-h">What moved vs your ' +
-        avgSpan +
-        ' average · a month</div>' +
-        moves
-          .map((x) =>
-            row(
-              esc(x.label) +
-                '<span class="an-sublbl">' +
-                money(x.was) +
-                ' → ' +
-                money(x.now) +
-                '</span>',
-              signed(x.now - x.was),
-            ),
-          )
-          .join('') +
-        '</div>'
-      : '';
-    return (
-      say +
-      list +
-      movesBlock +
-      how(
-        'Bills = ' +
-          bmName +
-          '’s lines as budgeted, so rent and Claude count as they are now. Everyday = each envelope’s average over your last ' +
-          mNow.everydayMonths.length +
-          ' complete months (' +
-          span(mNow.everydayMonths) +
-          '), what you actually spent — except where your own words say otherwise. Charity = ' +
-          bmName +
-          '’s. Trips and one-offs are kept apart because they come and go; the plan figure is your Sep 4 plan for next year, ÷ 12.',
-      )
-    );
-  };
-
-  // ── 3 · Floor ─────────────────────────────────────────────────────────
-  const levelsBlock = (): string => {
-    const catName = (k: string): string => {
-      const c = CATEGORIES.find((x) => x.key === k);
-      return c ? c.emoji + ' ' + esc(c.label) : esc(k);
-    };
-    return (
-      '<div class="an-block"><div class="an-h">Your four levels · a month</div>' +
-      LEVEL_ORDER.map((lv) => {
-        const by: Record<string, number> =
-          lv === 'lean'
-            ? Object.fromEntries(cats.map((c) => [c.key, c.floor]))
-            : spendLevelLines(lv);
-        const body =
-          '<div class="an-why">' +
-          LEVEL_NOTE[lv] +
-          (lv === 'lean'
-            ? none
-              ? ''
-              : ' — edit it line by line below.'
-            : ' — from your Oct 11 walkthrough.') +
-          '</div>' +
-          Object.keys(by)
-            .sort((a, b) => by[b] - by[a])
-            .map((k) => row(catName(k), money(by[k]), 'ym-row-sub'))
-            .join('');
-        return openRow(
-          'level:' + lv,
-          '<b>' + LEVEL_NAME[lv] + '</b><span class="an-sublbl">' + LEVEL_NOTE[lv] + '</span>',
-          money(levelTotal(lv)),
-          body,
-          lv === 'lean' ? 'ym-row-bold' : '',
-        );
-      }).join('') +
-      '</div>'
-    );
-  };
-  const floorSection = (): string => {
-    if (none)
-      return floorsLoading
-        ? '<p class="an-say">' + LOADING + '</p>'
-        : '<p class="an-say">Nothing in ' +
-            state.currentYear +
-            ' has happened yet, so there is no average to read your lines against. Your four levels are below' +
-            (floorsFrom
-              ? ' — Lean is ' +
-                floorsFrom +
-                '’s floor until you set ' +
-                state.currentYear +
-                '’s (shown, not saved)'
-              : '') +
-            '.</p>' +
-            levelsBlock();
-    const lv = cats.map((c) => ({ c, lv: levelOf(c) }));
-    const names = (l: Level[]): string =>
-      lv
-        .filter((x) => l.includes(x.lv))
-        .map((x) => esc(x.c.label))
-        .join(', ');
-    const unset = names(['unset']);
-    const below = names(['below-now']);
-    const normal = names(['normal']);
-    const leanest = names(['leanest']);
-    const say =
-      '<p class="an-say">The least a month could cost: <b>' +
-      (floorsLoading ? LOADING : money(s.floorTotal)) +
-      '</b>.</p>' +
-      (floorsLoading
-        ? ''
-        : '<p class="an-say an-say-sm">It mixes kinds of floor: ' +
-          [
-            normal ? '<b>a normal month</b> for ' + normal : '',
-            names(['pace-now']) ? '<b>your pace now</b> for ' + names(['pace-now']) : '',
-            leanest ? '<b>your leanest months or less</b> for ' + leanest : '',
-            unset ? '<b>not set</b> (counted as ₪0): ' + unset : '',
-          ]
-            .filter(Boolean)
-            .join(' · ') +
-          '.' +
-          (below
-            ? ' <span class="an-warn">' +
-              below +
-              (below.includes(',') ? ' sit' : ' sits') +
-              ' below what the bill is now.</span>'
-            : '') +
-          '</p>');
-    const groups = kindOrder
-      .map((k) => {
-        const rows = cats.filter((c) => c.kind === k.kind);
-        if (!rows.length) return '';
-        return (
-          '<div class="an-fgroup"><div class="an-h">' +
-          k.title +
-          ' <span class="an-note">' +
-          k.note +
-          '</span></div>' +
-          rows.map(floorRow).join('') +
-          '</div>'
-        );
-      })
-      .join('');
-    return (
-      say +
-      levelsBlock() +
-      '<div class="an-block"><div class="an-fhead"><span>Line</span><span>Floor</span><span>Avg ' +
-      avgSpan +
-      '</span></div>' +
-      groups +
-      '<div class="an-frow an-ftotal"><span class="an-flabel">Total</span><span class="an-fin">' +
-      (floorsLoading ? LOADING : money(s.floorTotal)) +
-      '</span><span class="an-favg">' +
-      money(s.realAvg) +
-      '</span></div></div>' +
-      how(
-        'Under each line: what kind of floor it is. Bills are checked against the bill now; everything else against your own months — your average, and your 3 lowest normal months (months with few entries, like when you were away, are left out). Type a floor to set your own; clear it to go back to the suggestion. Tap a line to see its months.',
-      )
-    );
-  };
-
-  // ── 4 · Where to cut ──────────────────────────────────────────────────
-  const cutSection = (): string => {
-    if (none) return noneNote;
-    if (floorsLoading) return '<p class="an-say">' + LOADING + '</p>';
-    // Lines she never set count as ₪0 — their "room" is not a decision she
-    // made, so they never rank as "most room" (UX reassessment, Oct 11).
-    const set = cats.filter((c) => c.floorSet);
-    const unsetC = cats.filter((c) => !c.floorSet && roundZ(c.aboveFloor) > 0);
-    const above = set
-      .filter((c) => roundZ(c.aboveFloor) > 0)
-      .sort((a, b) =>
-        a.kind === 'charity' ? 1 : b.kind === 'charity' ? -1 : b.aboveFloor - a.aboveFloor,
-      );
-    const top = above.filter((c) => c.kind !== 'charity').slice(0, 3);
-    const under = cats.filter((c) => roundZ(c.aboveFloor) < 0);
-    const aboveSum = above.reduce((a, c) => a + c.aboveFloor, 0);
-    const unsetSum = unsetC.reduce((a, c) => a + c.aboveFloor, 0);
-    const underSum = under.reduce((a, c) => a + c.aboveFloor, 0);
-    const say =
-      '<p class="an-say">Lines with a floor you set sit <b>' +
-      money(aboveSum) +
-      '</b> a month above it (' +
-      avgSpan +
-      ').' +
-      (top.length
-        ? ' Most room: ' +
-          top.map((c) => esc(c.label) + ' ' + money(c.aboveFloor)).join(' · ') +
-          '.'
-        : '') +
-      '</p>' +
-      (under.length || unsetC.length
-        ? '<p class="an-say an-say-sm">' +
-          (under.length
-            ? under.map((c) => esc(c.label)).join(', ') +
-              ': the bill went up — your floor is already above the average (' +
-              money(-underSum) +
-              '). '
-            : '') +
-          (unsetC.length
-            ? 'Not set yet (counted as ₪0): ' +
-              unsetC.map((c) => esc(c.label)).join(', ') +
-              ' — ' +
-              money(unsetSum) +
-              '.'
-            : '') +
-          '</p>'
-        : '');
-    const cutRow = (c: AnalyzeCatStat): string =>
-      openRow(
-        'cut:' + c.key,
-        c.emoji + ' ' + esc(c.label) + '<span class="an-sublbl">' + levelTxt(c) + '</span>',
-        signed(c.aboveFloor),
-        '<div class="an-why">Average ' +
-          money(c.avg) +
-          ' → your floor ' +
-          money(c.floor) +
-          (c.floorSet ? '' : ' (not set — counted as ₪0)') +
-          '</div>' +
-          (c.kind === 'charity'
-            ? '<div class="an-why">Your words Oct 9: “its flex… can evn be 0 if needed”.</div>'
-            : '') +
-          (c.kind === 'fixed'
-            ? '<div class="an-why">The bill now: ' + money(billNow(c)) + '.</div>'
-            : '') +
-          monthChips((m) => m.byCat[c.key] || 0, inAvg),
-      );
-    const net = aboveSum + unsetSum + underSum;
-    const list =
-      '<div class="an-block"><div class="an-h">Above your floor, most first · a month</div>' +
-      above.map(cutRow).join('') +
-      (unsetC.length
-        ? '<div class="an-h an-h2">Not set yet — counted as ₪0</div>' + unsetC.map(cutRow).join('')
-        : '') +
-      (under.length
-        ? '<div class="an-h an-h2">The bill went up past the average</div>' +
-          under.map(cutRow).join('')
-        : '') +
-      row(
-        'Net above the floor',
-        money(s.aboveFloor) +
-          (Math.abs(net - s.aboveFloor) < 1
-            ? ' <span class="an-ok">adds up ✓</span>'
-            : ' <span class="an-short">' +
-              money(Math.abs(net - s.aboveFloor)) +
-              ' from months you left out of single lines</span>'),
-        'ym-row-bold',
-      ) +
-      '</div>';
-    const goBills =
-      '<button type="button" class="an-go" onclick="setAnalyzeSub(\'bills\')">every bill, line by line ›</button>';
-    return say + list + goBills;
-  };
-
-  // ── 5 · If it goes wrong ──────────────────────────────────────────────
-  const safeSection = (): string => {
-    if (floorsLoading) return '<p class="an-say">' + LOADING + '</p>';
-    // A year with nothing complete (January 2027) has no real spend and only
-    // bills in its floor — a confident "+₪X" there would be a number with
-    // nothing under it. Say so instead.
-    // A year with nothing complete has no real spend: the "a month now" column
-    // is a dash, the levels (Lean from last year's floor, labelled) still work.
-    if (none && !floorsFrom)
-      return (
-        '<p class="an-say">Nothing in ' +
-        state.currentYear +
-        ' has happened yet, and no floors are set for it, so there’s no level to read the mixes against. ' +
-        (state.currentYear > 2026
-          ? 'Switch to ' + (state.currentYear - 1) + ' for the numbers that happened.'
-          : '') +
-        '</p>'
-      );
-    const real = mNow ? mNow.total : s.realAvg;
-    const nowIncome = avgOf((m) => m.income);
-    const order = SAFE_SCENARIOS.map((x) => x.key);
-    const scen = [
-      ...[...SAFE_SCENARIOS].sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)),
-      ...(none
-        ? []
-        : [
-            {
-              key: 'now',
-              label: 'Now — all your jobs (' + avgSpan + ' average)',
-              income: nowIncome,
-            },
-          ]),
-    ];
-    const lvName = LEVEL_NAME[_anLevel];
-    const fit = (x: { key: string; income: number }): number =>
-      incomeOf(x.key, x.income) - levelSpend;
-    const lowest = [...SAFE_SCENARIOS].sort((p, q) => p.income - q.income)[0];
-    const firstFit = [...SAFE_SCENARIOS]
-      .sort((p, q) => p.income - q.income)
-      .find((x) => fit(x) >= 0);
-    const levelPills =
-      '<div class="an-win an-levelpills">' +
-      LEVEL_ORDER.map(
-        (lv) =>
-          '<button class="yr-pillbtn an-winbtn' +
-          (_anLevel === lv ? ' active' : '') +
-          '" onclick="setAnalyzeLevel(\'' +
-          lv +
-          '\')">' +
-          LEVEL_NAME[lv] +
-          ' ' +
-          money(levelTotal(lv)) +
-          '</button>',
-      ).join('') +
-      '</div>';
-    const say =
-      levelPills +
-      '<p class="an-say">' +
-      fitting +
-      ' of ' +
-      CHOICES.length +
-      ' ways your week could look cover <b>' +
-      lvName +
-      '</b> (' +
-      money(levelSpend) +
-      ' a month). ' +
-      (fit(lowest) >= 0
-        ? 'every mix covers it — even ' + esc(lowest.label) + ' (' + margin(fit(lowest)) + ').'
-        : esc(lowest.label) +
-          ' is ' +
-          margin(fit(lowest)) +
-          (firstFit ? '; from <b>' + esc(firstFit.label) + '</b> up, every mix covers it.' : '.')) +
-      '</p>' +
-      '<p class="an-say an-say-sm">Your plan now — ' +
-      esc(planCaption()) +
-      ', at 4 clients: ' +
-      margin(fit(plan)) +
-      ' at ' +
-      lvName +
-      (planNow ? ', ' + margin(planNow.margin) + ' against a month now' : '') +
-      '.' +
-      (oneOffsMo ? ' Trips and one-offs are inside the levels (admin, travel).' : '') +
-      '</p>';
-    // What if: a one-off comes out of cash first (egg freezing ≈ ₪8,000,
-    // her Oct 9). Nothing is written — the box is gone on reload.
-    const oneOff =
-      '<div class="an-block an-oneoff"><label class="an-h" for="an-oneoff">What if a one-off comes out of cash first?</label>' +
-      '<div class="an-oneoff-row"><span>₪</span><input id="an-oneoff" type="number" min="0" step="100" inputmode="decimal" class="an-oneoff-in" placeholder="e.g. 8000" value="' +
-      (_anOneOff ? roundZ(_anOneOff) : '') +
-      '" onchange="setAnalyzeOneOff(this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
-      (_anOneOff
-        ? '<button type="button" class="an-back" onclick="setAnalyzeOneOff(\'\')">clear</button>'
-        : '') +
-      '</div><div class="an-legend">' +
-      (_anOneOff
-        ? 'Showing cash after ' +
-          money(_anOneOff) +
-          ' goes out: ' +
-          money(cashLeft) +
-          '. Nothing is saved — it’s a what-if.'
-        : 'Type an amount to see “cash lasts” move. Nothing is saved — it’s a what-if.') +
-      '</div></div>';
-    // ── Three small reads (one idea each; none of them is added into any total) ──
-    const mini = (title: string, big: string, lines: string[], foot: string): string =>
-      '<div class="an-card2 an-mini"><div class="an-c2-head"><span class="an-c2-label">' +
-      title +
-      '</span></div><div class="an-c2-net">' +
-      big +
-      '</div><div class="an-c2-lines">' +
-      lines.map((l) => '<div>' + l + '</div>').join('') +
-      '</div><div class="an-c2-save an-legend">' +
-      foot +
-      '</div></div>';
-    const cg = carmeiGatNet(PAY.carmeiGat);
-    const cgCard = mini(
-      '🏠 Carmei Gat, honestly',
-      money(cg.before) + ' to ' + money(cg.withUpkeep) + '<span class="an-c2-unit"> a month</span>',
-      [
-        'Rent in ' + money(PAY.carmeiGat.rent),
-        '− mortgage ' + money(PAY.carmeiGat.mortgage),
-        '− building insurance ' +
-          money(PAY.carmeiGat.insurance) +
-          ' · mortgage life ' +
-          money(PAY.carmeiGat.mortgageLife),
-        '= ' + money(cg.before) + ' a month',
-        '− upkeep allowance ' + money(PAY.carmeiGat.upkeepAllowance) + ' = ' + money(cg.withUpkeep),
-      ],
-      'Rough, from the Oct 12 analysis. Vaad bayit and your arnona share aren’t in this number. It costs a little each month — the bet is the apartment going up.',
-    );
-    const taxLow = taxSetAside(
-      PAY.private.turnoverMonth,
-      PAY.private.marginalRate,
-      PAY.private.taxableShare,
-    );
-    const taxHigh = taxSetAside(
-      PAY.private.turnoverMonth,
-      PAY.private.marginalRateHigh,
-      PAY.private.taxableShare,
-    );
-    const taxCard = mini(
-      '🧾 Set aside for tax on private',
-      money(taxLow) + '<span class="an-c2-unit"> a month</span>',
-      [
-        'Tax is on ' +
-          Math.round(PAY.private.taxableShare * 100) +
-          '% of about ' +
-          money(PAY.private.turnoverMonth) +
-          ' a month turnover, rough',
-        '× your ' + Math.round(PAY.private.marginalRate * 100) + '% rate',
-        'If gan 2 sits on top of the school: ' +
-          money(taxHigh) +
-          ' (' +
-          Math.round(PAY.private.marginalRateHigh * 100) +
-          '%)',
-      ],
-      'An estimate to park in the bank, not a number in any total. Your accountant confirms the rate.',
-    );
-    const runLeft = cashLasts(cashLeft, fit(plan), PAY.reserves.khHarel);
-    const monthsTxt = (m: number): string => (m > 60 ? 'years' : m + ' months');
-    const runCard = mini(
-      '⏳ How long cash lasts',
-      runLeft
-        ? monthsTxt(runLeft.months) + '<span class="an-c2-unit"> at ' + lvName + '</span>'
-        : 'Covered<span class="an-c2-unit"> at ' + lvName + '</span>',
-      [
-        'Total Liquid after cards ' +
-          money(cashLeft) +
-          (runLeft ? ' · short ' + money(-fit(plan)) + ' a month' : ' · nothing drawn down'),
-        'with ' + esc(plan.label),
-        runLeft
-          ? '+ ' +
-            (runLeft.extraWithReserve > 60 ? 'years' : runLeft.extraWithReserve + ' months') +
-            ' if the keren hishtalmut is used (' +
-            money(PAY.reserves.khHarel) +
-            ', never counted as cash)'
-          : 'The keren hishtalmut (' + money(PAY.reserves.khHarel) + ') stays untouched.',
-      ],
-      'Balances are the Cash tab’s' +
-        (cashDays !== null ? ', ' + cashDays + ' days old' : '') +
-        '. The KH is tax-free only after 6 years, so it’s a second line, never added.',
-    );
-    const smallCards =
-      '<div class="an-block"><div class="an-h">Three quick reads</div><div class="an-cards2">' +
-      cgCard +
-      taxCard +
-      runCard +
-      '</div></div>';
-    const cell = (inc: number, spend: number): string => {
-      const rw = runway(cashLeft, inc, spend);
-      return (
-        margin(rw.margin) +
-        (rw.months !== null
-          ? '<span class="an-runway">' +
-            (rw.months > 60 ? 'years of cash' : 'cash lasts ' + rw.months + ' mo') +
-            '</span>'
-          : '')
-      );
-    };
-    const table =
-      '<div class="an-block"><div class="an-stable">' +
-      '<div class="an-srow an-shead"><span>Income a month</span><span>At ' +
-      lvName +
-      '<br>' +
-      money(levelSpend) +
-      '</span><span>A month now<br>' +
-      (none ? '—' : money(real)) +
-      '</span></div>' +
-      scen
-        .map(
-          (x) =>
-            '<div class="an-srow' +
-            (x.key === 'now' ? ' an-snow' : x.key === plan.key ? ' an-splan' : '') +
-            '"><span><span class="an-slabel">' +
-            esc(x.label) +
-            '</span><span class="an-sinc">' +
-            money(x.income) +
-            '</span></span><span>' +
-            cell(incomeOf(x.key, x.income), levelSpend) +
-            '</span><span>' +
-            (none ? '—' : cell(incomeOf(x.key, x.income), real)) +
-            '</span></div>',
-        )
-        .join('') +
-      '</div></div>';
-    const stale = cashDays !== null && cashDays > 30;
-    const cashLine =
-      '<div class="an-block">' +
-      row('Cash · Total Liquid on the Cash tab', money(cash.liquid), 'ym-row-bold') +
-      row(
-        'Holdings + owed to you − what you owe',
-        money(cash.holdings) + ' + ' + money(cash.owed) + ' − ' + money(cash.debt),
-        'ym-row-sub',
-      ) +
-      (state.cashAccounts || [])
-        .filter((a) => a.is_debt)
-        .map((a) => row('owe · ' + esc(a.name), '−' + money(cashILS(a)), 'ym-row-sub an-dim'))
-        .join('') +
-      (_anOneOff ? row('What-if one-off', '−' + money(_anOneOff), 'ym-row-sub') : '') +
-      '<p class="' +
-      (stale ? 'an-flag' : 'an-legend') +
-      '">' +
-      (cash.oldest
-        ? 'Balances as of ' +
-          cash.oldest.toLocaleDateString('en-IL', { day: 'numeric', month: 'short' }) +
-          ' (' +
-          cashDays +
-          ' days ago)' +
-          (stale
-            ? ' — update them on the Cash tab and every “cash lasts” here moves with them.'
-            : '.')
-        : 'No balances set on the Cash tab yet.') +
-      '</p></div>';
-    const notes =
-      '<details class="an-how" open><summary>What this leaves out</summary><div><ul class="an-ul">' +
-      '<li>The incomes are your Oct 11 walkthrough: Petachya ≈ ' +
-      money(PET_NET) +
-      ' net a month in 2027, travel in, plus havra’a ≈ ' +
-      money(PAY.petachya.havraa2027) +
-      ' once a year in September; 2026 stays ' +
-      money(PAY.petachya.netInApp) +
-      ' (₪' +
-      PAY.petachya.ratePerPaidHour +
-      ' an hour × ' +
-      PAY.petachya.paidHoursWeek +
-      ' paid hours; your exact number is pending); 2 weekly private clients ≈ ' +
-      money(PAY.private.netMonth) +
-      '; gan 2 on Fridays (₪' +
-      PAY.gan2.perSession +
-      ' a ' +
-      PAY.gan2.minutesPerSession +
-      '-minute session, ' +
-      PAY.gan2.sessionsPerDay +
-      ' sessions on one gan day a week = ' +
-      money(PAY.gan2.perSession * PAY.gan2.sessionsPerDay) +
-      ' a day, paid ' +
-      PAY.gan2.paidMonths +
-      ' of 12 months (Sep–Jun; ₪0 in July–August), shown as a 12-month average ≈ ' +
-      money(gan2GrossMonth(PAY.gan2, PAY.school.weeksPerMonth)) +
-      ' gross a month, rough, ≈ ' +
-      money(GAN2_NET) +
-      ' net before the tax refund; waiting for the first payslip; October 2026 = 3 weeks of gan 2); the school ₪' +
-      PAY.school.ratePerPaidHour +
-      ' × ' +
-      PAY.school.paidHoursWeek +
-      'h. All net, estimates — real payslips can replace them.</li>' +
-      '<li>The school (Shtilim): ₪' +
-      PAY.school.ratePerPaidHour +
-      ' × ' +
-      PAY.school.weeksPerMonth +
-      ' × ' +
-      PAY.school.paidHoursWeek +
-      ' paid hours ≈ ' +
-      money(jobRates().schoolGross) +
-      ' gross a month for ' +
-      PAY.school.realHoursWeek +
-      ' real hours; with Petachya ≈ ' +
-      money(MIX_NET.school) +
-      ' net. Its pension, keren hishtalmut and travel terms aren’t known yet. Two salaries: set up תיאום מס from day one.</li>' +
-      '<li>“Now” is this app’s income, where private is before tax.</li>' +
-      "<li>August: private stops, so it's Petachya only that month (no travel pay in August).</li>" +
-      '<li>Clalit money that needs you on payroll that month: Nov 5 maybe ≈ ₪6,000 (not certain: ₪10K already paid in April); the January grant ≈ ₪5,300.</li>' +
-      '<li>Not counted as cash: pikadon, keren hishtalmut (tax-free only after 6 years), Harel. The tenant deposit isn’t yours.</li>' +
-      '<li>The four levels are yours (Oct 11): Lean is your floor in the app; Temp, Middle and Normal come from the same walkthrough. Admin and travel inside them carry the car, egg freezing (one cycle), surprises and trips.</li>' +
-      '</ul></div></details>';
-    const jobs =
-      '<div class="an-block"><div class="an-h">Petachya + Clalit (grants, no extra hours) vs Petachya + the school</div>' +
-      '<div class="an-srow an-shead"><span></span><span>Clalit</span><span>School</span></div>' +
-      jobCompareRows()
-        .map(
-          (j) =>
-            '<div class="an-srow"><span><span class="an-slabel">' +
-            esc(j.label) +
-            '</span><span class="an-runway">' +
-            esc(j.diff) +
-            '</span></span><span>' +
-            esc(j.clalit) +
-            '</span><span><b>' +
-            esc(j.school) +
-            '</b></span></div>',
-        )
-        .join('') +
-      '<div class="an-legend">Your bottom line, Oct 11. The school’s keren hishtalmut is your belief — confirm it before counting on it. Without it: net ' +
-      money(MIX_NET.school) +
-      ', net + funds ' +
-      money(MIX_NET.school + PAY.school.fundsMonthNoKh) +
-      '. Per-hour rows: gross ÷ paid hours — the extra job alone, at the margin.</div></div>';
-    const card = (c: (typeof CHOICES)[number]): string => {
-      const hrs = c.realHrs + (_anDrive ? c.driveHrs : 0);
-      const se = seOf(c.key);
-      const rw = runway(cashLeft, c.net - se, levelSpend);
-      return (
-        '<div class="an-card2' +
-        (c.key === 'all4' ? ' an-card2-plan' : c.key === 'clalit' ? ' an-card2-now' : '') +
-        '"><div class="an-c2-head"><span class="an-c2-label">' +
-        esc(c.label) +
-        '</span>' +
-        (c.note ? '<span class="an-sublbl">' + esc(c.note) + '</span>' : '') +
-        '</div><div class="an-c2-net">' +
-        money(c.net) +
-        '<span class="an-c2-unit"> a month</span></div>' +
-        '<div class="an-c2-lines">' +
-        '<div>⏱ <b>' +
-        (_anDrive ? Math.round(hrs) : c.realHrs) +
-        ' h</b> a week' +
-        (_anDrive ? ' · ' + c.realHrs + ' working + ~' + c.driveHrs + ' driving' : ' working') +
-        ' (' +
-        c.paidHrs +
-        ' paid)</div>' +
-        perHourLines(c.key)
-          .map(
-            (l) =>
-              '<div><b>' +
-              money(l.value) +
-              '</b> an hour · ' +
-              esc(l.job) +
-              '<span class="an-sublbl">' +
-              esc(l.basis) +
-              '</span></div>',
-          )
-          .join('') +
-        (se
-          ? '<div>🇺🇸 − <b>' +
-            money(se) +
-            '</b> a month self-employment tax<span class="an-sublbl">15.3% × 92.35% of the mixes’ private net after the accountant, rough, US</span></div>'
-          : '') +
-        '<div>✓ sure ' +
-        money(c.sure) +
-        (c.likely ? ' · likely ' + money(c.likely) : '') +
-        (c.maybe ? ' · maybe ' + money(c.maybe) : '') +
-        '</div>' +
-        '<div>☀️ Summer: ' +
-        esc(c.august) +
-        '</div>' +
-        '</div><div class="an-c2-save">At ' +
-        lvName +
-        ': ' +
-        (rw.margin >= 0
-          ? '<span class="an-pos">save ' + money(rw.margin) + ' a month</span>'
-          : '<span class="an-short">short ' +
-            money(-rw.margin) +
-            '</span>' +
-            (rw.months !== null
-              ? ' · cash lasts ' + (rw.months > 60 ? 'years' : rw.months + ' mo')
-              : '')) +
-        '</div></div>'
-      );
-    };
-    const cards =
-      '<div class="an-block"><div class="an-h">Which week? · after Feb 7 · net a month</div>' +
-      '<label class="an-toggle"><input type="checkbox"' +
-      (_anDrive ? ' checked' : '') +
-      ' onchange="setAnalyzeDrive(this.checked)"> include driving time</label>' +
-      '<label class="an-toggle"><input type="checkbox"' +
-      (_anSE ? ' checked' : '') +
-      ' onchange="setAnalyzeSE(this.checked)"> US self-employment tax: 15.3% × 92.35% of the mixes’ private net after the accountant (rough, US)</label>' +
-      '<div class="an-cards2">' +
-      CHOICES.map(card).join('') +
-      '</div><div class="an-legend">Hours are your words' +
-      (_anDrive ? '; driving is an estimate' : '') +
-      '. Every ₪-an-hour is the job’s own rate, gross per paid hour (a “real hour” line is hours in the room), not Petachya’s whole-week average. The school isn’t signed; gan 2 is a yes: Fridays, 4 kids, since Oct 16 (the first payslip will set its real net). Nothing here writes to your budget.</div></div>';
-    const allMixes =
-      '<details class="an-how"><summary>Every mix vs ' +
-      lvName +
-      ', with months of cash</summary><div>' +
-      table +
-      '</div></details>';
-    return say + smallCards + cards + allMixes + jobs + oneOff + cashLine + notes;
-  };
-
-  // ── 6 · Income — why each month was what it was ───────────────────────
-  const incomeSection = (): string => {
-    const srcs: { key: keyof IncomeWhy; label: string; pick: (m: MonthRow) => number }[] = [
-      { key: 'clalit', label: '🏥 Clalit', pick: (m) => Number(m.income_clalit) || 0 },
-      { key: 'petachya', label: '🏫 Petachya', pick: (m) => Number(m.income_petachya) || 0 },
-      {
-        key: 'private',
-        label: '🧩 Private (net of accountant)',
-        pick: (m) => Number(m.income_private) || 0,
-      },
-      {
-        key: 'other',
-        label: '➕ Other',
-        pick: (m) =>
-          (Number(m.income_other) || 0) +
-          (state.yearData?.incomeItems || [])
-            .filter((i) => i.month_id === m.id)
-            .reduce((a, i) => a + (Number(i.amount) || 0), 0),
-      },
-    ];
-    const ms = [...state.months].sort((a, b) => a.month_num - b.month_num);
-    const statusOf = (mn: number): string =>
-      months.find((x) => x.month_num === mn)?.status || 'future';
-    const inWin = ms.filter((m) => avgSet.has(m.month_num));
-    const avgSrc = (p: (m: MonthRow) => number): number =>
-      inWin.length ? inWin.reduce((a, m) => a + p(m), 0) / inWin.length : 0;
-    const total = (m: MonthRow): number => srcs.reduce((a, x) => a + x.pick(m), 0);
-    const whyYear: Record<number, IncomeWhy> = INCOME_WHY[state.currentYear] || {};
-    const say = none
-      ? '<p class="an-say">Nothing has landed in ' +
-        state.currentYear +
-        ' yet. These months are as budgeted so far — expected, not landed.</p>'
-      : '<p class="an-say"><b>' +
-        money(avgOf((m) => m.income)) +
-        '</b> a month came in (' +
-        avgSpan +
-        '): ' +
-        srcs
-          .filter((x) => Math.round(avgSrc(x.pick)) !== 0)
-          .map(
-            (x) =>
-              x.label.replace(/^\S+\s/, '').replace(/ \(.*\)$/, '') +
-              ' <b>' +
-              money(avgSrc(x.pick)) +
-              '</b>',
-          )
-          .join(' · ') +
-        '.</p>';
-    const clalitPast = ms.filter((m) => statusOf(m.month_num) === 'past');
-    const hi = clalitPast.length
-      ? clalitPast.reduce((a, m) => (srcs[0].pick(m) > srcs[0].pick(a) ? m : a))
-      : null;
-    const lo = clalitPast.length
-      ? clalitPast.reduce((a, m) => (srcs[0].pick(m) < srcs[0].pick(a) ? m : a))
-      : null;
-    const range =
-      hi && lo
-        ? '<p class="an-say an-say-sm">Clalit swung from <b>' +
-          money(srcs[0].pick(lo)) +
-          '</b> (' +
-          abbr(lo.month_num) +
-          ') to <b>' +
-          money(srcs[0].pick(hi)) +
-          '</b> (' +
-          abbr(hi.month_num) +
-          ') — open a month to see why.</p>'
-        : '';
-    const list =
-      '<div class="an-block"><div class="an-h">Month by month · what landed that pay period</div>' +
-      ms
-        .map((m) => {
-          const w = whyYear[m.month_num] || {};
-          const body =
-            srcs
-              .filter((x) => Math.round(x.pick(m)) !== 0 || (w[x.key] || []).length)
-              .map(
-                (x) =>
-                  row(x.label, money(x.pick(m)), 'ym-row-sub') +
-                  (w[x.key] || [])
-                    .map((t) => '<div class="an-why an-why-in">' + bidi(t) + '</div>')
-                    .join(''),
-              )
-              .join('') || '<div class="an-why">Nothing entered for this month yet.</div>';
-          const st = statusOf(m.month_num);
-          return openRow(
-            'inc:' + m.month_num,
-            abbr(m.month_num) + (st === 'current' ? ' ◉' : ''),
-            '<span class="' + (st === 'past' ? '' : 'an-proj') + '">' + money(total(m)) + '</span>',
-            body,
-          );
-        })
-        .join('') +
-      '<div class="an-legend">italic = expected, not landed yet · ◉ this month · private here is net of the accountant, before tax</div></div>';
-    const hasWhy = Object.keys(whyYear).length > 0;
-    const pats = INCOME_PATTERNS[state.currentYear] || [];
-    const patBlock = pats.length
-      ? '<div class="an-block"><div class="an-h">What the year shows</div><ul class="an-ul an-pats">' +
-        pats.map((t) => '<li>' + bidi(t) + '</li>').join('') +
-        '</ul></div>'
-      : '';
-    return (
-      say +
-      range +
-      patBlock +
-      list +
-      (hasWhy
-        ? how(
-            'The reasons under each month come from your Clalit payslips and the pay-system decode (premiot land two months late; grants: היקף in April and October, קליטה in the January salary). Where a reason isn’t known, the month shows only its numbers.',
-          )
-        : none
-          ? ''
-          : '<p class="an-flag">The reasons behind each month aren’t loaded for ' +
-            state.currentYear +
-            ' — only the app’s numbers show here.</p>')
-    );
-  };
-
-  // ── 7 · Bills — every recurring line across the year ──────────────────
-  const billsSection = (): string => {
-    if (!state.yearData) return '<p class="an-say">' + LOADING + '</p>';
-    const fixedKeys = CATEGORIES.filter((c) => c.hasLines && !c.hasTab).map((c) => c.key);
-    const ref = billsMonthFor(s.referenceMonth);
-    const bl = billLines(state.yearData.budgetItems, state.months, fixedKeys, ref);
-    const firstNum = months.length ? months[0].month_num : 1;
-    const sumAt = (mn: number, cat?: string): number =>
-      bl
-        .filter((l) => !cat || l.category === cat)
-        .reduce((a, l) => a + (l.byMonth[mn - 1] || 0), 0);
-    const catLabel = (k: string): string => CATEGORIES.find((c) => c.key === k)?.label || k;
-    const say =
-      '<p class="an-say">Bills now: <b>' +
-      money(sumAt(ref)) +
-      '</b> a month (' +
-      abbr(ref) +
-      ') — ' +
-      fixedKeys.map((k) => catLabel(k).toLowerCase() + ' ' + money(sumAt(ref, k))).join(' · ') +
-      (ref === firstNum
-        ? '. Across '
-        : '. In ' + abbr(firstNum) + ' they were ' + money(sumAt(firstNum)) + '. Across ') +
-      state.currentYear +
-      ': ' +
-      money(bl.reduce((a, l) => a + l.annual, 0)) +
-      '.</p>';
-    // What moved since the first month, biggest first.
-    const moves = bl
-      .map((l) => {
-        const start = l.byMonth[firstNum - 1] || 0;
-        const delta = l.now - start;
-        let what = '';
-        if (l.status === 'ended')
-          what =
-            'ended after ' +
-            abbr(l.lastMonth) +
-            ' (was ' +
-            money(l.byMonth[(l.lastMonth || 1) - 1]) +
-            ')';
-        else if (Math.round(start) === 0 && l.firstMonth !== null)
-          what = 'started ' + abbr(l.firstMonth) + ' at ' + money(l.first);
-        else what = money(start) + ' → ' + money(l.now);
-        return { l, delta, what };
-      })
-      .filter((x) => Math.abs(x.delta) >= 1)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-    const movesBlock = moves.length
-      ? '<div class="an-block"><div class="an-h">What moved since ' +
-        abbr(firstNum) +
-        ' · a month</div>' +
-        moves
-          .slice(0, 8)
-          .map((x) =>
-            row(esc(x.l.label) + '<span class="an-sublbl">' + x.what + '</span>', signed(x.delta)),
-          )
-          .join('') +
-        row(
-          'Bills ' + abbr(firstNum) + ' → ' + abbr(ref),
-          signed(sumAt(ref) - sumAt(firstNum)),
-          'ym-row-bold',
-        ) +
-        '</div>'
-      : '';
-    const statusTxt: Record<BillLine['status'], string> = {
-      ended: 'ended',
-      new: 'new this year',
-      changed: 'changed',
-      steady: 'steady',
-    };
-    const lineRow = (l: BillLine): string => {
-      const body =
-        (l.names.length > 1
-          ? '<div class="an-why">Also called: ' +
-            l.names
-              .filter((x) => x !== l.label)
-              .map(esc)
-              .join(' · ') +
-            '</div>'
-          : '') +
-        (l.changes.length
-          ? '<div class="an-why">' +
-            l.changes
-              .slice(0, 6)
-              .map((c) => 'from ' + abbr(c.month) + ': ' + money(c.from) + ' → ' + money(c.to))
-              .join(' · ') +
-            '</div>'
-          : '') +
-        monthChips((m) => l.byMonth[m.month_num - 1] || 0, months);
-      return openRow(
-        'bill:' + l.key,
-        esc(l.label) +
-          ' <span class="an-tagchip' +
-          (l.status === 'ended' ? ' t-ended' : '') +
-          '">' +
-          statusTxt[l.status] +
-          '</span>',
-        (l.status === 'ended' ? '' : money(l.now) + ' · ') + money(l.annual) + '/yr',
-        body,
-        l.status === 'ended' ? 'an-dim' : '',
-      );
-    };
-    const groups = fixedKeys
-      .map((k) => {
-        const live = bl.filter((l) => l.category === k && l.status !== 'ended');
-        if (!live.length) return '';
-        return (
-          '<div class="an-block"><div class="an-h">' +
-          esc(catLabel(k)) +
-          ' · now ' +
-          money(sumAt(ref, k)) +
-          ' a month</div>' +
-          live.map(lineRow).join('') +
-          '</div>'
-        );
-      })
-      .join('');
-    const ended = bl.filter((l) => l.status === 'ended');
-    const endedBlock = ended.length
-      ? '<div class="an-block"><div class="an-h">Ended this year</div>' +
-        ended.map(lineRow).join('') +
-        '</div>'
-      : '';
-    return (
-      say +
-      movesBlock +
-      groups +
-      endedBlock +
-      how(
-        'Read from your budget lines, month by month. Lines that share a first word are one bill (Claude Pro → Claude Max). “Now” is ' +
-          abbr(ref) +
-          '; a line has ended when it had money before ' +
-          abbr(ref) +
-          ' and none from then on. Months still ahead show as budgeted.',
-      )
-    );
-  };
-
-  // ── 8 · Travel & admin — this year vs next ────────────────────────────
-  const potsSection = (): string => {
-    const pc = state.potsCmp;
-    if (!pc || pc.years[0] !== state.currentYear) return '<p class="an-say">' + LOADING + '</p>';
-    const [y0, y1] = pc.years;
-    const [t0, t1] = pc.travel;
-    const [a0, a1] = pc.admin;
-    const plan = potPlanFor(y1);
-    // Her plan for the year being viewed, while the app has nothing booked for it
-    // (2027 is the viewed year from January: the plan must not vanish then).
-    const plan0 = potPlanFor(y0);
-    const planT = plan.filter((p) => p.pot === 'travel');
-    const planA = plan.filter((p) => p.pot === 'admin');
-    const sum = (xs: { amount: number }[]): number => xs.reduce((a, x) => a + x.amount, 0);
-    const big = (p: PotYear): number => p.rows.reduce((a, r) => a + Math.max(r.planned, r.paid), 0);
-    const y0Total = big(t0) + big(a0);
-    const y1App = big(t1) + big(a1);
-    const y1Plan = sum(plan);
-    const y0Say =
-      Math.round(y0Total) === 0 && plan0.length
-        ? y0 +
-          ':</b> nothing booked in the app yet; your plan says trips ' +
-          money(sum(plan0.filter((p) => p.pot === 'travel'))) +
-          ' · one-offs ' +
-          money(sum(plan0.filter((p) => p.pot === 'admin'))) +
-          ' — about <b>' +
-          money(sum(plan0) / 12) +
-          '</b> a month. <b>'
-        : y0 +
-          ':</b> trips ' +
-          money(big(t0)) +
-          ' · one-offs ' +
-          money(big(a0)) +
-          (Math.round(a0.planned - a0.paid) > 0 ? ' (' + money(a0.paid) + ' paid so far)' : '') +
-          ' — about <b>' +
-          money(y0Total / 12) +
-          '</b> a month. <b>';
-    const say =
-      '<p class="an-say"><b>' +
-      y0Say +
-      y1 +
-      ':</b> ' +
-      money(y1App) +
-      ' in the app so far' +
-      (plan.length
-        ? '; your plan says trips ' +
-          money(sum(planT)) +
-          ' · one-offs ' +
-          money(sum(planA)) +
-          ' — about <b>' +
-          money(y1Plan / 12) +
-          '</b> a month'
-        : '') +
-      '.</p>';
-    // One row per group, this year → next (app, or her plan where the app is empty).
-    const groupNames: string[] = [];
-    const addG = (g: string): void => {
-      if (!groupNames.includes(g)) groupNames.push(g);
-    };
-    addG('Trips');
-    a0.byGroup.forEach((g) => addG(g.group));
-    a1.byGroup.forEach((g) => addG(g.group));
-    planA.forEach((p) => addG(p.group));
-    const rowsOf = (p: PotYear, g: string): PotRow[] => p.rows.filter((r) => r.group === g);
-    const potFor = (g: string, i: 0 | 1): PotYear => (g === 'Trips' ? pc.travel[i] : pc.admin[i]);
-    const block =
-      '<div class="an-block"><div class="an-h">' +
-      y0 +
-      ' → ' +
-      y1 +
-      ' by kind · a year</div>' +
-      groupNames
-        .map((g) => {
-          const r0 = rowsOf(potFor(g, 0), g);
-          const r1 = rowsOf(potFor(g, 1), g);
-          const p1 = plan.filter((p) => p.group === g);
-          const v0 = r0.reduce((a, r) => a + Math.max(r.planned, r.paid), 0);
-          const v1app = r1.reduce((a, r) => a + Math.max(r.planned, r.paid), 0);
-          const v1plan = sum(p1);
-          const v1 = Math.max(v1app, v1plan);
-          if (Math.round(v0) === 0 && Math.round(v1) === 0) return '';
-          const itemRow = (r: PotRow): string =>
-            row(
-              esc(r.label) + (r.estimate ? ' <span class="an-sublbl">estimate</span>' : ''),
-              money(Math.max(r.planned, r.paid)) +
-                (Math.round(r.planned - r.paid) > 0
-                  ? ' <span class="an-sublbl">' + money(r.paid) + ' paid</span>'
-                  : ''),
-              'ym-row-sub',
-            );
-          const body =
-            '<div class="an-why"><b>' +
-            y0 +
-            '</b></div>' +
-            (r0.length ? r0.map(itemRow).join('') : '<div class="an-why">nothing</div>') +
-            '<div class="an-why"><b>' +
-            y1 +
-            '</b></div>' +
-            (r1.length ? r1.map(itemRow).join('') : '') +
-            p1
-              .map((p) =>
-                row(
-                  esc(p.label) + '<span class="an-sublbl">your plan · ' + esc(p.note) + '</span>',
-                  '<span class="an-proj">' + money(p.amount) + '</span>',
-                  'ym-row-sub',
-                ),
-              )
-              .join('') +
-            (!r1.length && !p1.length ? '<div class="an-why">nothing yet</div>' : '');
-          return openRow(
-            'pot:' + g,
-            esc(g),
-            money(v0) +
-              ' → ' +
-              (v1plan > v1app ? '<span class="an-proj">' + money(v1) + '</span>' : money(v1)),
-            body,
-          );
-        })
-        .join('') +
-      row(y0 + ' → ' + y1, money(y0Total) + ' → ' + money(Math.max(y1App, y1Plan)), 'ym-row-bold') +
-      '<div class="an-legend">italic = your plan, not in the app yet · a trip or item counts its plan or what’s been paid, whichever is more</div></div>';
-    const notIn = POT_NOT_IN_APP[y0] || [];
-    const flags = notIn.length
-      ? '<p class="an-flag">Known, not in the app: ' + notIn.map(esc).join(' ') + '</p>'
-      : '';
-    return (
-      say +
-      flags +
-      block +
-      how(
-        y0 +
-          ' is the Travel and Admin tabs: each trip or item’s plan and what has been paid. ' +
-          y1 +
-          ' shows what is in the app for that year, and your Sep 4 plan for it where the app is still empty.',
-      )
-    );
-  };
-
-  const sectionHtml =
-    sub === 'real'
-      ? realSection()
-      : sub === 'now'
-        ? nowSection()
-        : sub === 'why'
-          ? whySection()
-          : sub === 'floor'
-            ? floorSection()
-            : sub === 'cut'
-              ? cutSection()
-              : sub === 'income'
-                ? incomeSection()
-                : sub === 'bills'
-                  ? billsSection()
-                  : sub === 'pots'
-                    ? potsSection()
-                    : safeSection();
-  void petReal;
-  const titles: Record<AnSub, string> = {
-    real: 'Did I save?',
-    now: 'What does a month cost?',
-    why: 'How did it get so high?',
-    floor: 'My ladder — what could a month cost?',
-    cut: 'Where can I cut?',
-    safe: 'Which week? — after Feb 7',
-    income: 'Why did I make what I made?',
-    bills: 'What do my bills really look like?',
-    pots: 'Travel & admin — this year vs next',
-  };
-
-  return (
-    '<div class="year-tab-wrap ym-full an-wrap">' +
-    head +
-    tiles +
-    '<section class="card an-card an-section" data-sub="' +
-    sub +
-    '"><div class="card-title">' +
-    titles[sub] +
-    '</div>' +
-    sectionHtml +
-    back +
-    '</section></div>'
-  );
 }
 
 function setYearViewMonth(monthNum: number): void {
@@ -14905,7 +12796,7 @@ async function jumpToHistoryEntry(entityType: string, entityId: string): Promise
       const el = document.querySelector(
         '.an-floor[data-floor-cat="' + entityId + '"]',
       ) as HTMLElement | null;
-      if (el) highlight((el.closest('.an-floorcell') as HTMLElement | null) || el);
+      if (el) highlight(el);
       else toast('Floor not found — another year, or the line is gone');
     }, 300);
     return;
@@ -16197,8 +14088,6 @@ Object.assign(window as unknown as Record<string, unknown>, {
   renderSpendingGrid,
   renderTravelTab,
   renderYearSnapshot,
-  renderAnalyzeTab,
-  analyzeMode,
   buildStackCtx,
   loadAnalyzeData,
   loadFloors,
@@ -16206,18 +14095,12 @@ Object.assign(window as unknown as Record<string, unknown>, {
   toggleFloorMonth,
   setFloorAvgN,
   setAnalyzeAvgWindow,
-  setAnalyzeSub,
-  setAnalyzeLevel,
   setAnalyzeDrive,
   setAnalyzeSE,
   PAY,
   setAnalyzeOneOff,
   toggleAnRow,
-  analyzeToTop,
   cashTotals,
-  yearTabGap,
-  whyBridge,
-  billLines,
   loadPotsCompare,
   loadFeb7Data,
   computeAnalyze,

@@ -170,7 +170,7 @@ test('potsDueBefore: unpaid on this year’s rows + later rows up to Jan 2027, l
   const r = potsDueBefore(rows, later, { year: 2027, month: 1 }, { year: 2026, month: 10 });
   assert.equal(r.total, 2400);
   assert.deepEqual(r.lines, [
-    { label: 'Trip', amount: 2000 },
+    { label: 'Trip', amount: 2000, admin: false },
     { label: 'Car test', amount: 400 },
   ]);
 });

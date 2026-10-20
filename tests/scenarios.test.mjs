@@ -13,11 +13,11 @@ assert.ok(existsSync(compiled), 'dist/lib/scenarios.js is missing — run `npm r
 const {
   PAY,
   SCENARIOS,
+  POT_PLAN,
   scenario,
   privateNetOf,
   spendLevelLines,
   spendLevelTotal,
-  potPlanFor,
   LEVEL_META,
   planIncomeForMonth,
   planCaption,
@@ -103,7 +103,7 @@ test('spending levels: Temp 9,752 · Middle 12,714 · Normal 14,429, each on the
 });
 
 test('POT_PLAN: 2027 sums to 39,761 (normal) and 25,208 (lean); 2028 has no plan', () => {
-  const rows = potPlanFor(2027);
+  const rows = POT_PLAN.filter((p) => p.year === 2027);
   assert.equal(rows.length, 9);
   assert.equal(
     rows.reduce((a, p) => a + p.amount, 0),
@@ -114,7 +114,10 @@ test('POT_PLAN: 2027 sums to 39,761 (normal) and 25,208 (lean); 2028 has no plan
     25208,
   );
   assert.equal(rows.find((p) => p.label === 'Cog-Fun course').lean, 0);
-  assert.deepEqual(potPlanFor(2028), []);
+  assert.deepEqual(
+    POT_PLAN.filter((p) => p.year === 2028),
+    [],
+  );
 });
 
 test('PAY: gan 2 paid months = 12 minus its unpaid months (July–August)', () => {

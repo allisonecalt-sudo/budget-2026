@@ -11,7 +11,7 @@
 //   Temp / Middle / Normal = her Oct 11 walkthrough rows; Lean is NOT here —
 //   it is her editable floor (spend_floors). No schema in v73.
 // What's built: PAY, GAN2_NET/PET_NET/clientsNet/MIX_NET, SCENARIOS + scenario()
-//   + privateNetOf(), LEVEL_META + SPEND_LEVELS, POT_PLAN + potPlanFor(),
+//   + privateNetOf(), LEVEL_META + SPEND_LEVELS, POT_PLAN,
 //   jobRates/perHourLines/jobCompareRows, planIncomeForMonth.
 // What's next: the Analyze stack reads planIncomeForMonth for the Feb–Dec 2027 strip.
 // Links: tests/scenarios.test.mjs · tests/pay.test.mjs · lib/pay.ts ·
@@ -940,11 +940,6 @@ export const POT_PLAN: PotPlanRow[] = [
     note: 'twice a year',
   },
 ];
-/** The plan rows of one year, in their original order ([] when none). */
-export function potPlanFor(year: number): PotPlanRow[] {
-  return POT_PLAN.filter((p) => p.year === year);
-}
-
 // Petachya + Clalit (grants spread, no extra hours) vs Petachya + the school —
 // her bottom line, Oct 11 20:29–20:30. School KH = her belief (confirm).
 // Every per-hour figure is GROSS per PAID hour (the same basis for every

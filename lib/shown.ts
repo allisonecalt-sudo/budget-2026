@@ -12,7 +12,7 @@
 //     ITS OWN rounding, `roundZ` (= Math.round, the app's one rule), exactly as every other
 //     tab prints it. No part is ever nudged to make a sum work.
 //   - Every total prints its SOURCE's own rounded number: the true (unrounded) sum, rounded
-//     once. That is what the ribbon, the Cash tab and the classic page print.
+//     once. That is what the ribbon, the Cash tab and the v72 page printed.
 //   - When the printed parts do not add to the printed total, the difference is returned as
 //     `residual` and the card prints ONE visible row "agorot, rounded" inside that sum, so
 //     what is on the screen still adds up exactly and nothing is hidden.
@@ -30,6 +30,11 @@ import { roundZ } from './money.js';
 
 /** The label of the one extra row that closes a sum whose printed parts are each rounded on their own. */
 export const ROUNDING_LABEL = 'agorot, rounded';
+/**
+ * The same row when the gap comes from averages or a ÷ 12 (not from agorot in her data): the
+ * figures were never whole shekels to begin with, so it says "rounding".
+ */
+export const ROUNDING_LABEL_AVG = 'rounding';
 
 const cents = (v: unknown): number => Math.round((Number(v) || 0) * 100);
 /** The true sum of the values (exact to the agorot), unrounded. */
@@ -199,7 +204,7 @@ export interface MonthNowShown {
   baseResidual: number;
   /** Her lean plan's trips & one-offs, ÷ 12, its own rounding. */
   lean: number;
-  /** The true base + lean (when a plan exists), rounded: the classic page's month. */
+  /** The true base + lean (when a plan exists), rounded: the v72 page's month. */
   headline: number;
   headlineResidual: number;
   /** The true base + her normal plan, rounded. */
@@ -249,7 +254,7 @@ export type GapKind =
 export interface YearWayShown {
   /** bills, everyday, trips + admin, charity - each its own rounding. */
   parts: number[];
-  /** The true real spend, rounded (the classic page's number). */
+  /** The true real spend, rounded (the v72 page's number). */
   realSpend: number;
   realResidual: number;
   income: number;
@@ -257,7 +262,7 @@ export interface YearWayShown {
   /** The true income − savings, rounded. */
   herWay: number;
   wayResidual: number;
-  /** The true gap, rounded (the classic page's "more than this tab"). */
+  /** The true gap, rounded (the v72 page's "more than this tab"). */
   gap: number;
   /** gap − (your way − real spend) as printed. */
   gapResidual: number;
@@ -350,7 +355,7 @@ export function gapChainShown(g: {
 /** "What moved since …": early + every driver's move = recent. */
 export interface BridgeShown {
   rows: { key: string; early: number; recent: number; delta: number }[];
-  /** The true early / recent averages, rounded (the classic page's). */
+  /** The true early / recent averages, rounded (the v72 page's). */
   earlyReal: number;
   recentReal: number;
   /** The true move, rounded. */
@@ -418,7 +423,7 @@ export interface BillMovesShown {
   /** The moves not listed, added together, and how many there are. */
   others: number;
   othersCount: number;
-  /** The true now − start of every bill, rounded (the classic page's "Bills Jan → Oct"). */
+  /** The true now − start of every bill, rounded (the v72 page's "Bills Jan → Oct"). */
   total: number;
   /** total − the printed moves (listed + the rest). */
   residual: number;

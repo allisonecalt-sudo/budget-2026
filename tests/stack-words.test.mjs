@@ -38,3 +38,53 @@ test('Z10: sw.js VERSION is "budget-" + APP_VERSION', () => {
   assert.ok(swVersion, 'VERSION not found in sw.js');
   assert.equal(swVersion, 'budget-' + appVersion);
 });
+
+test('V8: money() and signed() round a negative half like roundZ (toward +, never away from zero)', async () => {
+  const { money, signed } = await import(pathToFileURL(analyzeJs).href);
+  assert.equal(money(-2.5), '−₪2');
+  assert.equal(signed(-2.5), '−₪2');
+  assert.equal(money(-150.5), '−₪150');
+  assert.equal(signed(-150.5), '−₪150');
+  assert.equal(money(2.5), '₪3');
+  assert.equal(signed(2.5), '+₪3');
+  assert.equal(money(-0.4), '₪0');
+  assert.equal(signed(-0.4), '₪0');
+  assert.equal(signed(-2.6), '−₪3');
+});
+
+test('V4: data-qty keys survive item names with spaces ("Summer trip", "Paid, not tied to an item")', async () => {
+  const { Q, slug } = await import(pathToFileURL(analyzeJs).href);
+  const keysOf = (html) => html.match(/data-qty="([^"]*)"/)[1].split(' ');
+  for (const name of ['Summer trip', 'Paid, not tied to an item']) {
+    // Built with slug(): one key per intended key, none holding a space.
+    const k = keysOf(Q('₪1', 'pot:2026:' + slug(name), 'potdue:' + slug(name)));
+    assert.equal(k.length, 2, name);
+    assert.ok(
+      k.every((x) => !/\s/.test(x)),
+      name,
+    );
+    assert.equal(decodeURIComponent(k[1]), 'potdue:' + name);
+    // Even a key built WITHOUT slug() cannot split into pieces or break the attribute.
+    const raw = keysOf(Q('₪1', 'potdue:' + name + '"><b>'));
+    assert.equal(raw.length, 1, name);
+  }
+  assert.equal(slug('Postage'), 'Postage'); // plain names keep their key
+  assert.notEqual(slug('Summer trip'), slug('Summer_trip'));
+});
+
+test('V5: QN marks a positive print of a negative value, Q does not', async () => {
+  const { Q, QN } = await import(pathToFileURL(analyzeJs).href);
+  assert.match(QN('₪150', 'planres:low:lean'), /data-qty="planres:low:lean" data-qty-sign="-"/);
+  assert.doesNotMatch(Q('₪150', 'planres:low:lean'), /data-qty-sign/);
+});
+
+test('T2: the rounding marker says how many sums are off', async () => {
+  const { roundMarkText } = await import(pathToFileURL(analyzeJs).href);
+  assert.equal(roundMarkText([0, 0]), '');
+  assert.equal(roundMarkText([1]), ' · ±₪1 rounding');
+  assert.equal(roundMarkText([0, 2]), ' · ±₪2 rounding');
+  assert.equal(roundMarkText([1, 1]), ' · ±₪1 rounding in 2 sums');
+  assert.equal(roundMarkText([-1, 1]), ' · ±₪1 rounding in 2 sums');
+  assert.equal(roundMarkText([1, 2]), ' · rounding in 2 sums (up to ±₪2)');
+  assert.doesNotMatch(roundMarkText([1, 1]), /and/);
+});

@@ -90,7 +90,7 @@ export interface Feb7Input {
   envelopeKeys: string[];
   fallback: { fixedByCat: Record<string, number>; envelopeByCat: Record<string, number> };
   months: Feb7MonthIn[];
-  potsDue: { total: number; lines: { label: string; amount: number }[] };
+  potsDue: { total: number; lines: { label: string; amount: number; admin?: boolean }[] };
 }
 export interface Feb7Row {
   ym: YM;
@@ -108,7 +108,8 @@ export interface Feb7Result {
   restOfThisMonth: number;
   rows: Feb7Row[];
   potsDue: number;
-  potsLines: { label: string; amount: number }[];
+  /** amount = whole shekels as printed; exact = the unrounded unpaid amount (for a subtotal's own rounding). */
+  potsLines: { label: string; amount: number; exact: number; admin?: boolean }[];
   end: number;
   estimate: boolean;
 }
@@ -176,7 +177,12 @@ export function projectFeb7(input: Feb7Input): Feb7Result {
     prevIncome = income;
     prevYm = m.ym;
   }
-  const potsLines = input.potsDue.lines.map((l) => ({ label: l.label, amount: whole(l.amount) }));
+  const potsLines = input.potsDue.lines.map((l) => ({
+    label: l.label,
+    amount: whole(l.amount),
+    exact: l.amount,
+    admin: l.admin,
+  }));
   const potsDue = potsLines.reduce((a, l) => a + l.amount, 0);
   return {
     start,
@@ -221,12 +227,13 @@ export function potsDueBefore(
   laterUnpaid: Feb7Data['laterUnpaid'],
   until: YM,
   today: YM,
-): { total: number; lines: { label: string; amount: number }[] } {
-  const lines: { label: string; amount: number }[] = [];
+): { total: number; lines: { label: string; amount: number; admin?: boolean }[] } {
+  const lines: { label: string; amount: number; admin?: boolean }[] = [];
   for (const r of rowsThisYear) {
     const unpaid = ag(Math.max(0, n(r.planned) - n(r.paid)));
     // R7: under ₪1 left unpaid is a rounding crumb, not something still to pay (no "Licence ₪0" line).
-    if (unpaid >= 1) lines.push({ label: r.label, amount: unpaid });
+    // admin: an Admin item (not a trip) - the lines that add up to the Admin tab's Remaining.
+    if (unpaid >= 1) lines.push({ label: r.label, amount: unpaid, admin: r.group !== 'Trips' });
   }
   for (const l of laterUnpaid) {
     const i = ymIndex({ year: l.year, month: l.month });

@@ -50,7 +50,7 @@
 //   budgeted; whyBridge(…, wholeYear) compares the first months with the
 //   last months of the year.
 // What's next: a cross-year view so January 2027 can read 2026's months.
-// Links: consumed by app.ts renderAnalyzeTab; pinned by tests/analyze.test.mjs.
+// Links: consumed by tabs/analyze.ts (via app.ts buildStackCtx); pinned by tests/analyze.test.mjs.
 
 import { ag } from './budget-math.js';
 
@@ -1042,37 +1042,6 @@ export function monthNow(r: AnalyzeResult, rules: MonthNowRules): MonthNow | nul
     byCat,
     charity: bm.charity,
     total: ag(bm.fixed + everyday + bm.charity),
-  };
-}
-
-/**
- * The three figures "A month now" can show, from ONE computation so the
- * tile and its section can never disagree (v70: the tile said 12,970 while the
- * section bolded 10,869 — the tile added the lean-plan trips, the section did
- * not). base = bills + everyday + charity; withLean / withNormal add the
- * next year's trips & one-offs per month under her lean / normal plan.
- * `headline` is the one number the tile and the section's first sentence show:
- * base plus the lean plan when a plan exists, else the base alone.
- */
-export interface MonthNowTotals {
-  base: number;
-  withLean: number;
-  withNormal: number;
-  headline: number;
-}
-export function monthNowTotals(
-  base: number,
-  oneOffsMo: number,
-  oneOffsLeanMo: number,
-): MonthNowTotals {
-  const b = ag(n(base));
-  const withLean = ag(b + n(oneOffsLeanMo));
-  const withNormal = ag(b + n(oneOffsMo));
-  return {
-    base: b,
-    withLean,
-    withNormal,
-    headline: n(oneOffsMo) || n(oneOffsLeanMo) ? withLean : b,
   };
 }
 

@@ -32,7 +32,6 @@ const {
   billLines,
   potYear,
   monthNow,
-  monthNowTotals,
   billsMonthFor,
 } = await import(pathToFileURL(compiled).href);
 
@@ -631,22 +630,6 @@ test('monthNow: the coming month’s bills + recent everyday (with her rules) + 
 });
 
 // ── v70 (batch 2): one A-month-now computation, one bills month ──────────
-
-test('monthNowTotals: the tile and the section read the same headline', () => {
-  // The v69 bug: tile = base + lean trips (12,970), section bold = base (10,869).
-  const t = monthNowTotals(10869, 3313, 2101);
-  assert.equal(t.base, 10869);
-  assert.equal(t.withLean, 12970);
-  assert.equal(t.withNormal, 14182);
-  assert.equal(t.headline, 12970); // lean plan, as the tile always showed
-  // No plan for the year: the base is the headline, nothing is added.
-  assert.deepEqual(monthNowTotals(10869, 0, 0), {
-    base: 10869,
-    withLean: 10869,
-    withNormal: 10869,
-    headline: 10869,
-  });
-});
 
 test('billsMonthFor: the reference month for every caller, never the next one', () => {
   assert.equal(billsMonthFor(10), 10);

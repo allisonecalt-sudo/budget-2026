@@ -12,8 +12,8 @@
 // What's built: B1 the skeleton · B2 StackCtx (the plain data app.ts hands over) ·
 //   B3 the four answer cards · C1 the five truth cards (their money comes from the
 //   tested lib/analyze.ts functions, called here on plain data — no new formula).
-// What's next: v74 deletes the classic page (renderAnalyzeTab in app.ts).
-// Links: app.ts (analyzeMode, buildStackCtx) · lib/scenarios.ts · lib/feb7.ts ·
+// What's next: v74 deleted the v72 page; this stack is the only Analyze page.
+// Links: app.ts (buildStackCtx) · lib/scenarios.ts · lib/feb7.ts ·
 //   styles.css (.an2-*) · tests/analyze-stack.spec.js · second-brain
 //   projects/budget-app/v73-analyze-rebuild-spec-2026-10-18.md.
 
@@ -21,11 +21,13 @@ import { roundZ, shekels } from '../lib/money.js';
 import { planCaption } from '../lib/scenarios.js';
 import {
   ROUNDING_LABEL,
+  ROUNDING_LABEL_AVG,
   billMonthsSeen,
   billMovesShown,
   billsShown,
   bridgeShown,
   gapChainShown,
+  totalOf,
   monthNowShown,
   potCounts,
   potsShown,
@@ -225,11 +227,18 @@ export interface StackCtx {
   };
 }
 
-// ── Formatting (same rules as the classic page) ───────────────────────────
+// ── Formatting (same rules as the rest of the app) ───────────────────────────
 // Never ₪-x: a minus sits in front of the shekel sign (U+2212).
-const money = (v: number): string => (roundZ(v) < 0 ? '−' + shekels(-v) : shekels(v || 0));
-const signed = (v: number): string =>
-  roundZ(v) < 0 ? '−' + shekels(-v) : roundZ(v) > 0 ? '+' + shekels(v) : shekels(0);
+// Negatives are formed from roundZ(v) itself, so a half (−2.5) prints the one number roundZ says
+// (−₪2) here and on every other tab - never −₪3 (Math.round(2.5)) from negating first.
+export const money = (v: number): string => {
+  const r = roundZ(v);
+  return r < 0 ? '−' + shekels(-r) : shekels(r);
+};
+export const signed = (v: number): string => {
+  const r = roundZ(v);
+  return r < 0 ? '−' + shekels(-r) : r > 0 ? '+' + shekels(r) : shekels(0);
+};
 const esc = (t: unknown): string =>
   String(t ?? '')
     .replace(/&/g, '&amp;')
@@ -299,18 +308,68 @@ const lvTot = (key: string, html: string): string =>
     'level:' + key + ':' + curYear,
   );
 /**
+ * Like Q(), for a figure printed as a POSITIVE number whose real value is negative ("short ₪150",
+ * "₪30 less"): data-qty-sign="-" tells the cross-group test to read it as −150 / −30, so a signed
+ * print and an unsigned one of the same quantity compare like with like.
+ */
+export const QN = (html: string, ...keys: string[]): string =>
+  '<span data-qty="' + keys.map(safeKey).join(' ') + '" data-qty-sign="-">' + html + '</span>';
+/**
+ * An item name inside a data-qty key ("Summer trip", "Paid, not tied to an item"): percent-encoded,
+ * so a key never holds a space (the keys of one element are space-separated) or a quote.
+ */
+export const slug = (name: string): string => encodeURIComponent(name);
+/** Defence for a key that was built without slug(): any space or markup character is encoded. */
+const safeKey = (k: string): string => k.replace(/[\s"<>&]/g, (c) => encodeURIComponent(c));
+/**
  * A stable key on every printed figure that names a quantity (data-qty, space-separated for more
  * than one). The cross-group test asserts that every element with the same key prints the same
- * text across the whole app - the stack, the ribbon, the Cash tab, the Year tab, the classic page.
+ * text across the whole app - the stack, the ribbon, the Cash tab, the Year tab.
  */
-const Q = (html: string, ...keys: string[]): string =>
-  '<span data-qty="' + keys.join(' ') + '">' + html + '</span>';
+export const Q = (html: string, ...keys: string[]): string =>
+  '<span data-qty="' + keys.map(safeKey).join(' ') + '">' + html + '</span>';
 const ymKey = (y: number, m: number): string => y + '-' + String(m).padStart(2, '0');
 /** The viewed year while the stack renders (the level totals' keys carry it). */
 let curYear = 0;
 /** The one extra row that closes a sum whose printed parts are each rounded on their own. */
-const resRow = (group: string, residual: number, suffix = ''): string =>
-  residual === 0 ? '' : row(ROUNDING_LABEL + suffix, P(signed(residual), group), 'an2-row-sub');
+const resRow = (
+  group: string,
+  residual: number,
+  suffix = '',
+  label: string = ROUNDING_LABEL,
+): string => (residual === 0 ? '' : row(label + suffix, P(signed(residual), group), 'an2-row-sub'));
+/** The rounding row for a gap that comes from averages or a ÷ 12: it says "rounding". */
+const avgRow = (group: string, residual: number): string =>
+  resRow(group, residual, '', ROUNDING_LABEL_AVG);
+/**
+ * The one marker a face caption ends with when its shown parts do not add to its shown total.
+ * One sum off: " · ±₪N rounding" (N = the shown difference). K sums off by the same N:
+ * " · ±₪N rounding in K sums". K sums off by different amounts:
+ * " · rounding in K sums (up to ±₪M)". Figures on a face print plain (each its own rounding);
+ * the detail keeps its rounding row.
+ */
+export const roundMarkText = (diffs: number[]): string => {
+  const ds = diffs.map((d) => Math.abs(d)).filter((d) => d > 0);
+  if (!ds.length) return '';
+  if (ds.length === 1) return ' · ±' + shekels(ds[0]) + ' rounding';
+  const max = Math.max(...ds);
+  return ds.every((d) => d === ds[0])
+    ? ' · ±' + shekels(max) + ' rounding in ' + ds.length + ' sums'
+    : ' · rounding in ' + ds.length + ' sums (up to ±' + shekels(max) + ')';
+};
+const roundMark = (...diffs: number[]): string => {
+  const t = roundMarkText(diffs);
+  return t
+    ? '<span class="an2-rmark" data-n="' +
+        diffs
+          .map((d) => Math.abs(d))
+          .filter((d) => d > 0)
+          .join(',') +
+        '">' +
+        t +
+        '</span>'
+    : '';
+};
 const chip = '<span class="an2-chip">estimate</span>';
 const unit = (t: string): string => '<span class="an2-unit">' + t + '</span>';
 
@@ -459,10 +518,24 @@ function levelDetail(ctx: StackCtx, f: Fmt, i: number): string {
             P(money(pp.seHigh), 'plan-high-' + lv.key, true),
         )
       : '') +
-    resRow('plan-low-' + lv.key, pp.residualLow) +
-    row('Income · 4 clients', T(money(pp.incomeLow), 'plan-low-' + lv.key), 'an2-row-bold') +
-    resRow('plan-high-' + lv.key, pp.residualHigh) +
-    row('Income · 5 clients', T(money(pp.incomeHigh), 'plan-high-' + lv.key), 'an2-row-bold');
+    avgRow('plan-low-' + lv.key, pp.residualLow) +
+    row(
+      'Income · 4 clients',
+      Q(
+        T(money(pp.incomeLow), 'plan-low-' + lv.key),
+        'planincome:low' + (ctx.se ? ':se1' : ':se0'),
+      ),
+      'an2-row-bold',
+    ) +
+    avgRow('plan-high-' + lv.key, pp.residualHigh) +
+    row(
+      'Income · 5 clients',
+      Q(
+        T(money(pp.incomeHigh), 'plan-high-' + lv.key),
+        'planincome:high' + (ctx.se ? ':se1' : ':se0'),
+      ),
+      'an2-row-bold',
+    );
   const path = a.path;
   // Each month: in − out = net, and the cash before + net = the cash after (W1).
   const pathRows = path.rows
@@ -508,14 +581,20 @@ function levelDetail(ctx: StackCtx, f: Fmt, i: number): string {
         P(money(pp.incomeLow), 'res-low-' + lv.key) +
         ' − ' +
         P(lvTot(lv.key, money(lv.total)), 'res-low-' + lv.key, true),
-      T(signed(a.resLow), 'res-low-' + lv.key),
+      Q(
+        T(signed(a.resLow), 'res-low-' + lv.key),
+        'planres:low:' + lv.key + (ctx.se ? ':se1' : ':se0'),
+      ),
     ) +
     row(
       '5 clients: ' +
         P(money(pp.incomeHigh), 'res-high-' + lv.key) +
         ' − ' +
         P(lvTot(lv.key, money(lv.total)), 'res-high-' + lv.key, true),
-      T(signed(a.resHigh), 'res-high-' + lv.key),
+      Q(
+        T(signed(a.resHigh), 'res-high-' + lv.key),
+        'planres:high:' + lv.key + (ctx.se ? ':se1' : ':se0'),
+      ),
     ) +
     head('Cash, month by month · 4 clients') +
     note(
@@ -603,9 +682,15 @@ function answerCard(ctx: StackCtx, f: Fmt): string {
         (waiting
           ? '…'
           : '<span class="an2-nw">' +
-            T(signed(a.resLow), 'res-low-' + lv.key) +
+            Q(
+              T(signed(a.resLow), 'res-low-' + lv.key),
+              'planres:low:' + lv.key + (ctx.se ? ':se1' : ':se0'),
+            ) +
             '</span> to <span class="an2-nw">' +
-            T(signed(a.resHigh), 'res-high-' + lv.key) +
+            Q(
+              T(signed(a.resHigh), 'res-high-' + lv.key),
+              'planres:high:' + lv.key + (ctx.se ? ':se1' : ':se0'),
+            ) +
             '</span>') +
         '</span><span class="an2-lv-cash">' +
         (waiting ? '' : tileCash(ctx, f, i)) +
@@ -649,6 +734,12 @@ function cashCard(ctx: StackCtx, f: Fmt): string {
   const leftKeys = c.oneOff ? ['cash:leftnow'] : ['cash:leftnow', 'cash:liquid'];
   const st = ctx.feb7.status;
   const res = ctx.feb7.result;
+  // The Admin lines among the Feb 7 "not paid yet" list: their own sum (parts = the lines as
+  // printed, total = the true sum rounded once, one rounding row if they differ).
+  const adminGroup = 'admindue-' + ctx.today.year;
+  const adminLines = res ? res.potsLines.filter((l) => l.admin) : [];
+  const adminTotal = totalOf(adminLines.map((l) => l.exact));
+  const adminResidual = adminTotal - adminLines.reduce((x, l) => x + l.amount, 0);
   const shown = res ? res.end : st === 'passed' ? c.leftNow : null;
   const bigFeb7 = res
     ? '≈ ' + T(money(res.end), 'feb7')
@@ -705,7 +796,7 @@ function cashCard(ctx: StackCtx, f: Fmt): string {
       .map((d) =>
         row(
           '− ' + esc(d.name),
-          Q(P(money(d.amount), 'leftnow', true), 'cash:debt:' + d.name),
+          Q(P(money(d.amount), 'leftnow', true), 'cash:debt:' + slug(d.name)),
           'an2-row-sub',
         ),
       )
@@ -783,11 +874,36 @@ function cashCard(ctx: StackCtx, f: Fmt): string {
         .map((l) =>
           row(
             esc(l.label),
-            Q(P(money(l.amount), 'pots-due', true), 'potdue:' + l.label),
+            Q(
+              // An Admin line is also a part of the Admin subtotal below (its own sum group).
+              l.admin
+                ? P(P(money(l.amount), 'pots-due', true), adminGroup)
+                : P(money(l.amount), 'pots-due', true),
+              'potdue:' + slug(l.label),
+            ),
             'an2-row-sub',
           ),
         )
         .join('') +
+      // A SUBTOTAL of the Admin items among the lines above - not another item, and not the Admin
+      // tab's "Remaining": that one is budget − everything paid (an overpaid item offsets another),
+      // while this is cash still to go out: each item's max(0, planned − paid), crumbs under ₪1
+      // dropped. It sits outside the pots-due sum, in its OWN sum group: the Admin lines as printed
+      // are its parts, the true sum rounded once is its total, and a rounding row closes any gap.
+      (adminLines.length
+        ? (adminResidual === 0
+            ? ''
+            : row(
+                ROUNDING_LABEL,
+                P(signed(adminResidual), adminGroup),
+                'an2-row-sub an2-row-indent',
+              )) +
+          row(
+            'of these, Admin items still to pay',
+            Q(T(money(adminTotal), adminGroup), 'admindue:' + ctx.today.year),
+            'an2-row-sub an2-row-subtotal',
+          )
+        : '') +
       row('= Left on Feb 7', T(money(res.end), 'feb7'), 'an2-row-bold') +
       note(
         'Feb 7 falls in the January pay month (Jan 10 – Feb 10), so January counts in full. Out = bills + everyday + charity + money moved to investing; what you put aside for trips, admin and savings stays in the bank until it’s spent. Not counted: gan 2 until its first payslip (your rule) · Clalit’s pay that lands after Feb 7' +
@@ -858,9 +974,9 @@ function incomeCard(ctx: StackCtx): string {
   const pp = ctx.planParts;
   const face =
     '<div class="an2-big">' +
-    money(pp.incomeLow) +
+    Q(money(pp.incomeLow), 'planincome:low' + (ctx.se ? ':se1' : ':se0')) +
     ' – ' +
-    money(pp.incomeHigh) +
+    Q(money(pp.incomeHigh), 'planincome:high' + (ctx.se ? ':se1' : ':se0')) +
     unit(' a month') +
     '</div><div class="an2-cap">your plan: ' +
     esc(planCaption()) +
@@ -878,14 +994,22 @@ function incomeCard(ctx: StackCtx): string {
         .map((lv) => {
           const waiting = ctx.floorsLoading && lv.key === 'lean';
           const v = sc.incomeNet - lv.total;
+          // The two plan rows are the plan's edges: their result at a level is the 🧭 tile's.
+          const edgeKey = sc.plan_edge
+            ? 'planres:' + sc.plan_edge + ':' + lv.key + (ctx.se ? ':se1' : ':se0')
+            : '';
           return (
             esc(lv.name) +
             ' ' +
             (waiting
               ? '…'
               : roundZ(v) >= 0
-                ? signed(v)
-                : '<span class="an2-amber">short ' + money(-v) + '</span>')
+                ? edgeKey
+                  ? Q(signed(v), edgeKey)
+                  : signed(v)
+                : '<span class="an2-amber">short ' +
+                  (edgeKey ? QN(money(-v), edgeKey) : money(-v)) +
+                  '</span>')
           );
         })
         .join(' · ');
@@ -935,7 +1059,7 @@ function incomeCard(ctx: StackCtx): string {
         (sc.likely ? ' · likely ' + P(money(sc.likely), 'mix-' + sc.key) : '') +
         (sc.maybe ? ' · maybe ' + P(money(sc.maybe), 'mix-' + sc.key) : '') +
         (mixResidual
-          ? ' · ' + ROUNDING_LABEL + ' ' + P(signed(mixResidual), 'mix-' + sc.key)
+          ? ' · ' + ROUNDING_LABEL_AVG + ' ' + P(signed(mixResidual), 'mix-' + sc.key)
           : '') +
         '</div><div>☀️ Summer: ' +
         esc(sc.summer_note) +
@@ -1092,8 +1216,9 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
   const plan = ctx.potPlan.filter((p) => p.year === planYear);
   const oneOffsMo = plan.reduce((a, p) => a + p.amount, 0) / 12;
   const oneOffsLeanMo = plan.reduce((a, p) => a + p.lean, 0) / 12;
-  // W1: every part is shown in whole shekels, so each total is the sum of the printed
-  // parts (lib/shown.ts monthNowShown).
+  // The rounding rule (lib/shown.ts monthNowShown): every part prints its own roundZ, the month
+  // is the true sum rounded once; when the printed parts do not add to it, ONE rounding row
+  // closes the sum. No part is nudged.
   const env = v.r.cats.filter((c) => c.kind === 'envelope');
   const mn = monthNowShown({
     bills: mNow.bills,
@@ -1115,11 +1240,10 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
     ) +
     unit(' a month') +
     '</div><div class="an2-cap">' +
-    // The parts sit on the face, so when each prints its own rounding and they do not add to the
-    // month, the line says "≈" (the exact row is in the detail).
+    // The parts sit on the face: each prints its own rounding, and when they do not add to the
+    // month the caption ends with the rounding marker (the rounding row is in the detail).
     (oneOffsMo
-      ? (mn.headlineResidual ? '≈ ' : '') +
-        Q(
+      ? Q(
           money(mn.base),
           ctx.base.prior ? 'monthbase:' + ctx.base.year + ':base' : 'monthbase:' + ctx.year,
         ) +
@@ -1127,7 +1251,8 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
         money(mn.lean) +
         ' trips & one-offs (your lean ' +
         planYear +
-        ' plan)'
+        ' plan)' +
+        roundMark(mn.headlineResidual)
       : 'bills, everyday and charity') +
     '</div>' +
     (ctx.base.prior
@@ -1151,6 +1276,9 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
     ' · not in the total</div>';
 
   const cat = (key: string): AnalyzeCatStat | undefined => v.r.cats.find((c) => c.key === key);
+  // One everyday pace, one key: the envelope row, the "What moved" line and the 🪜 "your pace now"
+  // all print this month's pace for a line, so they must read the same.
+  const paceKey = (catKey: string): string => 'pace:' + ctx.base.year + ':' + catKey;
   const envRows = env
     .filter(
       (c) =>
@@ -1172,7 +1300,10 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
             : rules.zero.includes(c.key)
               ? sub('0 unless you go back (your words, Oct 9)')
               : ''),
-        P(money(mn.everydayRows.find((x) => x.key === c.key)?.value ?? 0), 'mn-everyday'),
+        Q(
+          P(money(mn.everydayRows.find((x) => x.key === c.key)?.value ?? 0), 'mn-everyday'),
+          paceKey(c.key),
+        ),
         'an2-row-sub',
       ),
     )
@@ -1181,13 +1312,22 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
   void cat;
   // What moved against the window average — biggest first.
   const moves = [
-    { label: '🏠 Bills', was: v.avgOf((m) => m.fixed), now: mNow.bills },
+    { label: '🏠 Bills', was: v.avgOf((m) => m.fixed), now: mNow.bills, nowKey: '', wasKey: '' },
     ...env.map((c) => ({
       label: c.emoji + ' ' + c.label,
       was: c.avg,
       now: mNow.byCat[c.key] || 0,
+      nowKey: paceKey(c.key),
+      // The window average of a line is the same figure 🪜 prints as its "average".
+      wasKey: 'floor:' + ctx.base.year + ':' + c.key + ':avg:' + v.win,
     })),
-    { label: '💚 Charity', was: v.avgOf((m) => m.charity), now: mNow.charity },
+    {
+      label: '💚 Charity',
+      was: v.avgOf((m) => m.charity),
+      now: mNow.charity,
+      nowKey: '',
+      wasKey: '',
+    },
   ]
     .filter((x) => Math.abs(x.now - x.was) >= 50)
     .sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was))
@@ -1203,9 +1343,15 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
       P(T(money(mn.everyday), 'mn-everyday'), 'mn-base'),
     ) +
     envRows +
-    resRow('mn-everyday', mn.everydayResidual) +
-    row('💚 Charity · ' + bmName, P(money(mn.charity), 'mn-base')) +
-    resRow('mn-base', mn.baseResidual) +
+    avgRow('mn-everyday', mn.everydayResidual) +
+    row(
+      '💚 Charity · ' + bmName,
+      Q(
+        P(money(mn.charity), 'mn-base'),
+        'charity:' + ymKey(ctx.base.year, mNow.billsMonth) + ':full',
+      ),
+    ) +
+    avgRow('mn-base', mn.baseResidual) +
     row(
       'Bills + everyday + charity',
       oneOffsMo ? P(T(money(mn.base), 'mn-base'), 'mn-month') : T(money(mn.base), 'mn-base'),
@@ -1216,7 +1362,7 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
           '✈️📋 Trips & one-offs · your lean ' + planYear + ' plan, ÷ 12',
           '+' + P(money(mn.lean), 'mn-month'),
         ) +
-        resRow('mn-month', mn.headlineResidual) +
+        avgRow('mn-month', mn.headlineResidual) +
         row('A month now', T(money(mn.headline), 'mn-month'), 'an2-row-bold') +
         row('with your normal plan instead', money(mn.withNormal), 'an2-row-sub')
       : '') +
@@ -1263,7 +1409,15 @@ function monthCard(ctx: StackCtx, f: Fmt): string {
             const d = shownDiff(x.now, x.was);
             return row(
               esc(x.label) +
-                sub(P(money(d.b), 'mn-move-' + k, true) + ' → ' + P(money(d.a), 'mn-move-' + k)),
+                sub(
+                  (x.wasKey
+                    ? Q(P(money(d.b), 'mn-move-' + k, true), x.wasKey)
+                    : P(money(d.b), 'mn-move-' + k, true)) +
+                    ' → ' +
+                    (x.nowKey
+                      ? Q(P(money(d.a), 'mn-move-' + k), x.nowKey)
+                      : P(money(d.a), 'mn-move-' + k)),
+                ),
               T(signed(d.a - d.b), 'mn-move-' + k),
             );
           })
@@ -1331,7 +1485,7 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
       ? '<div class="an2-cap">' + unsetN + ' lines not set — they use the suggestion</div>'
       : '');
 
-  // How each line reads against the bill now / her own months (classic levelOf, D19 wording).
+  // How each line reads against the bill now / her own months (D19 wording).
   const rules = ctx.text.MONTH_NOW_RULES[ctx.base.year] || { fromMonth: {}, zero: [] };
   const mNow = none
     ? null
@@ -1362,7 +1516,19 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
   // The same figure on one line prints once: the average (and the bill now) carry a key, so the
   // cross-group test can assert every print of one quantity reads the same.
   const qYear = baseYr ?? ctx.year;
-  const avgKey = (c: AnalyzeCatStat): string => 'floor:' + qYear + ':' + c.key + ':avg';
+  // The average depends on its window (Jan–Mar vs the whole year), so the key carries it.
+  const avgKey = (c: AnalyzeCatStat): string =>
+    'floor:' + qYear + ':' + c.key + ':avg:' + (ctx.base.prior ? 0 : ctx.avgWindow);
+  // The room depends on the average (its window) and on the Lean it is measured against (whose year).
+  const roomKey = (c: AnalyzeCatStat): string =>
+    'floor:' +
+    qYear +
+    ':' +
+    c.key +
+    ':room:' +
+    (ctx.base.prior ? 0 : ctx.avgWindow) +
+    ':lean' +
+    (fromYr && fromKeys.has(c.key) ? fromYr : ctx.year);
   const billKey = (c: AnalyzeCatStat): string =>
     'bills:' + ymKey(qYear, mNow ? mNow.billsMonth : billsMonthFor(s.referenceMonth)) + ':' + c.key;
   const levelTxt = (c: AnalyzeCatStat): string => {
@@ -1383,7 +1549,7 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
       return 'a normal month (avg ' + Q(money(c.avg), avgKey(c)) + ')';
     const pace = mNow ? mNow.byCat[c.key] : undefined;
     if (pace !== undefined && pace > 0 && c.floor >= 0.85 * pace && c.floor <= 1.2 * pace)
-      return 'your pace now (' + money(pace) + ')';
+      return 'your pace now (' + Q(money(pace), 'pace:' + ctx.base.year + ':' + c.key) + ')';
     if (c.floor <= lowNormal(c) * 1.05)
       return 'your leanest months or less (' + money(lowNormal(c)) + ')';
     return 'lean (avg ' + Q(money(c.avg), avgKey(c)) + ', leanest ' + money(lowNormal(c)) + ')';
@@ -1414,14 +1580,10 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
     ' ' +
     money(amt) +
     '</button>';
-  // The input is a part of Lean (lean-floors) AND the floor in "average − floor = room":
-  // the display:contents wrapper carries the second group without becoming a grid cell.
+  // The input is a part of Lean (lean-floors). It is NOT a part of "average − floor = room":
+  // each figure on a line prints its own rounding (the rounding rule), so a line may read
+  // one shekel off its own subtraction and nothing closes it.
   const floorInput = (c: AnalyzeCatStat): string =>
-    (loading
-      ? ''
-      : '<span style="display:contents" data-sum-group="room-' +
-        c.key +
-        '" data-part data-sign="-">') +
     '<input data-sum-group="lean-floors" data-part data-qty="floor:' +
     ctx.year +
     ':' +
@@ -1444,8 +1606,7 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
     (loading ? ' disabled' : '') +
     ' onclick="event.stopPropagation()" onchange="saveSpendFloor(\'' +
     c.key +
-    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">' +
-    (loading ? '' : '</span>');
+    '\', this.validity.badInput ? null : this.value)" onkeydown="if(event.key===\'Enter\'){this.blur()}">';
   // The line as it reads against the base year's own months (Z8/W5); the Lean floor stays the stack's.
   const viewOf = (c: AnalyzeCatStat): AnalyzeCatStat => {
     const bc = ctx.base.prior ? sr.cats.find((x) => x.key === c.key) : undefined;
@@ -1527,19 +1688,19 @@ function levelsCard(ctx: StackCtx, f: Fmt): string {
       (loading
         ? ''
         : (() => {
-            // average − your Lean = room (W1). Room is the true difference rounded (the classic
-            // page's number); your Lean is the figure in the box; the average printed is whatever
-            // makes the three add up (never more than a shekel from its own rounding).
-            const fl = lean.lines[c.key] ?? roundZ(c.floor);
+            // Each figure on the line prints its own rounding (the rounding rule): the average is
+            // roundZ(true average) wherever it prints, your Lean is the figure in the box, and
+            // room is roundZ(true average − true Lean). The three may read one shekel off their own
+            // subtraction; that is allowed, and no rounding row is added inside a single line.
             const avgShown = roundZ(v.avg);
             return sub(
               levelTxt(v) +
                 ' · ' +
                 (baseYr ? baseYr + '’s ' : '') +
                 'average ' +
-                Q(P(money(avgShown), 'room-' + c.key), avgKey(c)) +
+                Q(money(avgShown), avgKey(c)) +
                 ' · room ' +
-                T(signed(avgShown - fl), 'room-' + c.key) +
+                Q(signed(v.avg - c.floor), roomKey(c)) +
                 (fromYr && fromKeys.has(c.key) ? ' · ' + fromYr + '’s Lean' : ''),
             );
           })()) +
@@ -1606,7 +1767,8 @@ function potsCard(ctx: StackCtx, f: Fmt): string {
 
   // 2027 from January: nothing booked in the app yet, so her plan IS the number.
   if (Math.round(y0Total) === 0 && plan0.length) {
-    // W1: top down - the year's plan is the true sum rounded, the kinds and their lines add to it.
+    // The rounding rule, top down: the year's plan is the true sum rounded once; each kind and
+    // each line prints its own rounding; one rounding row closes any gap.
     const groups = [...new Set(plan0.map((p) => p.group))];
     const pl = potsShown(
       groups.map((g) => ({
@@ -1667,9 +1829,9 @@ function potsCard(ctx: StackCtx, f: Fmt): string {
   plan.filter((p) => p.pot === 'admin').forEach((p) => addG(p.group));
   const rowsOf = (p: PotYear, g: string): PotRow[] => p.rows.filter((r) => r.group === g);
   const potFor = (g: string, i: 0 | 1): PotYear => (g === 'Trips' ? pc.travel[i] : pc.admin[i]);
-  // W1 (lib/shown.ts potsShown), top down: each year's total is the true sum rounded, the kinds
-  // are apportioned to it, the items of a kind to the kind. A kind counts its plan or the app,
-  // whichever is more.
+  // The rounding rule (lib/shown.ts potsShown): each year's total is the true sum rounded once;
+  // each kind and each item prints its own rounding, nothing is apportioned, and one rounding
+  // row closes any gap. A kind counts its plan or the app, whichever is more.
   const kindRows = groupNames.map((g) => {
     const r0 = rowsOf(potFor(g, 0), g);
     const r1 = rowsOf(potFor(g, 1), g);
@@ -1704,8 +1866,8 @@ function potsCard(ctx: StackCtx, f: Fmt): string {
       // An item with nothing paid is also "still to pay" on the Feb 7 chain: the same figure.
       const itemKeys = (r: PotRow, year: number): string[] =>
         year === ctx.today.year && Math.round(r.paid) === 0 && Math.round(r.planned) > 0
-          ? ['pot:' + year + ':' + r.label, 'potdue:' + r.label]
-          : ['pot:' + year + ':' + r.label];
+          ? ['pot:' + year + ':' + slug(r.label), 'potdue:' + slug(r.label)]
+          : ['pot:' + year + ':' + slug(r.label)];
       const itemRow = (r: PotRow, shown: number, group: string | null, year: number): string =>
         row(
           esc(r.label) + (r.estimate ? sub('estimate') : ''),
@@ -1785,7 +1947,8 @@ function billsCard(ctx: StackCtx, f: Fmt): string {
   const firstNum = r.months.length ? r.months[0].month_num : 1;
   const sumAt = (mn: number, cat?: string): number =>
     bl.filter((l) => !cat || l.category === cat).reduce((a, l) => a + (l.byMonth[mn - 1] || 0), 0);
-  // W1: a bill category is the sum of its printed lines; the total is the sum of the categories.
+  // Bill categories and lines: each prints its own rounding (billsShown); the total is the true
+  // bills rounded once, and one rounding row closes any gap inside a category or the total.
   const liveOf = (k: string): BillLine[] =>
     bl.filter((l) => l.category === k && l.status !== 'ended');
   const catLabel = (k: string): string => ctx.text.CATEGORIES.find((c) => c.key === k)?.label || k;
@@ -1800,8 +1963,8 @@ function billsCard(ctx: StackCtx, f: Fmt): string {
       const v = ctx.base.r.months.find((m) => m.month_num === baseRef)?.byCat[k] || 0;
       if (Math.round(v) !== 0) fb[k] = v;
     }
-  // Top down (lib/shown.ts billsShown): the total is the true bills rounded - the classic
-  // page's number - then the categories, then each category's lines.
+  // Top down (lib/shown.ts billsShown): the total is the true bills rounded once, then the
+  // categories, then each category's lines - each its own rounding.
   const bs = billsShown(
     fixedKeys.map((k) => ({
       key: k,
@@ -1834,15 +1997,15 @@ function billsCard(ctx: StackCtx, f: Fmt): string {
       : Q(T(money(total), 'bills-total'), 'bills:' + ymOwn)) +
     unit(' a month') +
     '</div><div class="an2-cap">' +
-    // The parts sit on the face: each prints its own rounding, and a leading "≈" says when they
-    // do not add to the total (the exact row is in the detail).
-    (bs.residual ? '≈ ' : '') +
+    // The parts sit on the face: each prints its own rounding; when they do not add to the total
+    // the caption ends with the rounding marker (the rounding row is in the detail).
     fixedKeys
       .map((k) => esc(catLabel(k).toLowerCase()) + ' ' + Q(money(at(k)), catKey(k)))
       .join(' · ') +
     (!fbKeys.length && firstNum !== ref && mv.total !== 0
       ? ' · ' + T(signed(mv.total), 'bills-moves') + ' since ' + f.mon(firstNum)
       : '') +
+    roundMark(bs.residual) +
     '</div>' +
     (fbKeys.length
       ? '<div class="an2-cap">' +
@@ -1934,7 +2097,11 @@ function billsCard(ctx: StackCtx, f: Fmt): string {
           : ''),
       (l.status === 'ended'
         ? ''
-        : P(money(lineNow.get(l.key) ?? 0), 'bills-cat-' + l.category) + ' · ') + yearTxt(l),
+        : Q(
+            P(money(lineNow.get(l.key) ?? 0), 'bills-cat-' + l.category),
+            // The same line on the Budget tab (its amount box) for that month.
+            'billline:' + ymOwn + ':' + l.category + ':' + slug(l.label),
+          ) + ' · ') + yearTxt(l),
       l.status === 'ended' ? 'an2-row-sub' : '',
     );
   const groups = fixedKeys
@@ -2027,30 +2194,38 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
     unspentAvg: v.avgOf((m) => m.envelopeBudget - m.envelope),
   });
   const gapOver = yw.kind === 'over-spent';
-  // Keys: the same figure prints the same on the classic page (real spend, saved, your way, the gap).
-  const qk = (what: string): string => what + ':' + ctx.base.year + ':' + v.win;
-  // The face lists parts, so a leading "≈" says when they do not add exactly; the exact rows
-  // (with the "agorot, rounded" line) are in the detail.
+  // Keys: the same figure prints the same on the Year tab (real spend, saved, your way, the gap).
+  // The saved / income averages are the full-year PROJECTED figures when the window is the whole
+  // year; the Year tab's keys end :full or :actual (its "Actual Only" view zeroes future months).
+  const qk = (what: string): string =>
+    what +
+    ':' +
+    ctx.base.year +
+    ':' +
+    v.win +
+    (what === 'saved' || what === 'incomeavg' ? ':full' : '');
+  // The face lists parts, each its own rounding; the caption ends with ONE rounding marker when
+  // your way − real spend is not the gap as printed and/or the split's two parts do not add to
+  // it (the rounding rows are in the detail).
   const gapSplit =
     yw.kind === 'none'
       ? ''
       : yw.kind === 'over-spent'
         ? ' · ' +
-          (yw.gapResidual ? '≈ ' : '') +
           Q(money(-yw.gap), qk('gap')) +
-          ' less than real spend (you spent more than you budgeted)'
+          ' less than real spend (you spent more than you budgeted)' +
+          roundMark(yw.gapResidual)
         : ' · ' +
-          (yw.gapResidual ? '≈ ' : '') +
           Q(money(yw.gap), qk('gap')) +
           ' more than real spend' +
           (yw.kind === 'split'
             ? ': ' +
-              (yw.splitResidual ? '≈ ' : '') +
-              money(yw.notBudgeted) +
+              Q(money(yw.notBudgeted), qk('notbudgeted')) +
               ' income not yet budgeted + ' +
-              money(yw.unspent) +
+              Q(money(yw.unspent), qk('unspent')) +
               ' budgeted, not spent'
-            : '');
+            : '') +
+          roundMark(yw.gapResidual, yw.kind === 'split' ? yw.splitResidual : 0);
   const face =
     '<div class="an2-big">' +
     Q(T(money(yw.realSpend), 'yr-real'), qk('real')) +
@@ -2119,11 +2294,34 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
     const g = (html: string, total = false): string =>
       closes ? (total ? T(html, 'yr-ytab') : P(html, 'yr-ytab')) : html;
     const open = gap.openMonths.length ? f.span(gap.openMonths) : '';
+    // The Year tab prints Total Used, which has your savings in it. Its own figure is shown first,
+    // then taken apart: Total Used − savings = the number this card compares (real spend).
+    const sav12 = v.months.reduce((a, m) => a + m.savings, 0) / 12;
+    const used12 = gap.yearTabAvg + sav12;
+    const ub = shownDiff(used12, sav12);
+    const usedKey = 'yeartab:used:' + ctx.base.year + ':full';
+    const savKey = 'saved:' + ctx.base.year + ':-1:full';
     gapRows =
       head(
-        'The Year tab says ' +
-          Q(g(money(gc.yearTab), true), qk('yeartab')) +
-          ' — same money, different months',
+        'The Year tab (full year, projected) says Total Used ' +
+          Q(money(used12), usedKey) +
+          ' a month — savings included',
+      ) +
+      row(
+        'Year tab · Total Used, all 12 months ÷ 12',
+        P(Q(money(used12), usedKey), 'yr-ytab-u'),
+        'an2-row-sub',
+      ) +
+      row(
+        '− your savings, all 12 months ÷ 12',
+        P(Q(money(sav12), savKey), 'yr-ytab-u', true),
+        'an2-row-sub',
+      ) +
+      avgRow('yr-ytab-u', ub.residual) +
+      row(
+        '= without savings (what this card compares)',
+        T(Q(g(money(gc.yearTab), true), qk('yeartab')), 'yr-ytab-u'),
+        'an2-row-bold',
       ) +
       row('This tab · ' + v.avgSpan + ' ÷ ' + s.avgMonths.length, g(money(gc.windowAvg))) +
       (gc.windowEffect !== 0
@@ -2145,9 +2343,9 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
             'an2-row-sub',
           )
         : '') +
-      (closes ? resRow('yr-ytab', gc.residual) : '') +
+      (closes ? avgRow('yr-ytab', gc.residual) : '') +
       row(
-        'Year tab · all 12 months ÷ 12',
+        'Year tab without savings · all 12 months ÷ 12',
         g(money(gc.yearTab), true) +
           (gc.unexplained === 0
             ? ' adds up ✓'
@@ -2164,7 +2362,11 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
           '">' +
           money(m.real) +
           ' · ' +
-          money(m.savings) +
+          // The month's savings is the Year tab's Total Savings for that month (a month that has not
+          // started reads 0 there unless "projected" is on, so only past / current months are keyed).
+          (m.status === 'future'
+            ? money(m.savings)
+            : Q(money(m.savings), 'monthsaved:' + ymKey(ctx.base.year, m.month_num) + ':full')) +
           '</span>',
       ),
     )
@@ -2189,6 +2391,9 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
     const more = bs.delta >= 0;
     // The sentence's three figures add exactly only when the two averages differ by the move.
     const noteExact = bs.recentReal - bs.earlyReal === bs.delta;
+    // Keys: the two averages print in the sentence and again in their rows; the move is signed
+    // (QN reads a printed "less" as negative) so it only ever compares with a signed print.
+    const wk = ctx.base.year + ':' + v.win;
     whyBlock =
       '<details class="an2-sub"><summary>What moved since ' +
       f.span(why.early) +
@@ -2196,21 +2401,31 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
       note(
         f.span(why.recent) +
           ' cost ' +
-          (noteExact ? P(money(bs.recentReal), 'yr-why-note', !more) : money(bs.recentReal)) +
+          Q(
+            noteExact ? P(money(bs.recentReal), 'yr-why-note', !more) : money(bs.recentReal),
+            'whyrecent:' + wk,
+          ) +
           ' a month; ' +
           f.span(why.early) +
           ' cost ' +
-          (noteExact ? P(money(bs.earlyReal), 'yr-why-note', more) : money(bs.earlyReal)) +
+          Q(
+            noteExact ? P(money(bs.earlyReal), 'yr-why-note', more) : money(bs.earlyReal),
+            'whyearly:' + wk,
+          ) +
           ' — ' +
           (noteExact ? '' : '≈ ') +
-          Q(
+          (more ? Q : QN)(
             noteExact ? T(money(Math.abs(bs.delta)), 'yr-why-note') : money(Math.abs(bs.delta)),
-            'whymove:' + ctx.base.year + ':' + v.win,
+            'whymove:' + wk,
           ) +
           (more ? ' more' : ' less') +
           '.',
       ) +
-      row(f.span(why.early) + ' average', P(money(bs.earlyReal), 'yr-why'), 'an2-row-bold') +
+      row(
+        f.span(why.early) + ' average',
+        Q(P(money(bs.earlyReal), 'yr-why'), 'whyearly:' + wk),
+        'an2-row-bold',
+      ) +
       rows
         .map((x) => {
           const m = meta(x.key);
@@ -2220,10 +2435,11 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
           );
         })
         .join('') +
-      resRow('yr-why', bs.residual) +
+      avgRow('yr-why', bs.residual) +
       row(
         f.span(why.recent) + ' average',
-        T(money(bs.recentReal), 'yr-why') + (bs.residual === 0 ? ' adds up ✓' : ''),
+        Q(T(money(bs.recentReal), 'yr-why'), 'whyrecent:' + wk) +
+          (bs.residual === 0 ? ' adds up ✓' : ''),
         'an2-row-bold',
       ) +
       (why.thin.length
@@ -2239,7 +2455,7 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
     (pills.length > 1 ? '<div class="an2-pills">' + pills.join('') + '</div>' : '') +
     head('Where it went · a month, ' + v.avgSpan) +
     parts.map((p, k) => row(p.label, P(money(yw.parts[k]), 'yr-real'))).join('') +
-    resRow('yr-real', yw.realResidual) +
+    avgRow('yr-real', yw.realResidual) +
     row('Real spend', Q(T(money(yw.realSpend), 'yr-real'), qk('real')), 'an2-row-bold') +
     row('🏦 Savings — the score', Q(money(yw.savings), qk('saved')), 'an2-row-bold') +
     row(
@@ -2250,14 +2466,14 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
         ' saved',
       Q(T(money(yw.herWay), 'yr-way'), qk('herway')),
     ) +
-    resRow('yr-way', yw.wayResidual) +
+    avgRow('yr-way', yw.wayResidual) +
     (yw.kind === 'none'
       ? ''
       : // The gap: your way − real spend (the other way round when you spent more), then the same
         // gap split in two. Each closes with its own "agorot, rounded" row when needed.
         row('Your way', P(money(yw.herWay), 'yr-gap', gapOver)) +
         row('− Real spend', P(money(yw.realSpend), 'yr-gap', !gapOver)) +
-        resRow('yr-gap', gapOver ? -yw.gapResidual : yw.gapResidual) +
+        avgRow('yr-gap', gapOver ? -yw.gapResidual : yw.gapResidual) +
         row(
           gapOver
             ? '= Less than real spend (you spent more than you budgeted)'
@@ -2271,9 +2487,15 @@ function yearCard(ctx: StackCtx, f: Fmt): string {
           'an2-row-bold',
         ) +
         (yw.kind === 'split'
-          ? row('Income not yet budgeted', P(money(yw.notBudgeted), 'yr-split')) +
-            row('Budgeted for an everyday envelope, not spent', P(money(yw.unspent), 'yr-split')) +
-            resRow('yr-split', yw.splitResidual) +
+          ? row(
+              'Income not yet budgeted',
+              Q(P(money(yw.notBudgeted), 'yr-split'), qk('notbudgeted')),
+            ) +
+            row(
+              'Budgeted for an everyday envelope, not spent',
+              Q(P(money(yw.unspent), 'yr-split'), qk('unspent')),
+            ) +
+            avgRow('yr-split', yw.splitResidual) +
             row('= More than real spend', T(money(yw.gap), 'yr-split'), 'an2-row-sub')
           : '')) +
     gapRows +
