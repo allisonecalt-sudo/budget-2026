@@ -1,6 +1,8 @@
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import {
-  extractCandidates,
+  GENERIC_ERROR,
+  ValidationError,
+  safeErrorMessage,
   groupBySection,
   isAuthorized,
   searchRows,
@@ -11,36 +13,42 @@ import {
   type ItemRow,
 } from './logic.ts';
 
-const S = 'correct-horse-battery';
+const S = 'Zk3-correct_horse_battery_staple-0123456789';
 const item = (o: Partial<ItemRow>): ItemRow => ({
-  list_type: 'allison', item_name: 'x', section: 'Dairy', checked: false, quantity: 1, paid_by: null, ...o,
+  list_type: 'allison', item_name: 'x', section: 'Dairy', checked: false, quantity: 1, ...o,
 });
 
-Deno.test('auth: unset secret fails closed', async () => {
+Deno.test('auth: unset or short secret fails closed', async () => {
   assertEquals(await isAuthorized(undefined, '/grocery-mcp/mcp', `Bearer ${S}`), false);
-  assertEquals(await isAuthorized('', '/grocery-mcp//mcp', 'Bearer '), false);
+  assertEquals(await isAuthorized('', '/grocery-mcp/mcp', 'Bearer '), false);
+  const short = 'a'.repeat(31);
+  assertEquals(await isAuthorized(short, '/grocery-mcp/mcp', `Bearer ${short}`), false);
+  const ok32 = 'a'.repeat(32);
+  assert(await isAuthorized(ok32, '/grocery-mcp/mcp', `Bearer ${ok32}`));
 });
 Deno.test('auth: bearer header works', async () => {
   assert(await isAuthorized(S, '/grocery-mcp/mcp', `Bearer ${S}`));
   assert(await isAuthorized(S, '/mcp', `bearer ${S}`));
 });
-Deno.test('auth: path segment works', async () => {
-  assert(await isAuthorized(S, `/grocery-mcp/${S}/mcp`, null));
-  assert(await isAuthorized(S, `/${S}/mcp`, null));
+Deno.test('auth: secret in URL path is NOT accepted', async () => {
+  assertEquals(await isAuthorized(S, `/grocery-mcp/${S}/mcp`, null), false);
+  assertEquals(await isAuthorized(S, `/${S}/mcp`, null), false);
 });
 Deno.test('auth: wrong or missing refused', async () => {
   assertEquals(await isAuthorized(S, '/grocery-mcp/mcp', null), false);
   assertEquals(await isAuthorized(S, '/grocery-mcp/mcp', 'Bearer nope'), false);
-  assertEquals(await isAuthorized(S, '/grocery-mcp/nope/mcp', null), false);
   assertEquals(await isAuthorized(S, '/grocery-mcp/mcp', S), false);
-  assertEquals(await isAuthorized(S, `/grocery-mcp/${S}/other`, null), false);
-  assertEquals(await isAuthorized(S, `/grocery-mcp/a/b/${S}/mcp`, null), false);
 });
-Deno.test('auth: right secret on a wrong path shape is refused', async () => {
+Deno.test('auth: right secret on a wrong path is refused', async () => {
   assertEquals(await isAuthorized(S, '/grocery-mcp/admin', `Bearer ${S}`), false);
+  assertEquals(await isAuthorized(S, '/grocery-mcp/a/mcp', `Bearer ${S}`), false);
 });
-Deno.test('auth: malformed escape does not throw', () => {
-  assertEquals(extractCandidates('/grocery-mcp/%E0%A4%A/mcp', null).candidates, []);
+
+Deno.test('errors: only validation messages pass through', () => {
+  assertEquals(safeErrorMessage(new ValidationError('query must be text')), 'query must be text');
+  assertEquals(safeErrorMessage(new Error('<html>502 upstream</html> key=abc')), GENERIC_ERROR);
+  assertEquals(safeErrorMessage('boom'), GENERIC_ERROR);
+  assertEquals(safeErrorMessage(new TypeError('fetch failed https://x.supabase.co')), GENERIC_ERROR);
 });
 
 Deno.test('validate list_type', () => {

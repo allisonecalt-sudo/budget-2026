@@ -3,10 +3,22 @@
 // GROCERY_MCP_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import { handler } from './index.ts';
 
-const secret = Deno.env.get('GROCERY_MCP_SECRET')!;
+const secret = Deno.env.get('GROCERY_MCP_SECRET') ?? '';
+if (secret.length < 32) throw new Error('set GROCERY_MCP_SECRET (32+ chars) for the smoke');
 const srv = Deno.serve({ port: 8799, onListen() {} }, handler);
 const base = 'http://127.0.0.1:8799';
 let n = 0;
+
+interface RpcBody {
+  result: { tools: { name: string }[]; isError?: boolean; content: { text: string }[] };
+}
+interface ListOut { count: number; sections: unknown[] }
+interface SearchOut { items: unknown[]; catalog: unknown[] }
+type Trips = unknown[];
+const must = (b: RpcBody | null): RpcBody['result'] => {
+  if (!b) throw new Error('empty response');
+  return b.result;
+};
 
 async function rpc(url: string, method: string, params: unknown, headers: Record<string, string>) {
   const res = await fetch(url, {
@@ -15,7 +27,7 @@ async function rpc(url: string, method: string, params: unknown, headers: Record
     body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),
   });
   const text = await res.text();
-  return { status: res.status, body: text ? JSON.parse(text) : null };
+  return { status: res.status, body: (text ? JSON.parse(text) : null) as RpcBody | null };
 }
 function check(name: string, ok: boolean, extra = '') {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${extra}`);
@@ -26,37 +38,47 @@ const url = `${base}/grocery-mcp/mcp`;
 
 await rpc(url, 'initialize', { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'smoke', version: '0' } }, bearer);
 const list = await rpc(url, 'tools/list', {}, bearer);
-const names = (list.body.result.tools as { name: string }[]).map((t) => t.name).sort();
+const names = must(list.body).tools.map((t) => t.name).sort();
 check('tools/list (bearer) = 3 read tools', JSON.stringify(names) === JSON.stringify(['grocery_list', 'grocery_recent_trips', 'grocery_search']), names.join(','));
 
 const call = (u: string, name: string, args: unknown, h: Record<string, string>) =>
   rpc(u, 'tools/call', { name, arguments: args }, h);
-const txt = (r: { body: { result: { isError?: boolean; content: { text: string }[] } } }) => r.body.result.content[0].text;
+const txt = (r: { body: RpcBody | null }) => must(r.body).content[0].text;
 
 let r = await call(url, 'grocery_list', {}, bearer);
-let j = JSON.parse(txt(r));
-check('grocery_list', !r.body.result.isError && typeof j.count === 'number', `count=${j.count} sections=${j.sections.length}`);
+let j = JSON.parse(txt(r)) as ListOut;
+check('grocery_list', !must(r.body).isError && typeof j.count === 'number', `count=${j.count} sections=${j.sections.length}`);
 r = await call(url, 'grocery_list', { list_type: 'allison' }, bearer);
-j = JSON.parse(txt(r));
+j = JSON.parse(txt(r)) as ListOut;
 check('grocery_list list_type=allison', typeof j.count === 'number', `count=${j.count}`);
 r = await call(url, 'grocery_list', { list_type: 'a&select=*' }, bearer);
-check('grocery_list rejects bad list_type', r.body.result.isError === true, txt(r));
+check('grocery_list rejects bad list_type', must(r.body).isError === true, txt(r));
 r = await call(url, 'grocery_search', { query: 'MILK' }, bearer);
-j = JSON.parse(txt(r));
-check('grocery_search MILK', !r.body.result.isError, `items=${j.items.length} catalog=${j.catalog.length}`);
+const s1 = JSON.parse(txt(r)) as SearchOut;
+check('grocery_search MILK', !must(r.body).isError, `items=${s1.items.length} catalog=${s1.catalog.length}`);
 r = await call(url, 'grocery_search', { query: 'חלב' }, bearer);
-j = JSON.parse(txt(r));
-check('grocery_search Hebrew', !r.body.result.isError, `items=${j.items.length} catalog=${j.catalog.length}`);
+const s2 = JSON.parse(txt(r)) as SearchOut;
+check('grocery_search Hebrew', !must(r.body).isError, `items=${s2.items.length} catalog=${s2.catalog.length}`);
 r = await call(url, 'grocery_recent_trips', {}, bearer);
-j = JSON.parse(txt(r));
-check('grocery_recent_trips default 5', Array.isArray(j) && j.length <= 5, `trips=${j.length}`);
+const t1 = JSON.parse(txt(r)) as Trips;
+check('grocery_recent_trips default 5', Array.isArray(t1) && t1.length <= 5, `trips=${t1.length}`);
 r = await call(url, 'grocery_recent_trips', { limit: 99 }, bearer);
-j = JSON.parse(txt(r));
-check('grocery_recent_trips limit capped at 20', j.length <= 20, `trips=${j.length}`);
+const t2 = JSON.parse(txt(r)) as Trips;
+check('grocery_recent_trips limit capped at 20', t2.length <= 20, `trips=${t2.length}`);
+r = await call(url, 'grocery_recent_trips', { limit: -1 }, bearer);
+check('validation error is passed through', txt(r).startsWith('limit must be'), txt(r));
 
 const pathUrl = `${base}/grocery-mcp/${secret}/mcp`;
 const pl = await rpc(pathUrl, 'tools/list', {}, {});
-check('tools/list (secret in URL path)', pl.status === 200 && pl.body.result.tools.length === 3);
+check('secret in URL path no longer accepted -> 401', pl.status === 401);
+for (const method of ['GET', 'DELETE']) {
+  const res = await fetch(url, { method, headers: bearer });
+  await res.body?.cancel();
+  check(`${method} with right secret -> 405`, res.status === 405, String(res.status));
+}
+const g401 = await fetch(url, { method: 'GET' });
+await g401.body?.cancel();
+check('GET without secret -> 401', g401.status === 401);
 
 const bad1 = await rpc(url, 'tools/list', {}, { authorization: 'Bearer wrong' });
 check('wrong bearer -> 401', bad1.status === 401);

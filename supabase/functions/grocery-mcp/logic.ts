@@ -10,7 +10,6 @@ export interface ItemRow {
   section: string | null;
   checked: boolean;
   quantity: number | null;
-  paid_by: string | null;
 }
 
 export interface CatalogRow {
@@ -36,34 +35,20 @@ export interface TripRow {
 
 // ---------- auth ----------
 
-/**
- * Pull the candidate secret out of a request: Bearer header first, then URL
- * path `/grocery-mcp/<secret>/mcp`. Returns null candidate list members that
- * are absent. Also reports whether the path shape is acceptable at all.
- */
-export function extractCandidates(
-  pathname: string,
-  authHeader: string | null,
-): { candidates: string[]; pathOk: boolean } {
-  const candidates: string[] = [];
-  if (authHeader) {
-    const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (m) candidates.push(m[1]);
-  }
+export const MIN_SECRET_LENGTH = 32;
+
+/** Bearer token from the Authorization header, or null. */
+export function bearerToken(authHeader: string | null): string | null {
+  if (!authHeader) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  return m ? m[1] : null;
+}
+
+/** Only `/mcp` or `/grocery-mcp/mcp` is a valid endpoint path. */
+export function isMcpPath(pathname: string): boolean {
   let segs = pathname.split('/').filter((s) => s.length > 0);
   if (segs[0] === FUNCTION_NAME) segs = segs.slice(1);
-  let pathOk = false;
-  if (segs.length === 1 && segs[0] === 'mcp') {
-    pathOk = true;
-  } else if (segs.length === 2 && segs[1] === 'mcp') {
-    pathOk = true;
-    try {
-      candidates.push(decodeURIComponent(segs[0]));
-    } catch {
-      // malformed escape: ignore this candidate
-    }
-  }
-  return { candidates, pathOk };
+  return segs.length === 1 && segs[0] === 'mcp';
 }
 
 async function sha256(s: string): Promise<Uint8Array> {
@@ -79,21 +64,28 @@ export async function secretsMatch(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
-/** Fail closed: unset/empty secret refuses everything. */
+/** Fail closed: unset or shorter-than-32 secret refuses everything. Header only. */
 export async function isAuthorized(
   expected: string | undefined | null,
   pathname: string,
   authHeader: string | null,
 ): Promise<boolean> {
-  if (!expected) return false;
-  const { candidates, pathOk } = extractCandidates(pathname, authHeader);
-  if (!pathOk) return false;
-  let ok = false;
-  for (const c of candidates) {
-    // evaluate every candidate; do not short-circuit
-    if (await secretsMatch(c, expected)) ok = true;
-  }
-  return ok;
+  if (!expected || expected.length < MIN_SECRET_LENGTH) return false;
+  if (!isMcpPath(pathname)) return false;
+  const token = bearerToken(authHeader);
+  if (token === null) return false;
+  return await secretsMatch(token, expected);
+}
+
+// ---------- errors ----------
+
+/** Only messages from this class are ever shown to callers. */
+export class ValidationError extends Error {}
+
+export const GENERIC_ERROR = 'grocery read failed';
+
+export function safeErrorMessage(e: unknown): string {
+  return e instanceof ValidationError ? e.message : GENERIC_ERROR;
 }
 
 // ---------- input validation ----------
@@ -103,22 +95,22 @@ const LIST_TYPE_RE = /^[A-Za-z0-9_-]{1,40}$/;
 export function validateListType(v: unknown): string | null {
   if (v === undefined || v === null || v === '') return null;
   if (typeof v !== 'string' || !LIST_TYPE_RE.test(v)) {
-    throw new Error('list_type must be 1-40 letters, digits, _ or -');
+    throw new ValidationError('list_type must be 1-40 letters, digits, _ or -');
   }
   return v;
 }
 
 export function validateSearchTerm(v: unknown): string {
-  if (typeof v !== 'string') throw new Error('query must be text');
+  if (typeof v !== 'string') throw new ValidationError('query must be text');
   const t = v.trim();
-  if (t.length < 1 || t.length > 100) throw new Error('query must be 1-100 characters');
+  if (t.length < 1 || t.length > 100) throw new ValidationError('query must be 1-100 characters');
   return t;
 }
 
 export function validateLimit(v: unknown, def = 5, max = 20): number {
   if (v === undefined || v === null) return def;
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 1) {
-    throw new Error('limit must be a whole number, 1 or more');
+    throw new ValidationError('limit must be a whole number, 1 or more');
   }
   return Math.min(v, max);
 }
