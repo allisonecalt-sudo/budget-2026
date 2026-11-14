@@ -103,7 +103,7 @@ def smoke(slug: str, secret: str) -> str:
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}).encode()
     results = []
     for label, auth in (("right secret", f"Bearer {secret}"), ("no secret", None)):
-        req = urllib.request.Request(f"{FUNCTIONS_URL}/{slug}", data=body, method="POST")
+        req = urllib.request.Request(f"{FUNCTIONS_URL}/{slug}/mcp", data=body, method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("Accept", "application/json, text/event-stream")
         if auth:
@@ -152,7 +152,7 @@ def main() -> None:
         print(f"   deploy -> {code} {txt[:200] if code >= 300 else ''}")
         if code < 300:
             print(f"   smoke: {smoke(slug, secret)}")
-            print(f"   URL for claude.ai: {FUNCTIONS_URL}/{slug}  (header: Authorization: Bearer <secret from the private file>)")
+            print(f"   URL for claude.ai: {FUNCTIONS_URL}/{slug}/mcp  (header: Authorization: Bearer <secret from the private file>)")
 
 
 if __name__ == "__main__":
