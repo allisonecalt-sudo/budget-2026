@@ -8,3 +8,7 @@ tests/.auth/
 
 # Local financial data export — never commit to this PUBLIC repo
 budget-data.txt
+
+# Local secrets for edge-function tests — never commit
+supabase/functions/**/.env.local
+.env.local
