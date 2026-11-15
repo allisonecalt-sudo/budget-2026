@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,7 +27,7 @@ jobs:
       - run: npm run build
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
   # Build dist/ and publish the static app to GitHub Pages. Only on master,
   # only after lint+test pass. Pages source must be set to "GitHub Actions".
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [lint, test]
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     # Don't let overlapping deploys race.
