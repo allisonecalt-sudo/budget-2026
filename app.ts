@@ -2352,9 +2352,11 @@ async function savedYearBudgets(): Promise<Record<string, Record<string, number>
   const map: Record<string, Record<string, number>> = {};
   const ids = state.months.map((m) => m.id);
   const idSet = new Set(ids);
-  const pre = (state.yearData?.allBudgets as
-    | { month_id: string; category: string; amount: number }[]
-    | undefined)?.filter((b) => idSet.has(b.month_id));
+  const pre = (
+    state.yearData?.allBudgets as
+      | { month_id: string; category: string; amount: number }[]
+      | undefined
+  )?.filter((b) => idSet.has(b.month_id));
   let rows = pre;
   if (!rows || !rows.length) {
     const { data } = await sb
