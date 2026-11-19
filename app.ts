@@ -75,8 +75,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v74';
-const BUILD_DATE = 'Oct 20, 2026 03:59';
+const APP_VERSION = 'v75';
+const BUILD_DATE = 'Nov 19, 2026 13:00';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
@@ -8541,7 +8541,6 @@ function renderBizTab(): string {
 
 function renderAccountantTracker(current: MonthRow): string {
   const allBiz = state.allBiz || [];
-  const todayMonth = todayMonthForYear();
   const upToMonth = current.month_num;
   // Sum fees for all months up to the tab month
   const paidUpTo = allBiz
@@ -8550,19 +8549,15 @@ function renderAccountantTracker(current: MonthRow): string {
       return m && m.month_num <= upToMonth;
     })
     .reduce((sum, b) => sum + (b.accountant_fee || 0), 0);
-  const shouldBe = upToMonth * 200;
-  const diffColor = paidUpTo >= shouldBe ? 'var(--green)' : 'var(--amber)';
+  // "Due by now" row removed Nov 19 2026, her words: "get rid of due by now on biz page".
+  // Its green/amber colour on "Paid so far" compared against that row, so it went too.
 
   return `
     <div class="biz-card">
       <div class="biz-section-title">Accountant Fee Tracker — ₪200/month</div>
       <div class="biz-row">
-        <span class="biz-label">Due by ${current.month_num <= todayMonth ? current.month_name : 'now'}</span>
-        <span class="biz-val">${fmt(shouldBe)}</span>
-      </div>
-      <div class="biz-row">
         <span class="biz-label">Paid so far</span>
-        <span class="biz-val" style="color:${diffColor}">${fmt(paidUpTo)}</span>
+        <span class="biz-val">${fmt(paidUpTo)}</span>
       </div>
     </div>
   `;
