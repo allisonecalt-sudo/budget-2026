@@ -2616,9 +2616,14 @@ input:focus {
     font-size: 0.82rem;
     padding: 0.4rem 0.5rem;
   }
-  /* Travel/Admin/Charity 2-col layout: stack on mobile */
+  /* Travel/Admin/Charity 2-col layout: stack on mobile.
+     minmax(0, 1fr), not 1fr: a plain 1fr column grows to its widest content, and
+     the Admin sort row (Grouped · Added · A→Z · Z→A · High · Low) pushed the whole
+     tab to 466px on her 412px phone, hiding the group totals ("₪9…") and the
+     Feb–Dec allocations. Capped, the sort row scrolls sideways as DM9 intended.
+     Found by a live check Nov 19 2026; tests/phone-fit.spec.js keeps every tab in. */
   .tab-two-col {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   /* Add-payment forms: 2×2 grid on mobile with full-width + button */
   .pay-add-form {

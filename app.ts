@@ -75,8 +75,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v77';
-const BUILD_DATE = 'Nov 19, 2026 18:53';
+const APP_VERSION = 'v78';
+const BUILD_DATE = 'Nov 19, 2026 18:56';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
