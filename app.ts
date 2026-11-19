@@ -75,8 +75,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v76';
-const BUILD_DATE = 'Nov 19, 2026 18:20';
+const APP_VERSION = 'v77';
+const BUILD_DATE = 'Nov 19, 2026 18:53';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
@@ -2344,6 +2344,9 @@ let _savedYearCache: { year: number; rows: Record<string, Record<string, number>
 
 async function savedYearBudgets(): Promise<Record<string, Record<string, number>>> {
   if (_savedYearCache && _savedYearCache.year === state.currentYear) return _savedYearCache.rows;
+  // Pin the year at the start: if she switches years while this is fetching,
+  // the result belongs to the year she left and must not be cached as the new one.
+  const year = state.currentYear;
   // Prefer what the Year tab already loaded — no second round trip.
   // Only rows for THIS year's months count: after a year switch, yearData could
   // still hold the year she left, and the popover then showed nothing for the
@@ -2370,7 +2373,7 @@ async function savedYearBudgets(): Promise<Record<string, Record<string, number>
     if (!map[b.month_id]) map[b.month_id] = {};
     map[b.month_id][b.category] = Number(b.amount) || 0;
   });
-  _savedYearCache = { year: state.currentYear, rows: map };
+  if (year === state.currentYear) _savedYearCache = { year, rows: map };
   return map;
 }
 
@@ -4167,7 +4170,15 @@ function renderApp() {
     state.budgets['charity'] = _chCalc;
     // Sync the derived cash into the budgets table, but ONLY when the stored
     // number really differs, and leave a history row when it does.
-    if (!state._lastCharitySync || state._lastCharitySync[state.currentMonthId] !== _chCalc) {
+    // Never while loading: switchMonth/switchYear render once BEFORE the new
+    // month's data arrives, so `current` and state.incomeItems can belong to
+    // different months (or years) and the sum is wrong. Her change_log showed
+    // it: same-minute flip-flops (Dec 2026 ₪842 → ₪802 → ₪842, Nov 8 2026).
+    // Found by a blind code check, Nov 19 2026. The render after loading syncs.
+    if (
+      !state.loading &&
+      (!state._lastCharitySync || state._lastCharitySync[state.currentMonthId] !== _chCalc)
+    ) {
       if (!state._lastCharitySync) state._lastCharitySync = {};
       state._lastCharitySync[state.currentMonthId] = _chCalc;
       void syncCharityBudget(state.currentMonthId!, _chCalc);
@@ -4719,6 +4730,15 @@ async function writeBudgetAmount(catKey: string, num: number, monthId: string): 
     if (error) throw error;
   }
   if (monthId === state.currentMonthId) state.budgets[catKey] = num;
+  // Keep the Year-tab copy in step: the Saved drop-down reads it off-tab, and
+  // saveCache() stores it, so a stale row here showed the OLD savings amount
+  // after an edit (blind code check, Nov 19 2026).
+  const yb = state.yearData?.allBudgets;
+  if (yb) {
+    const row = yb.find((b) => b.month_id === monthId && b.category === catKey);
+    if (row) row.amount = num;
+    else yb.push({ month_id: monthId, category: catKey, amount: num });
+  }
   const month = state.months.find((m) => m.id === monthId);
   if (month) {
     if (catKey === 'admin') {
@@ -9443,6 +9463,7 @@ function yrExpandAll() {
 // -- Year Snapshot ------------------------------------------------------
 async function loadYearData() {
   // Always fetch fresh data so edits are reflected immediately
+  const year = state.currentYear;
   const monthIds = state.months.map((m) => m.id);
   const [txRes, biRes, budgetRes, incItemsRes] = await Promise.all([
     sb.from('transactions').select('*').in('month_id', monthIds),
@@ -9454,6 +9475,9 @@ async function loadYearData() {
     toast('Could not load year data');
   }
   if (!state.admin.items.length) await loadAdminData();
+  // She switched years while this was in flight (same guard as loadFloors):
+  // these rows belong to the year she left — never store them as this year's.
+  if (year !== state.currentYear) return;
   state.yearData = {
     txns: txRes.data || [],
     budgetItems: biRes.data || [],
