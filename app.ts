@@ -75,8 +75,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v75';
-const BUILD_DATE = 'Nov 19, 2026 13:00';
+const APP_VERSION = 'v76';
+const BUILD_DATE = 'Nov 19, 2026 18:20';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
@@ -2345,10 +2345,17 @@ let _savedYearCache: { year: number; rows: Record<string, Record<string, number>
 async function savedYearBudgets(): Promise<Record<string, Record<string, number>>> {
   if (_savedYearCache && _savedYearCache.year === state.currentYear) return _savedYearCache.rows;
   // Prefer what the Year tab already loaded — no second round trip.
-  const pre = state.yearData?.allBudgets;
+  // Only rows for THIS year's months count: after a year switch, yearData could
+  // still hold the year she left, and the popover then showed nothing for the
+  // year on screen. Her words, Nov 19 2026: "fix the saved drop down for 2027
+  // it shoudl show 2027".
   const map: Record<string, Record<string, number>> = {};
   const ids = state.months.map((m) => m.id);
-  let rows = pre as { month_id: string; category: string; amount: number }[] | undefined;
+  const idSet = new Set(ids);
+  const pre = (state.yearData?.allBudgets as
+    | { month_id: string; category: string; amount: number }[]
+    | undefined)?.filter((b) => idSet.has(b.month_id));
+  let rows = pre;
   if (!rows || !rows.length) {
     const { data } = await sb
       .from('budgets')
@@ -2425,7 +2432,11 @@ async function showSavedPop(el: HTMLElement): Promise<void> {
   const bankFor = (mid: string): number => map[mid]?.['savings_bank'] || 0;
   const investFor = (mid: string): number => map[mid]?.['savings_invested'] || 0;
   const savedFor = (mid: string): number => bankFor(mid) + investFor(mid);
-  const todayMonth = new Date().getMonth() + 1;
+  // Relative to the year on screen: a future year (2027 seen from 2026) has no
+  // "so far" yet — every month is still a plan. new Date() here used to count
+  // Jan–Nov 2027 as already saved.
+  const todayMonth = todayMonthForYear();
+  const futureYear = todayMonth === 0;
   const months = [...state.months].sort((a, b) => a.month_num - b.month_num);
   const ytd = ag(
     months.filter((m) => m.month_num <= todayMonth).reduce((s, m) => s + savedFor(m.id), 0),
@@ -2438,7 +2449,8 @@ async function showSavedPop(el: HTMLElement): Promise<void> {
   const rowsHtml = months
     .filter((m) => roundZ(savedFor(m.id)) !== 0)
     .map((m) => {
-      const future = m.month_num > todayMonth;
+      // In a future year every row is a plan — fading all twelve would read as "nothing here".
+      const future = !futureYear && m.month_num > todayMonth;
       const inv = investFor(m.id);
       return `<div style="${future ? 'opacity:.55;' : ''}">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.18rem 0;font-size:.78rem;">
@@ -2455,6 +2467,28 @@ async function showSavedPop(el: HTMLElement): Promise<void> {
         </div>`;
     })
     .join('');
+
+  if (futureYear) {
+    const projBank = ag(months.reduce((s, m) => s + bankFor(m.id), 0));
+    const projInvest = ag(months.reduce((s, m) => s + investFor(m.id), 0));
+    pop.innerHTML =
+      '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.4rem;">Saved in ' +
+      state.currentYear +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;margin-bottom:.15rem;">' +
+      '<span style="font-size:.8rem;color:var(--text);">Planned for the year</span>' +
+      '<span style="font-family:\'DM Mono\',monospace;font-size:1.05rem;font-weight:600;color:var(--accent);">' +
+      shekels(proj) +
+      '</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;font-size:.68rem;color:var(--dim);padding-bottom:.4rem;border-bottom:1px solid var(--border);margin-bottom:.4rem;">' +
+      '<span>🏦 in bank ' +
+      shekels(projBank) +
+      (roundZ(projInvest) !== 0 ? '  ·  📈 invested ' + shekels(projInvest) : '') +
+      '</span></div>' +
+      (rowsHtml ||
+        '<div style="font-size:.78rem;color:var(--dim);">No savings planned yet for this year.</div>');
+    return;
+  }
 
   pop.innerHTML =
     '<div style="font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.4rem;">Saved in ' +
@@ -2982,6 +3016,8 @@ async function switchYear(year: number): Promise<void> {
   localStorage.removeItem('activeMonthId'); // belonged to the prior year
   state.currentMonthId = null;
   state.floors = null; // the prior year's floors must never be written under this year
+  state.yearData = null; // the prior year's Year-tab data must never be read as this year's
+  invalidateSavedYearCache();
   state.loading = true;
   renderApp();
   await loadFresh();
