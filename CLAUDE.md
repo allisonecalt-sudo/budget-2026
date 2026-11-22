@@ -29,7 +29,7 @@ Everything is a dial. A number changing is the instrument working — never call
 | **Fixed**             | Housing, Recurring                                              | _"they are unchangeable and there budget is implicitly there spend."_ Counted as consumed when the month opens, so an envelope can't be spent twice. She trues up the real bill later, _"but never by so much"_. |
 | **Set-aside pot**     | Travel, Admin                                                   | Putting money in **is** the spend. The amount is still a dial: _"i cna move it around based on eneed"_.                                                                                                          |
 
-**Charity is the only calculated line** — she sets a %, the money follows income. Note the two sides: the **allocation** is monthly (income × %); the **giving** is one yearly bucket with no month attribution (see `renderCharityTab`, 2026-08-02).
+**Charity is the only calculated line** — she sets a %, the money follows income. Note the two sides: the **allocation** is monthly (income × %); the **giving** is one yearly bucket with no month attribution (see `renderCharityTab`, 2026-08-02). **Every screen starts from the %** (her words Nov 22 2026: *"it should start form percentage"*): `charityFromPct()` in `lib/budget-math.ts` is the one rule. The saved `budgets` charity row is only a fallback/cache; opening the Charity tab repairs a drifted one (v79). Never read the saved row as the truth.
 
 ## Vocabulary — do NOT flatten these
 
