@@ -26,9 +26,8 @@ assert.ok(
   'dist/lib/budget-math.js is missing — run `npm run build` before the unit tests.',
 );
 
-const { ag, pct, status, creditOccurrences, creditTotal, fileToYear } = await import(
-  pathToFileURL(compiled).href
-);
+const { ag, pct, status, creditOccurrences, creditTotal, fileToYear, charityFromPct } =
+  await import(pathToFileURL(compiled).href);
 
 // ── ag: float drift ───────────────────────────────────────────────────────
 test('ag kills binary-float drift at sum boundaries', () => {
@@ -145,4 +144,19 @@ test('the viewed year ALWAYS wins, in both directions', () => {
   assert.equal(fileToYear('2026-09-18', 2027, 9).yr, 2027);
   assert.equal(fileToYear('2027-01-05', 2026, 9).yr, 2026);
   assert.equal(fileToYear('garbage', 2026, 9).yr, 2026, 'junk date must not move the year');
+});
+
+// ── charityFromPct: charity starts from the percent (her rule, Nov 22 2026) ──
+test('charityFromPct = income × % rounded to whole shekels', () => {
+  // Her real Jan 2027 after gan 2 went 5 → 4 kids: 15,420 × 5.2% = 801.84 → 802.
+  assert.equal(charityFromPct(15420, 5.2), 802);
+  assert.equal(charityFromPct(21000, 5), 1050);
+  assert.equal(charityFromPct('18320', '5.2'), 953);
+});
+
+test('charityFromPct is null when there is no % or no income (caller keeps the saved amount)', () => {
+  assert.equal(charityFromPct(15420, 0), null);
+  assert.equal(charityFromPct(15420, null), null);
+  assert.equal(charityFromPct(0, 5), null);
+  assert.equal(charityFromPct(undefined, 5), null);
 });

@@ -28,6 +28,20 @@ export function ag(n: unknown): number {
 }
 
 /**
+ * Charity's monthly amount, worked out from the percent. Her rule (Nov 22 2026):
+ * "it should start form percentage". income × pct / 100, rounded to whole
+ * shekels: the same number the month page, Year tab, Analyze and the Web
+ * connector show. Returns null when there is no percent or no income, so the
+ * caller falls back to the saved amount.
+ */
+export function charityFromPct(income: unknown, pctValue: unknown): number | null {
+  const inc = Number(income) || 0;
+  const p = Number(pctValue) || 0;
+  if (!inc || !p) return null;
+  return Math.round((inc * p) / 100);
+}
+
+/**
  * Spend as a percentage of budget, clamped to 100 so a progress bar can never
  * overflow its track. A zero or absent budget yields 0 rather than Infinity.
  */

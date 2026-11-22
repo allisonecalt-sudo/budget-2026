@@ -6,7 +6,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // required so the emitted dist/app.js resolves the sibling module in the browser.
 import { fmtHistoryDate } from './lib/history-format.js';
 import { roundZ, amount, shekels, shekelsOrDash } from './lib/money.js';
-import { ag, pct, status, creditOccurrences, creditTotal, fileToYear } from './lib/budget-math.js';
+import {
+  ag,
+  pct,
+  status,
+  creditOccurrences,
+  creditTotal,
+  fileToYear,
+  charityFromPct,
+} from './lib/budget-math.js';
 import { analyzeYear, WHOLE_YEAR, potYear } from './lib/analyze.js';
 import { seTax, taxSetAside, carmeiGatNet } from './lib/pay.js';
 import { feb7Passed, projectFeb7, buildFeb7Input, answerByLevel } from './lib/feb7.js';
@@ -75,8 +83,8 @@ const PT_KEY =
 // Visible build version (shown small + muted in the header) so she can tell at a
 // glance whether a new build actually loaded. BUMP THIS TOGETHER WITH the sw.js
 // VERSION constant ('budget-vN') on every deploy.
-const APP_VERSION = 'v78';
-const BUILD_DATE = 'Nov 19, 2026 18:56';
+const APP_VERSION = 'v79';
+const BUILD_DATE = 'Nov 22, 2026 17:28';
 
 // PAY, the income mixes, SCENARIOS, the spending levels and POT_PLAN live in lib/scenarios.ts (v73).
 
@@ -4164,9 +4172,9 @@ function renderApp() {
   // budget is always derived = income × pct, recomputed here on every render so it
   // adapts when income changes, on web AND mobile. Sync the derived cash into the
   // budgets table quietly (no undo/log) so the rest of the app sees a normal budget.
-  const _chPct = Number(current.charity_pct) || 0;
-  if (_chPct && income) {
-    const _chCalc = Math.round((income * _chPct) / 100);
+  const _chFromPct = charityFromPct(income, current.charity_pct);
+  if (_chFromPct !== null) {
+    const _chCalc = _chFromPct;
     state.budgets['charity'] = _chCalc;
     // Sync the derived cash into the budgets table, but ONLY when the stored
     // number really differs, and leave a history row when it does.
@@ -5171,7 +5179,7 @@ async function switchTab(tab: string): Promise<void> {
   } else if (tab === 'charity') {
     state.loading = true;
     renderApp();
-    await loadCharityData();
+    await loadCharityData(true); // she opened Charity: repair drifted saved amounts
     state.loading = false;
   } else if (tab === 'cash') {
     state.loading = true;
@@ -5336,36 +5344,94 @@ async function loadTravelData() {
 }
 
 // ── Charity data loading ──────────────────────────────────────────────
-async function loadCharityData() {
+async function loadCharityData(repair = false) {
+  const year = state.currentYear;
   const { data: items, error: itemsErr } = await sb
     .from('charity_items')
     .select('*')
-    .eq('year', state.currentYear)
+    .eq('year', year)
     .order('created_at');
   if (itemsErr) toast('Could not load charity data');
   state.charity.items = items || [];
   const { data: payments } = await sb
     .from('charity_payments')
     .select('*')
-    .eq('year', state.currentYear)
+    .eq('year', year)
     .order('month_num,created_at');
   state.charity.payments = payments || [];
   const { data: subs } = await sb.from('charity_sub_items').select('*').order('created_at');
   state.charity.subItems = subs || [];
-  // allocations from budgets table
-  const { data: budgetRows } = await sb
-    .from('budgets')
-    .select('month_id,amount')
-    .eq('category', 'charity');
+
+  // Charity STARTS FROM THE PERCENT (her words, Nov 22 2026: "it should start form
+  // percentage"). Each month = that month's income × its charity %, worked out
+  // fresh from the DB here: the same number the month page, Year tab, Analyze and
+  // Web show. The saved budgets row is only the fallback (a month with no % or no
+  // income). Before this the tab summed the saved rows, which go stale when income
+  // changes outside the app: Nov 22 2026, gan 2 went 5 → 4 kids in nine 2027 months
+  // by a direct DB write, and the tab read ₪10,217 while every other screen read ₪10,038.
+  type CharityMonth = Pick<
+    MonthRow,
+    'id' | 'month_num' | 'income_petachya' | 'income_clalit' | 'income_private' | 'income_other'
+  > & { charity_pct: number | null };
+  const [{ data: monthRows }, { data: budgetRows }] = await Promise.all([
+    sb
+      .from('months')
+      .select('id,month_num,income_petachya,income_clalit,income_private,income_other,charity_pct')
+      .eq('year', year),
+    sb.from('budgets').select('month_id,amount').eq('category', 'charity'),
+  ]);
+  const yearMonths = (monthRows || []) as CharityMonth[];
+  const ids = yearMonths.map((m) => m.id);
+  const { data: incRows } = ids.length
+    ? await sb.from('income_items').select('month_id,amount').in('month_id', ids)
+    : { data: [] };
+  if (state.currentYear !== year) return; // the year changed while this loaded
+
+  const extras: Record<string, number> = {};
+  ((incRows || []) as { month_id: string; amount: unknown }[]).forEach((i) => {
+    extras[i.month_id] = (extras[i.month_id] || 0) + (Number(i.amount) || 0);
+  });
+  const saved: Record<string, number> = {};
+  ((budgetRows || []) as { month_id: string; amount: unknown }[]).forEach((b) => {
+    saved[b.month_id] = Number(b.amount) || 0;
+  });
+
   state.charity.allocations = {};
-  (budgetRows || []).forEach((b) => {
-    const m = state.months.find((m) => m.id === b.month_id);
-    if (m)
-      state.charity.allocations[m.month_num] = {
-        month_id: b.month_id,
-        amount: b.amount,
-        id: b.month_id,
-      } as AdminAllocationRow;
+  yearMonths.forEach((m) => {
+    // Same income sum as totalIncome() (the month page), so the numbers match exactly.
+    const income = ag(
+      (Number(m.income_petachya) || 0) +
+        (Number(m.income_clalit) || 0) +
+        (Number(m.income_private) || 0) +
+        (Number(m.income_other) || 0) +
+        (extras[m.id] || 0),
+    );
+    const fromPct = charityFromPct(income, m.charity_pct);
+    const hasSaved = Object.prototype.hasOwnProperty.call(saved, m.id);
+    if (fromPct === null && !hasSaved) return;
+    const amount = fromPct !== null ? fromPct : saved[m.id];
+    state.charity.allocations[m.month_num] = {
+      month_id: m.id,
+      amount,
+      id: m.id,
+    } as AdminAllocationRow;
+    // Self-repair, ONLY when she opens the Charity tab itself (repair = true):
+    // a saved row that drifted from income × % is brought back in line, with a
+    // history row, as the month page does for its own month on open
+    // (syncCharityBudget reads first and writes only on a real difference).
+    // The quiet background load on every app open / month switch never writes:
+    // opening the app writes for the month on screen only (engine-safety.spec).
+    // _lastCharitySync stops a second overlapping load from writing it twice.
+    if (
+      repair &&
+      fromPct !== null &&
+      (!hasSaved || saved[m.id] !== fromPct) &&
+      (!state._lastCharitySync || state._lastCharitySync[m.id] !== fromPct)
+    ) {
+      if (!state._lastCharitySync) state._lastCharitySync = {};
+      state._lastCharitySync[m.id] = fromPct;
+      void syncCharityBudget(m.id, fromPct);
+    }
   });
 }
 
@@ -9654,10 +9720,9 @@ function renderYearSnapshot(): string {
     // silently diverge from the month page (May 2026 showed ₪175 vs ₪7 remaining).
     if (catKey === 'charity') {
       const m = months.find((mo) => mo.id === mid);
-      const chPct = Number(m?.charity_pct) || 0;
-      if (chPct && m) {
-        const inc = incFor(m);
-        if (inc) return Math.round((inc * chPct) / 100);
+      if (m) {
+        const fromPct = charityFromPct(ag(incFor(m)), m.charity_pct);
+        if (fromPct !== null) return fromPct;
       }
     }
     const fromItems = yearBiTotal(mid, catKey);
